@@ -1,0 +1,25 @@
+# Scorecard's Dependency-Update-Tool check looks for this file. More usefully,
+# it is what tells you a pinned action SHA has a security release behind it --
+# pinning without an update tool is how a repository ends up frozen on a
+# vulnerable version and calls it supply-chain hygiene.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "deps"
+    ignore:
+      - dependency-name: "numpy"
+      - dependency-name: "scipy"
