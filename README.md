@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen?style=flat-square)](https://opensource.org/license/apache-2-0)
 
 
-<img src="https://github.com/otwin-core/otwin/blob/16018fabf8cf2866c96ad1585b50142b95dd186d/assets/overview.png" width="100%" >
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/overview.png" width="100%" >
 
 </div>
 
@@ -147,6 +147,13 @@ $$\frac{dx}{dt} = \bigl(J(x) - R(x)\bigr)\,\nabla H(x) + g(x)\,u
 \qquad\qquad
 y = g(x)^{\top}\,\nabla H(x)$$
 
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/storage.png" width="100%">
+
+</div>
+
+
 | Symbol | Meaning | Units | Example: a water tank |
 |---|---|---|---|
 | $x$ | state vector | varies | water height $h$ |
@@ -170,11 +177,24 @@ pairing.
 | **Chemical / process** | An energy balance on a control volume, with the internal exchange terms separated from the irreversible loss terms |
 | **Control / telecom** | Passive and dissipative systems in the sense of Willems (1972). $H$ is the storage function; $y^{\top}u$ is the supply rate |
 
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/dc.png" width="100%">
+
+</div>
+
 If you have drawn a bond graph or an equivalent circuit, you have already
 written $J$, $R$, $H$ and $g$ — the library only asks you to write them down
 separately instead of collapsing them into one right-hand side.
 
 ### 4.2 A complete worked model
+
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/tank_block.png" width="100%">
+
+</div>
+
 
 ```python
 import numpy as np
