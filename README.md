@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/groundlens-dev/groundlens/main/docs/assets/Groundlens_01.png" width="30%">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_logo.png" width="30%">
   
 # Otwin: building physics-based dynamic models of engineering systems 
 
