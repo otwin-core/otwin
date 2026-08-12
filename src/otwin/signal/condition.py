@@ -92,20 +92,24 @@ def sort_samples(
         >>> t.tolist(), y.tolist()
         ([0.0, 1.0, 2.0], [0.0, 10.0, 20.0])
     """
-    t = np.asarray(t, dtype=float)
-    y = np.asarray(y, dtype=float)
-    if y.shape[0] != t.shape[0]:
-        raise ValueError(f"got {t.shape[0]} timestamps and {y.shape[0]} values")
+    # Bound to fresh names rather than rebinding the parameters: `t` and `y`
+    # are declared as the untyped ArrayLike union, and reusing them would carry
+    # that union all the way to the return statement even though everything
+    # below this point is a float array.
+    t_arr: npt.NDArray[np.floating] = np.asarray(t, dtype=float)
+    y_arr: npt.NDArray[np.floating] = np.asarray(y, dtype=float)
+    if y_arr.shape[0] != t_arr.shape[0]:
+        raise ValueError(f"got {t_arr.shape[0]} timestamps and {y_arr.shape[0]} values")
 
-    order = np.argsort(t, kind="stable")
-    t, y = t[order], y[order]
+    order = np.argsort(t_arr, kind="stable")
+    t_arr, y_arr = t_arr[order], y_arr[order]
 
-    if drop_duplicates and t.size > 1:
+    if drop_duplicates and t_arr.size > 1:
         # Keep the last occurrence of each timestamp: a later write to the same
         # instant is a correction, not a duplicate.
-        keep = np.append(np.diff(t) > 0, True)
-        t, y = t[keep], y[keep]
-    return t, y
+        keep = np.append(np.diff(t_arr) > 0, True)
+        t_arr, y_arr = t_arr[keep], y_arr[keep]
+    return t_arr, y_arr
 
 
 def resample(
