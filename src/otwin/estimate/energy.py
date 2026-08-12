@@ -264,7 +264,7 @@ class EnergyConsistentObserver(ExtendedKalmanFilter):
         for name in ("energy", "H"):
             fn = getattr(model, name, None)
             if callable(fn):
-                return fn  # type: ignore[return-value]
+                return fn
         raise TypeError(
             "model exposes neither energy(x) nor H(x); an energy-consistent "
             "observer needs a stored-energy function. Pass energy=... "
@@ -347,7 +347,7 @@ class EnergyConsistentObserver(ExtendedKalmanFilter):
                 hi = mid
         return lo
 
-    def update(  # type: ignore[override]
+    def update(
         self, y: Array, u: Array, t: float = 0.0, dt: float = 0.0, enforce: bool = True
     ) -> Array:
         """Correct with one measurement, scaled to respect the energy budget.
@@ -408,14 +408,12 @@ class EnergyConsistentObserver(ExtendedKalmanFilter):
         self._last_created = float(created)
         return self.x.copy()
 
-    def step(  # type: ignore[override]
-        self, y: Array, u: Array, dt: float, t: float = 0.0
-    ) -> Array:
+    def step(self, y: Array, u: Array, dt: float, t: float = 0.0) -> Array:
         """Predict across ``dt``, then apply an energy-consistent correction."""
         self.predict(u, dt, t)
         return self.update(y, u, t + dt, dt)
 
-    def filter(  # type: ignore[override]
+    def filter(
         self, ys: Array, us: Array | None, ts: Array, reset: bool = True
     ) -> EnergyFilterResult:
         """Run the observer over a full measurement record.
