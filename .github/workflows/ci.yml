@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: py${{ matrix.python }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - os: macos-latest
+            python: "3.13"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Test
+        run: pytest -q
+      - name: Run the worked example
+        run: python examples/bess_end_to_end.py
+
+  # The gate that matters. A fresh runner, a non-editable install, no source
+  # checkout on the path, and the README quickstart copy-pasted verbatim.
+  # Every packaging defect this project has shipped -- a test dependency
+  # missing from the manifest, an extra that pulled 2 GB nobody needed, an
+  # error raised in the wrong order -- was invisible in a developer
+  # environment that had accumulated the missing pieces, and would have been
+  # caught here.
+  clean-install:
+    name: clean install from a wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build and install the wheel, nothing else
+        run: |
+          pip install build
+          python -m build --wheel
+          cd /tmp
+          python -m venv fresh
+          /tmp/fresh/bin/pip install "$GITHUB_WORKSPACE"/dist/*.whl
+      - name: Base install is numpy and scipy only
+        run: |
+          installed=$(/tmp/fresh/bin/pip list --format=freeze \
+            | grep -viE '^(pip|setuptools|wheel|otwin)==' | cut -d= -f1 | sort | tr '\n' ' ')
+          echo "installed: $installed"
+          test "$installed" = "numpy scipy " \
+            || { echo "::error::base install pulled more than numpy and scipy"; exit 1; }
+      - name: The README quickstart, copy-pasted, from outside the source tree
+        run: |
+          cd /tmp && /tmp/fresh/bin/python - <<'PY'
+          import numpy as np
+          from otwin.model import PortHamiltonianSystem, integrate_phs
+
+          osc = PortHamiltonianSystem(
+              H      = lambda x: 0.5 * 2.0 * x[0]**2 + 0.5 * x[1]**2,
+              grad_H = lambda x: np.array([2.0 * x[0], x[1]]),
+              J      = lambda x: np.array([[0.0, 1.0], [-1.0, 0.0]]),
+              R      = lambda x: np.array([[0.0, 0.0], [0.0, 0.3]]),
+              g      = lambda x: np.array([[0.0], [1.0]]),
+              n_states=2, n_inputs=1,
+          )
+          t = np.linspace(0, 20, 400)
+          sol = integrate_phs(osc, np.array([1.0, 0.0]), t, np.zeros((400, 1)))
+          E = np.array([osc.energy(x) for x in sol["x"]])
+          assert np.all(np.diff(E) <= 1e-9), "energy bound violated"
+          print("quickstart ok, worst step gain:", float(np.max(np.diff(E))))
+          PY
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install ruff
+      - run: ruff check src tests examples
+      - run: ruff format --check src tests examples
