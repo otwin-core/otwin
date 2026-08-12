@@ -10,6 +10,9 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/groundlens-dev/groundlens/badge)](https://scorecard.dev/viewer/?uri=github.com/groundlens-dev/groundlens)
 [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen?style=flat-square)](https://opensource.org/license/apache-2-0)
 
+
+<img src="https://github.com/otwin-core/otwin/blob/16018fabf8cf2866c96ad1585b50142b95dd186d/assets/overview.png" width="100%" >
+
 </div>
 
 <details>
