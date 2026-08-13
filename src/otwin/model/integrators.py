@@ -773,9 +773,15 @@ def implicit_midpoint(
                 if dt != cache_dt:
                     step_solve = None
                     cache_dt = dt
+                # `_cached_newton` calls this with the iterate alone; the extra
+                # parameters below are default-argument bindings that pin this
+                # step's values into the closure, not arguments any caller
+                # supplies. Declaring the one-argument signature here says that,
+                # and keeps the two branches interchangeable at the call site.
+                build: Callable[[Vector], tuple[Callable[[Vector], Vector], int]]
                 if jac is not None:
 
-                    def build(
+                    def build_from_jac(
                         x: Vector,
                         x_n: Vector = x_n,
                         dt: float = dt,
@@ -786,6 +792,7 @@ def implicit_midpoint(
                         jac_f = np.asarray(jac(t_mid, x_mid, u_mid), dtype=float)
                         return _reusable_solve(eye - 0.5 * dt * jac_f), 0
 
+                    build = build_from_jac
                 else:
                     build = _fd_solve_builder(residual)
 

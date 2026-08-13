@@ -1,6 +1,6 @@
 """Port-Hamiltonian Neural Network (structure-constrained learning).
 
-Requires the ``[torch]`` extra: ``pip install otwin-learn[torch]``.
+Requires the ``nn`` extra: ``pip install 'otwin[nn]'``.
 
 The structure is enforced *by construction*, so passivity holds regardless of the
 learned weights:
@@ -31,8 +31,10 @@ def _require_torch() -> Any:
         return torch
     except ImportError as exc:  # pragma: no cover - exercised only without extra
         raise ImportError(
-            "PortHamiltonianNN requires PyTorch. Install with: "
-            "pip install otwin-learn[torch]"
+            "PortHamiltonianNN requires PyTorch, which is not installed.\n"
+            "    pip install 'otwin[nn]'\n"
+            "PyTorch is roughly a 2 GB download and is needed only for the "
+            "learned models; everything else in otwin runs on numpy and scipy."
         ) from exc
 
 

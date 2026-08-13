@@ -1,7 +1,8 @@
 """Training losses for learned port-Hamiltonian models.
 
-Requires the ``[torch]`` extra. These operate on torch tensors / a
-:class:`otwin.learn.phnn.PortHamiltonianNN` and import torch lazily.
+Requires the ``nn`` extra: ``pip install 'otwin[nn]'``. These operate on
+torch tensors / a :class:`otwin.model.phnn.PortHamiltonianNN` and import
+torch lazily.
 """
 
 from typing import Any

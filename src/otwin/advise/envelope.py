@@ -194,7 +194,25 @@ class Envelope:
             else:
                 checked.append(f"horizon {horizon} <= {self.max_horizon}")
 
-        if state is not None and self.state_bounds is not None:
+        if state is not None and self.state_bounds is None:
+            # Symmetric with the horizon check above. An operating range that
+            # was never recorded is a refusal, not a licence.
+            #
+            # The previous version skipped this branch entirely when
+            # `state_bounds` was None, so a twin with no recorded range
+            # returned a clean verdict for any operating point at all -- a
+            # state of charge of 1e12 came back answerable with zero breaches.
+            # `from_manifest` already states the intended rule: fields the
+            # manifest does not carry stay None, "which is a refusal rather
+            # than a default". That held for `max_horizon` and not for this.
+            breaches.append(
+                Breach(
+                    "state",
+                    "no operating range has been recorded for this twin, so no "
+                    "operating point can be shown to be inside it",
+                )
+            )
+        elif state is not None and self.state_bounds is not None:
             x = np.atleast_1d(np.asarray(state, dtype=float))
             if len(x) != len(self.state_bounds):
                 breaches.append(

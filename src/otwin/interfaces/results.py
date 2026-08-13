@@ -6,9 +6,9 @@ They are deliberately dumb: they carry numbers and provenance, and they know
 how to serialise themselves. Logic that *interprets* them belongs in a tool
 package, not here.
 
-Keeping them here rather than in each tool is what lets an ``otwin-uq``
-calibrator consume an ``otwin-phs`` forecast without either package importing
-the other. The ``to_dict`` / ``from_dict`` pair on each type is what lets a
+Keeping them here rather than in each subpackage is what lets
+``otwin.forecast.calibration`` consume an ``otwin.model`` forecast without
+either importing the other. The ``to_dict`` / ``from_dict`` pair on each type is what lets a
 ``Report`` produced in Python be read by the Julia binding — and what stops
 each tool from inventing its own key names.
 """

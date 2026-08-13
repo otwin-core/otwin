@@ -119,7 +119,7 @@ class PortHamiltonianSystem:
         return np.asarray(g_mat.T @ grad_H, dtype=float)
 
     # ----------------------------------------------------------------------
-    # otwin-base protocol surface
+    # Contract surface
     #
     # `rhs` and `observe` are the names in the Otwin contract
     # (otwin.interfaces.TwinModel). They are what every tool in the ecosystem calls,

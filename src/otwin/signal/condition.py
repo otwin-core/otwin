@@ -92,20 +92,24 @@ def sort_samples(
         >>> t.tolist(), y.tolist()
         ([0.0, 1.0, 2.0], [0.0, 10.0, 20.0])
     """
-    t = np.asarray(t, dtype=float)
-    y = np.asarray(y, dtype=float)
-    if y.shape[0] != t.shape[0]:
-        raise ValueError(f"got {t.shape[0]} timestamps and {y.shape[0]} values")
+    # Bound to fresh names rather than rebinding the parameters: `t` and `y`
+    # are declared as the untyped ArrayLike union, and reusing them would carry
+    # that union all the way to the return statement even though everything
+    # below this point is a float array.
+    t_arr: npt.NDArray[np.floating] = np.asarray(t, dtype=float)
+    y_arr: npt.NDArray[np.floating] = np.asarray(y, dtype=float)
+    if y_arr.shape[0] != t_arr.shape[0]:
+        raise ValueError(f"got {t_arr.shape[0]} timestamps and {y_arr.shape[0]} values")
 
-    order = np.argsort(t, kind="stable")
-    t, y = t[order], y[order]
+    order = np.argsort(t_arr, kind="stable")
+    t_arr, y_arr = t_arr[order], y_arr[order]
 
-    if drop_duplicates and t.size > 1:
+    if drop_duplicates and t_arr.size > 1:
         # Keep the last occurrence of each timestamp: a later write to the same
         # instant is a correction, not a duplicate.
-        keep = np.append(np.diff(t) > 0, True)
-        t, y = t[keep], y[keep]
-    return t, y
+        keep = np.append(np.diff(t_arr) > 0, True)
+        t_arr, y_arr = t_arr[keep], y_arr[keep]
+    return t_arr, y_arr
 
 
 def resample(
@@ -158,7 +162,21 @@ def resample(
         max_gap = 3.0 * dt
 
     gaps = find_gaps(t, max_gap)
-    t_grid = np.arange(t[0], t[-1] + 0.5 * dt, dt)
+
+    # The grid must not run past the last measurement. `arange` up to
+    # `t[-1] + 0.5*dt` was meant to admit a final point landing on `t[-1]`
+    # within rounding, but it also admitted a real half-step extrapolation
+    # whenever the record did not end on a grid multiple: samples ending at
+    # t = 1.6 with dt = 1.0 produced a grid point at t = 2.0 carrying the
+    # 1.6 s reading, and `coverage` certified that window as 100 % measured.
+    # Bounded by dt/2, so small -- but it is this module's own rule about not
+    # inventing data, broken at the trailing edge, where `find_gaps` cannot
+    # see it because it only inspects intervals *between* samples.
+    #
+    # Counting whole steps keeps the intended rounding tolerance without
+    # admitting extrapolation.
+    n_steps = int(np.floor(float(t[-1] - t[0]) / dt + 1e-9))
+    t_grid = t[0] + dt * np.arange(n_steps + 1)
 
     if method == "linear":
         cols = [np.interp(t_grid, t, y[:, j]) for j in range(y.shape[1])]

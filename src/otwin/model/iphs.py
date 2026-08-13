@@ -188,7 +188,7 @@ class IrreversiblePHS:
         return dx_phs + dx_irreversible
 
     # ----------------------------------------------------------------------
-    # otwin-base protocol surface
+    # Contract surface
     #
     # The contract (otwin.interfaces.IrreversibleModel) extends PortHamiltonianModel,
     # so an irreversible system must also expose H, J, R and g. Those live on

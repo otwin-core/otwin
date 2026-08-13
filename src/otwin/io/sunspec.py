@@ -86,8 +86,10 @@ __all__ = [
     "compare_model_defs",
     "SUNSPEC_BASE_ADDRESSES",
     "SUNSPEC_IDENTIFIER",
+    "SUNSSF_RANGE",
     "SUPPORTED_MODELS",
     "MODEL_NAMES",
+    "ScaleFactorError",
 ]
 
 #: Base addresses a SunSpec device may publish its chain at, in probe order.
@@ -97,6 +99,24 @@ SUNSPEC_BASE_ADDRESSES: tuple[int, ...] = (40000, 50000, 0)
 SUNSPEC_IDENTIFIER: tuple[int, int] = (0x5375, 0x6E53)
 
 _END_MODEL_ID = 0xFFFF
+
+#: Range the SunSpec specification allows a ``sunssf`` scale factor to take.
+#: The register is a signed 16-bit integer, so a device can put anything in
+#: it; the specification restricts the *meaning* to base-10 exponents in this
+#: band. A register outside it is corruption or a mis-mapped address, and the
+#: points it scales are reported as unreadable rather than multiplied by
+#: 10**400.
+SUNSSF_RANGE: tuple[int, int] = (-10, 10)
+
+
+class ScaleFactorError(ValueError):
+    """A ``sunssf`` register holds a value outside :data:`SUNSSF_RANGE`.
+
+    Raised inside :meth:`SunSpecSource._scale`, where :meth:`SunSpecSource.read`
+    catches it and degrades the affected points. It reaches a caller only
+    through :attr:`SunSpecSource.last_error`.
+    """
+
 
 #: Models this module names explicitly. Others found on the wire are still
 #: decoded when a definition is available.
@@ -986,13 +1006,30 @@ class SunSpecSource:
         A named scale factor whose register holds the not-implemented
         sentinel is treated as an exponent of zero; the alternative is
         multiplying by 10**-32768.
+
+        Raises:
+            ScaleFactorError: If the exponent falls outside
+                :data:`SUNSSF_RANGE`. ``10.0 ** 400`` raises ``OverflowError``
+                in CPython, which used to escape :meth:`read` and lose the
+                whole sample -- every other model on the chain included --
+                because one register on one model was corrupt. The exponent is
+                now checked before it is used, and the caller degrades the
+                points that depend on it.
         """
         if point.sf is None:
             return 1.0
-        if isinstance(point.sf, int):
-            return float(10.0**point.sf)
-        exponent = raw.get(point.sf)
-        return 1.0 if exponent is None else float(10.0 ** int(exponent))
+        exponent = point.sf if isinstance(point.sf, int) else raw.get(point.sf)
+        if exponent is None:
+            return 1.0
+        low, high = SUNSSF_RANGE
+        e = int(exponent)
+        if not low <= e <= high:
+            raise ScaleFactorError(
+                f"scale factor {point.sf!r} for point {point.name!r} reads {e}, "
+                f"outside the SunSpec range [{low}, {high}]. This is a corrupt "
+                f"or mis-mapped sunssf register, not an exponent."
+            )
+        return float(10.0**e)
 
     def read(self) -> Sample:
         """Read every discovered model once and return a :class:`Sample`.
@@ -1001,7 +1038,11 @@ class SunSpecSource:
         or ``"bad"`` and records the exception in :attr:`last_error`; other
         models are still read. Points holding the SunSpec not-implemented
         sentinel degrade the same way, because the device is saying it has no
-        such measurement.
+        such measurement, and so do points whose scale-factor register is
+        outside :data:`SUNSSF_RANGE`.
+
+        This method does not raise for a wire-level problem. Everything it can
+        say about a link that is misbehaving, it says through ``quality``.
         """
         now = time.time()
         self.last_error = None
@@ -1034,7 +1075,16 @@ class SunSpecSource:
                 if value is None:
                     values[tag], quality[tag] = self._quality.resolve_failed(tag, now)
                     continue
-                scaled = value * self._scale(p, raw)
+                try:
+                    scaled = value * self._scale(p, raw)
+                except ScaleFactorError as exc:
+                    # Same treatment as a failed block read: this point is not
+                    # readable, the rest of the chain is unaffected. A corrupt
+                    # scale factor is a wire-level problem, and read() does not
+                    # raise for those.
+                    self.last_error = exc
+                    values[tag], quality[tag] = self._quality.resolve_failed(tag, now)
+                    continue
                 final = to_si(scaled, p.units or "1") if self.normalise_units else scaled
                 values[tag] = final
                 quality[tag] = "good"
@@ -1051,13 +1101,25 @@ class SunSpecSource:
         is what the DER reports to the grid operator and may apply usable-
         window limits to 802's number.
 
+        The fallback is on readability, not only on publication. Among the
+        models that publish an ``SoC``, the first one reading ``"good"`` is
+        used; if none is good, the first one reading ``"stale"`` is used,
+        because a state of charge from the last cycle is better information
+        than none. Only when every published view is ``"bad"`` does this
+        raise.
+
+        A value outside ``[0, 1]`` is *not* a reason to fall back. It means a
+        scale factor is misapplied on a link that is otherwise answering, and
+        quietly reading the other model would leave that broken for as long as
+        the second view held up.
+
         Args:
             sample: Reuse an existing sample instead of reading again.
 
         Raises:
             LookupError: If the device publishes neither model with a
                 decodable ``SoC``.
-            TransportError: If the point exists but is unreadable.
+            TransportError: If every published view is unreadable.
             ValueError: If the value falls outside ``[0, 1]`` — almost always
                 a misapplied scale factor, and a twin fed SoC = 85.4 produces
                 nonsense quietly.
@@ -1080,12 +1142,23 @@ class SunSpecSource:
                 f"{sorted({m.model_id for m in self.models})}. If the battery "
                 f"is behind a separate BMS, point a second SunSpecSource at it."
             )
-        tag = candidates[0]
-        if sample.quality.get(tag) == "bad":
-            raise TransportError(
-                f"{self.name}: {tag} is not readable (quality 'bad'); "
-                f"last error: {self.last_error}"
+        # Rank by readability, then by the model preference already encoded in
+        # the order of `candidates`. Picking candidates[0] and giving up if it
+        # read badly threw away a working second view: a bank publishing both
+        # models, whose 713 block stops answering while 802 reads cleanly, lost
+        # its state of charge entirely -- which is the exact case the fallback
+        # was written for.
+        readable = [c for c in candidates if sample.quality.get(c) == "good"]
+        readable += [c for c in candidates if sample.quality.get(c) == "stale"]
+        if not readable:
+            reported = ", ".join(
+                f"{c}={sample.quality.get(c, 'unknown')}" for c in candidates
             )
+            raise TransportError(
+                f"{self.name}: state of charge is not readable from any model "
+                f"that publishes it ({reported}); last error: {self.last_error}"
+            )
+        tag = readable[0]
         value = sample.values[tag]
         if not self.normalise_units:
             value = value / 100.0
