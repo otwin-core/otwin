@@ -52,7 +52,7 @@ It is intended for systems that store, move and dissipate energy: batteries and
 battery banks, electrical machines, hydraulic and pneumatic circuits, thermal
 networks, mechanical drivetrains, heat exchangers, pumped storage.
 
-The library provides:
+Otwin provides:
 
 | | |
 |---|---|
