@@ -1,78 +1,90 @@
-# This workflow uses actions that are not certified by GitHub. They are provided
-# by a third-party and are governed by separate terms of service, privacy
-# policy, and support documentation.
-
+# OpenSSF Scorecard — automated supply-chain security scoring.
+#
+# Runs weekly and on every push to the default branch, publishes the result to
+# the OpenSSF API (which is what makes the README badge work), and uploads the
+# findings to this repository's Code scanning dashboard.
+#
+# This workflow uses an action that is not certified by GitHub. It is provided
+# by a third party under separate terms of service and privacy policy.
 name: Scorecard supply-chain security
+
 on:
-  # For Branch-Protection check. Only the default branch is supported. See
-  # https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection
+  # Re-score when branch protection changes, so the Branch-Protection check
+  # does not go stale after a settings change.
   branch_protection_rule:
-  # To guarantee Maintained check is occasionally updated. See
-  # https://github.com/ossf/scorecard/blob/main/docs/checks.md#maintained
+  # Weekly, so the Maintained check keeps seeing recent activity.
   schedule:
     - cron: '31 9 * * 1'
   push:
-    branches: [ "main" ]
+    branches: ["main"]
+  # Lets you run it by hand from the Actions tab after changing a setting,
+  # instead of waiting for Monday.
+  workflow_dispatch:
 
-# Declare default permissions as read only.
+# Everything is read-only unless a job asks for more.
 permissions: read-all
 
 jobs:
   analysis:
     name: Scorecard analysis
     runs-on: ubuntu-latest
-    # `publish_results: true` only works when run from the default branch. conditional can be removed if disabled.
-    if: github.event.repository.default_branch == github.ref_name || github.event_name == 'pull_request'
+
+    # publish_results only works from the default branch.
+    if: github.event.repository.default_branch == github.ref_name
+
+    # A job-level permissions block REPLACES the workflow-level one rather than
+    # adding to it, so this job runs with exactly these two grants and nothing
+    # else. That is deliberate: Scorecard's own Token-Permissions check scores
+    # this file, and every permission added here lowers that score. Do not add
+    # `contents: read` or `actions: read` — those are for private repositories,
+    # and this one is public.
     permissions:
-      # Needed to upload the results to code-scanning dashboard.
-      security-events: write
-      # Needed to publish results and get a badge (see publish_results below).
-      id-token: write
-      # Uncomment the permissions below if installing in a private repository.
-      # contents: read
-      # actions: read
+      security-events: write   # upload findings to Code scanning
+      id-token: write          # publish results to the OpenSSF API
 
     steps:
-      - name: "Checkout code"
+      - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
 
-      - name: "Run analysis"
+      - name: Run analysis
         uses: ossf/scorecard-action@f49aabe0b5af0936a0987cfb85d86b75731b0186 # v2.4.1
         with:
           results_file: results.sarif
           results_format: sarif
-          # (Optional) "write" PAT token. Uncomment the `repo_token` line below if:
-          # - you want to enable the Branch-Protection check on a *public* repository, or
-          # - you are installing Scorecard on a *private* repository
-          # To create the PAT, follow the steps in https://github.com/ossf/scorecard-action?tab=readme-ov-file#authentication-with-fine-grained-pat-optional.
-          repo_token: ${{ secrets.SCORECARD_TOKEN }}
-
-          # Public repositories:
-          #   - Publish results to OpenSSF REST API for easy access by consumers
-          #   - Allows the repository to include the Scorecard badge.
-          #   - See https://github.com/ossf/scorecard-action#publishing-results.
-          # For private repositories:
-          #   - `publish_results` will always be set to `false`, regardless
-          #     of the value entered here.
+          # Publishes to the OpenSSF REST API. Required for the README badge.
           publish_results: true
+          #
+          # OPTIONAL — the Branch-Protection check.
+          #
+          # Without a token, Branch-Protection reports -1 (inconclusive) and is
+          # left out of the total. It is not counted as a failure.
+          #
+          # To have it scored, do BOTH of these, in this order:
+          #   1. Create a fine-grained personal access token at
+          #      https://github.com/settings/personal-access-tokens/new
+          #        Resource owner ....... otwin-core
+          #        Repository access .... Only select repositories → otwin-core/otwin
+          #        Repository permissions → Administration: Read-only
+          #   2. Save it at
+          #      https://github.com/otwin-core/otwin/settings/secrets/actions
+          #      as a secret named SCORECARD_TOKEN
+          # Then uncomment the line below.
+          #
+          # Uncommenting it WITHOUT creating the secret first passes an empty
+          # string to the action and gains nothing.
+          #
+          # repo_token: ${{ secrets.SCORECARD_TOKEN }}
 
-          # (Optional) Uncomment file_mode if you have a .gitattributes with files marked export-ignore
-          # file_mode: git
-
-      # Upload the results as artifacts (optional). Commenting out will disable uploads of run results in SARIF
-      # format to the repository Actions tab.
-      - name: "Upload artifact"
+      - name: Upload SARIF as a build artifact
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: SARIF file
           path: results.sarif
           retention-days: 5
 
-      # Upload the results to GitHub's code scanning dashboard (optional).
-      # Commenting out will disable upload of results to your repo's Code Scanning dashboard
-      - name: "Upload to code-scanning"
+      - name: Upload SARIF to Code scanning
         uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         with:
           sarif_file: results.sarif
