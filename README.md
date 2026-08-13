@@ -7,7 +7,7 @@
 [![PyPI](https://img.shields.io/pypi/v/otwin?color=1a4fd6)](https://pypi.org/project/otwin/)
 [![Python](https://img.shields.io/pypi/pyversions/otwin)](https://pypi.org/project/otwin/)
 [![CI](https://github.com/otwin-core/otwin/actions/workflows/ci.yml/badge.svg)](https://github.com/groundlens-dev/groundlens/actions/workflows/ci.yml)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/groundlens-dev/groundlens/badge)](https://scorecard.dev/viewer/?uri=github.com/groundlens-dev/groundlens)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/otwin-core/otwin/badge)](https://scorecard.dev/viewer/?uri=github.com/otwin-core/otwin)
 [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen?style=flat-square)](https://opensource.org/license/apache-2-0)
 
 
