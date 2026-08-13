@@ -77,6 +77,7 @@ from otwin.io.sunspec import (  # noqa: E402
     ModelDef,
     PointDef,
     PySunSpec2Transport,
+    ScaleFactorError,
     compare_model_defs,
     decode_point,
     load_model_def,
@@ -1323,54 +1324,41 @@ def test_a_scale_factor_at_its_legal_extremes_still_decodes() -> None:
 
 
 # --------------------------------------------------------------------------
-# Known defects, pinned so that fixing them is visible
+# Regressions: two defects these tests found, each fixed
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "DEFECT: SunSpecSource.read() propagates OverflowError when a sunssf "
-        "register holds a large positive exponent. _scale() computes "
-        "10.0**exponent unguarded and outside the per-model try block, so one "
-        "corrupt register loses the whole sample, every other model included. "
-        "Left unfixed deliberately; remove this marker with the fix."
-    ),
-)
 def test_a_corrupt_scale_factor_register_must_not_take_the_sample_down() -> None:
-    """read() promises never to raise for a wire-level problem. It does.
+    """read() promises never to raise for a wire-level problem.
 
     A ``sunssf`` register holding 400 is out of the SunSpec range and can only
     be corruption or a mis-mapped address — which is exactly the case the
-    quality ladder exists for. The point should degrade to 'bad' or 'stale'
-    and the rest of the chain should still be read.
+    quality ladder exists for. The point degrades to 'bad' or 'stale' and the
+    rest of the chain is still read.
+
+    Before the fix this raised OverflowError out of read(), losing the whole
+    sample because one register on one model was wrong.
     """
     sim = SunSpecSimulator(soc=0.62)
     src = SunSpecSource(transport=sim)
     assert src.read().quality["m802.SoC"] == "good"
 
     sim.pin_raw(802, "SoC_SF", 400)
-    sample = src.read()  # currently raises OverflowError
+    sample = src.read()
 
     assert sample.quality["m802.SoC"] in ("stale", "bad")
     assert sample.quality["m713.SoC"] == "good"  # the other models are innocent
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "DEFECT: SunSpecSource.soc() picks between models 713 and 802 on "
-        "publication alone and then raises TransportError if the chosen one is "
-        "unreadable, instead of falling back to the model that is answering. "
-        "Left unfixed deliberately; remove this marker with the fix."
-    ),
-)
 def test_soc_falls_back_to_802_when_713_stops_answering() -> None:
     """The fallback exists for exactly this: one of two views going dark.
 
     713 is the grid-interface view and 802 the BMS view of the same battery.
     When the 713 block stops answering and 802 is reading cleanly, a twin that
     loses its state of charge altogether has thrown away good data.
+
+    Before the fix the choice was made on publication alone, so a bad 713
+    raised even though 802 was answering.
     """
     sim = SunSpecSimulator(soc=0.62)
     src = SunSpecSource(transport=sim)
@@ -1381,6 +1369,60 @@ def test_soc_falls_back_to_802_when_713_stops_answering() -> None:
     assert sample.quality["m802.SoC"] == "good"
 
     assert src.soc(sample) == pytest.approx(0.62, abs=1e-6)
+
+
+def test_a_corrupt_scale_factor_is_named_in_last_error() -> None:
+    """Degrading a point quietly is not enough; the operator has to find it.
+
+    'SoC reads bad' sends a technician to the battery. 'the SoC_SF register
+    reads 400, outside the SunSpec range' sends them to the register map,
+    which is where the fault actually is.
+    """
+    sim = SunSpecSimulator(soc=0.62)
+    src = SunSpecSource(transport=sim)
+    src.read()
+
+    sim.pin_raw(802, "SoC_SF", 400)
+    src.read()
+
+    assert isinstance(src.last_error, ScaleFactorError)
+    message = str(src.last_error)
+    assert "SoC_SF" in message and "400" in message
+    assert "[-10, 10]" in message
+
+
+def test_soc_prefers_a_readable_view_over_a_preferred_one() -> None:
+    """713 outranks 802 on preference, not on precedence.
+
+    A 713 block that has gone quiet still delivers a stale number from the
+    last cycle. An 802 block reading now is better information, and the
+    ranking has to say so -- otherwise the preference for the grid-interface
+    view quietly outlives the link that carries it.
+    """
+    sim = SunSpecSimulator(soc=0.62)
+    src = SunSpecSource(transport=sim)
+    sim.pin_raw(802, "SoC", 7000)  # 70.00 % on the BMS view
+    assert src.soc() == pytest.approx(0.62, abs=1e-6)  # 713 while both are good
+
+    sim.inject_timeout_for_model(713)
+    sample = src.read()
+    assert sample.quality["m713.SoC"] == "stale"
+    assert sample.quality["m802.SoC"] == "good"
+
+    assert src.soc(sample) == pytest.approx(0.70, abs=1e-6)
+
+
+def test_soc_names_every_view_it_tried_before_giving_up() -> None:
+    """The refusal has to say what was attempted, not just that it failed."""
+    sim = SunSpecSimulator(soc=0.5)
+    src = SunSpecSource(transport=sim)
+    sim.inject_timeout_for_model(713)
+    sim.inject_timeout_for_model(802)
+
+    with pytest.raises(TransportError) as exc:
+        src.soc()
+    message = str(exc.value)
+    assert "m713.SoC=bad" in message and "m802.SoC=bad" in message
 
 
 # --------------------------------------------------------------------------
