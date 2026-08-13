@@ -14,6 +14,8 @@ install rather than a traceback from three frames down.
 from __future__ import annotations
 
 import importlib
+import re
+from importlib import metadata
 
 import pytest
 
@@ -45,8 +47,16 @@ def test_unknown_attribute_raises_attribute_error_not_import_error() -> None:
 def test_missing_torch_says_what_to_install() -> None:
     """The failure mode users actually hit, pinned.
 
-    The message must name a distribution that exists. An earlier version said
-    `pip install otwin[torch]`, and there is no `otwin` package.
+    The message must name a distribution that exists. This test had the right
+    idea and the wrong fact: it was written when the learned models shipped as
+    a separate `otwin-learn` distribution, and it asserted that the message
+    must NOT say `otwin[...]`. The thirteen packages were then merged into one
+    called `otwin`, which inverted the truth without touching the test -- so
+    the suite actively defended an instruction that resolves to nothing on
+    PyPI.
+
+    Asserted against the installed metadata now, not against a string, so the
+    same drift cannot happen again.
     """
     # The shim resolves the NAME without torch -- the ImportError fires on
     # construction, which is the moment torch is actually needed. Worth pinning:
@@ -57,7 +67,19 @@ def test_missing_torch_says_what_to_install() -> None:
         cls(n_states=2, n_inputs=1)
     message = str(exc.value)
     assert "torch" in message.lower()
-    assert "otwin[" not in message, (
-        "error message names a distribution that does not exist; "
-        f"say otwin-learn[torch] instead. Got: {message}"
+
+    named = re.findall(r"otwin\[([a-z0-9,\s_.-]+)\]", message)
+    assert named, f"message does not say what to install. Got: {message}"
+    declared = {
+        e.lower() for e in (metadata.metadata("otwin").get_all("Provides-Extra") or [])
+    }
+    for group in named:
+        for extra in (e.strip().lower() for e in group.split(",")):
+            assert extra in declared, (
+                f"message names extra {extra!r}, which pip does not accept. "
+                f"Declared: {sorted(declared)}. Got: {message}"
+            )
+    assert "otwin-learn" not in message, (
+        f"otwin-learn was one of the pre-merge distributions and is not on "
+        f"PyPI. Got: {message}"
     )
