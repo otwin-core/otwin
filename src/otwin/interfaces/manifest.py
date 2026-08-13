@@ -239,7 +239,19 @@ class TwinManifest:
         older reader.
         """
         data = dict(d)
-        version = str(data.get("manifest_version", MANIFEST_VERSION))
+        raw_version = data.get("manifest_version", MANIFEST_VERSION)
+        if not isinstance(raw_version, str):
+            # A non-string version used to be coerced with str(), which meant
+            # `{"manifest_version": null}` loaded, warned about version "None",
+            # and then vanished from to_dict() entirely -- so reading the file
+            # back produced a manifest silently claiming to be this reader's
+            # own version. The one job of this field is to let an old reader
+            # notice it is reading a new file; quietly relabelling it defeats
+            # that completely.
+            raise ValueError(
+                f"manifest_version must be a string, got {type(raw_version).__name__}"
+            )
+        version = raw_version
         if version.split(".")[0] != MANIFEST_VERSION.split(".")[0]:
             warnings.warn(
                 f"Manifest declares version {version}; this reader implements "
@@ -249,9 +261,21 @@ class TwinManifest:
         prov = data.pop("provenance", None)
         if prov is None:
             raise ValueError("manifest is missing the required 'provenance' section")
-        if isinstance(prov, dict):
-            prov_known = {f for f in Provenance.__dataclass_fields__}
-            prov = Provenance(**{k: v for k, v in prov.items() if k in prov_known})
+        if not isinstance(prov, dict):
+            # Fail at the boundary, naming the field. The previous version let
+            # a non-mapping through untouched: `{"provenance": true}` loaded
+            # without complaint and then raised
+            # `AttributeError: 'bool' object has no attribute 'items'` from
+            # `to_dict()`, at a call site with no idea which file was at fault.
+            # SECURITY.md names manifest deserialisation as this project's
+            # threat surface; a permissive parser that defers its failure is
+            # exactly the shape that hides in.
+            raise ValueError(
+                f"manifest 'provenance' must be a mapping of fields, got "
+                f"{type(prov).__name__}"
+            )
+        prov_known = {f for f in Provenance.__dataclass_fields__}
+        prov = Provenance(**{k: v for k, v in prov.items() if k in prov_known})
         known = {f for f in cls.__dataclass_fields__} - {"provenance", "extra"}
         kwargs = {k: v for k, v in data.items() if k in known}
         extra = {k: v for k, v in data.items() if k not in known}

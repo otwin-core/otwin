@@ -1,0 +1,40 @@
+# ClusterFuzzLite: fuzz every pull request for a short budget.
+#
+# This is a regression fuzzer, not a discovery campaign. It builds the targets
+# in fuzz/, runs them for a few minutes against the code the PR proposes, and
+# fails the job if an input reaches an undocumented exception. Long-running
+# discovery is what cflite_batch.yml is for.
+name: ClusterFuzzLite PR fuzzing
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions: read-all
+
+jobs:
+  fuzz:
+    name: Fuzz (${{ matrix.sanitizer }})
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ matrix.sanitizer }}-${{ github.ref }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined]
+    steps:
+      - name: Build fuzzers
+        uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          language: python
+          sanitizer: ${{ matrix.sanitizer }}
+
+      - name: Run fuzzers
+        uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fuzz-seconds: 180
+          mode: code-change
+          sanitizer: ${{ matrix.sanitizer }}
+          output-sarif: true
