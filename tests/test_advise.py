@@ -576,3 +576,43 @@ def test_a_clean_verdict_is_evidence_not_silence() -> None:
     assert v.to_dict()["checked"] == v.checked
     for entry in v.checked:
         assert entry in v.explain()
+
+
+# --------------------------------------------------------------------------
+# Regression: an unrecorded operating range is a refusal, not a licence
+# --------------------------------------------------------------------------
+
+
+def test_absent_state_bounds_refuse_every_operating_point():
+    """The inverse of the max_horizon rule, and it used to be backwards.
+
+    Until this was fixed, `check` skipped the state test entirely when
+    `state_bounds` was None, so a twin with no recorded operating range
+    returned a clean, evidence-carrying verdict for any state whatsoever --
+    a state of charge of 1e12 came back answerable with zero breaches.
+
+    `from_manifest` documents the intended rule: a field the manifest does not
+    carry "stays None, which is a refusal rather than a default". This asserts
+    it on the axis where it was violated.
+    """
+    env = Envelope(state_bounds=None, max_horizon=500)
+
+    for absurd in ([0.5], [1e12], [-1e12], [0.0]):
+        verdict = env.check(state=absurd, horizon=10)
+        assert not verdict, f"state {absurd} was admitted with no recorded range"
+        kinds = [b.kind for b in verdict.breaches]
+        assert "state" in kinds, f"no state breach for {absurd}: {kinds}"
+
+
+def test_absent_state_bounds_do_not_refuse_when_no_state_is_asked_about():
+    """The refusal must be about the question, not about the envelope.
+
+    A caller asking only about a horizon has not asked anything the missing
+    operating range can answer, so the absent bounds must stay silent. This is
+    exactly how the horizon check behaves when `horizon` is not supplied, and
+    the asymmetry would be a bug in the other direction.
+    """
+    env = Envelope(state_bounds=None, max_horizon=500)
+    verdict = env.check(horizon=10)
+    assert verdict, verdict.explain()
+    assert not any(b.kind == "state" for b in verdict.breaches)

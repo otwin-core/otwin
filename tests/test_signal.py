@@ -478,3 +478,47 @@ def test_resampled_grid_is_uniform_and_covers_the_record(
     assert gaps == []
     assert not np.isnan(y_grid).any()
     assert coverage(y_grid) == 1.0
+
+
+# --------------------------------------------------------------------------
+# Regression: the grid must not run past the last measurement
+# --------------------------------------------------------------------------
+
+
+def test_grid_never_extends_beyond_the_last_measurement():
+    """No invented trailing point, however small.
+
+    The grid was built with `arange(t[0], t[-1] + 0.5*dt, dt)`, which admits a
+    final point up to half a step past the end of the record whenever the
+    record does not end on a grid multiple. Three samples ending at t = 1.6
+    with dt = 1.0 produced a point at t = 2.0 carrying the 1.6 s reading, and
+    `coverage` reported the window as 100 % measured.
+
+    `find_gaps` cannot catch this: it only inspects intervals *between*
+    samples, so the trailing edge is structurally invisible to it.
+    """
+    for last, dt in ((1.6, 1.0), (2.4, 1.0), (0.7, 0.25), (9.99, 1.0)):
+        t = [0.0, last / 2.0, last]
+        y = [10.0, 20.0, 30.0]
+        t_grid, _, _ = resample(t, y, dt=dt, max_gap=float("inf"))
+        assert t_grid[-1] <= last + 1e-12, (
+            f"grid ends at {t_grid[-1]}, past the last measurement at {last}"
+        )
+
+
+def test_a_record_ending_on_a_grid_multiple_keeps_its_final_point():
+    """The fix must not cost the legitimate endpoint.
+
+    Clamping the grid is only correct if a record that genuinely ends on a
+    multiple of `dt` still gets a sample there. Floating-point accumulation
+    makes this easy to get wrong by one point in either direction.
+    """
+    t_grid, y_grid, _ = resample([0.0, 1.0, 2.0], [1.0, 2.0, 3.0], dt=1.0)
+    assert t_grid[-1] == pytest.approx(2.0)
+    assert len(t_grid) == 3
+    assert y_grid[-1] == pytest.approx(3.0)
+
+    # And on a grid where the step does not divide the span exactly.
+    t_grid, _, _ = resample([0.0, 0.5, 1.0], [1.0, 2.0, 3.0], dt=0.1)
+    assert t_grid[-1] == pytest.approx(1.0)
+    assert len(t_grid) == 11
