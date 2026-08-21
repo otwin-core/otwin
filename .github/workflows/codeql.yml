@@ -11,6 +11,9 @@
 #
 name: "CodeQL Advanced"
 
+# Nothing by default. The analyze job asks for what it needs.
+permissions: {}
+
 on:
   push:
     branches: [ "main" ]

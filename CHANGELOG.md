@@ -10,6 +10,10 @@ exact version in anything you depend on.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0] — 2026-08-21
+
 Seven changes, all found by rewriting a ten-notebook digital-twin study to run on the
 library instead of on hand-rolled code. Every existing call path is unchanged: the new
 arguments are optional and the new modules are additive.
