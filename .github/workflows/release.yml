@@ -37,7 +37,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install the build tooling
-        run: pip install build==1.5.0 twine==7.0.0
+        # Hashes, not just versions. Scorecard flags `pip install build==1.5.0`
+        # exactly as it flags an unpinned one, and it is right to: a version tag
+        # can be re-pointed at different bytes, a hash cannot.
+        run: pip install --require-hashes -r .github/requirements/build.txt
 
       - name: Build sdist and wheel
         run: python -m build

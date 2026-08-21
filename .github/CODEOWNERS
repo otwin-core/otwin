@@ -1,2 +1,21 @@
-# Every file needs a maintainer. Until there is a second one, that is me.
-* @Javihaus
+# Every file has an owner, and the owner is asked to review changes to it.
+#
+# Scorecard's Branch-Protection check reads two things that this file feeds:
+# whether codeowner review is required on `main`, and whether the codeowners
+# file is valid. The file alone scores nothing — the branch rule has to require
+# it. See CONTRIBUTING.md, "Git", for the settings that go with this.
+#
+# A single-maintainer catch-all is honest rather than decorative: it says who is
+# accountable, and it makes the reviewer explicit the moment a second maintainer
+# joins. Add the Julia and MATLAB owners here when those slots are filled
+# (MAINTAINERS.md).
+
+*                       @Javihaus
+
+# The parts where a wrong change is expensive and quiet, called out so that a
+# future co-maintainer knows these are not ordinary files.
+
+/src/otwin/model/       @Javihaus
+/src/otwin/forecast/    @Javihaus
+/.github/workflows/     @Javihaus
+/pyproject.toml         @Javihaus
