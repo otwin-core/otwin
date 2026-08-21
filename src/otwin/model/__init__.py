@@ -23,8 +23,17 @@ without refitting anything.
 """
 
 from .integrators import implicit_midpoint, integrate_phs, newton_step
-from .iphs import IrreversiblePHS
-from .library import dc_motor, mass_spring_damper, pumped_hydro, water_tank
+from .iphs import IrreversiblePHS, ModulatedIPHS
+from .library import (
+    FoulingLaw,
+    dc_motor,
+    effectiveness_ntu,
+    heat_exchanger,
+    kern_seaton_fouling,
+    mass_spring_damper,
+    pumped_hydro,
+    water_tank,
+)
 from .linalg import check_psd, check_skew_symmetric, numerical_gradient
 from .phs import PortHamiltonianSystem
 from .solvers import integrate, integrate_with_inputs
@@ -32,10 +41,15 @@ from .solvers import integrate, integrate_with_inputs
 __all__ = [
     "PortHamiltonianSystem",
     "IrreversiblePHS",
+    "ModulatedIPHS",
     "water_tank",
     "mass_spring_damper",
     "dc_motor",
     "pumped_hydro",
+    "heat_exchanger",
+    "effectiveness_ntu",
+    "kern_seaton_fouling",
+    "FoulingLaw",
     "implicit_midpoint",
     "integrate_phs",
     "newton_step",

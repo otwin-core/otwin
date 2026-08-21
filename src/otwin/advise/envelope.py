@@ -254,26 +254,52 @@ class Envelope:
         if manifest is not None:
             if self.requires_validated:
                 if not getattr(manifest, "is_validated", False):
-                    breaches.append(
-                        Breach(
-                            "validation",
-                            "this twin has never been validated under a "
-                            "leakage-free protocol",
+                    # A manifest that carries validation under some other key is
+                    # the interesting case: the twin probably *was* validated and
+                    # the record simply does not assert it. Saying "never been
+                    # validated" there is true of the record and false of the
+                    # work, and sends the reader looking in the wrong place.
+                    recorded = getattr(manifest, "validation", None) or {}
+                    # Narrow on purpose. A record that carries `leakage_free`
+                    # and sets it to False -- or to a `1` that survived a trip
+                    # through MATLAB -- has answered the question, and the
+                    # answer is no. The reworded message is only for the record
+                    # that never mentions the key, which is the one whose author
+                    # has no way to find out what is wrong.
+                    if recorded and "leakage_free" not in recorded:
+                        detail = (
+                            "validation is recorded "
+                            f"({', '.join(sorted(str(k) for k in recorded))}) but does "
+                            "not assert leakage_free=True; that key, as the boolean, is "
+                            "what certifies the protocol. Build it with "
+                            "TwinManifest.validated_by(...)"
                         )
-                    )
+                    else:
+                        detail = (
+                            "this twin has never been validated under a "
+                            "leakage-free protocol"
+                        )
+                    breaches.append(Breach("validation", detail))
                 else:
                     checked.append("validated, leakage-free")
 
             if wants_interval and self.requires_calibrated:
                 calibration = getattr(manifest, "calibration", None) or {}
                 if calibration.get("empirical_coverage") is None:
-                    breaches.append(
-                        Breach(
-                            "calibration",
-                            "interval coverage has never been measured, so the "
-                            "band has no demonstrated meaning",
+                    if calibration and "empirical_coverage" not in calibration:
+                        detail = (
+                            "calibration is recorded "
+                            f"({', '.join(sorted(str(k) for k in calibration))}) but "
+                            "carries no empirical_coverage; a nominal level is a "
+                            "promise, and this check reads the measurement. Build it "
+                            "with TwinManifest.calibrated_by(...)"
                         )
-                    )
+                    else:
+                        detail = (
+                            "interval coverage has never been measured, so the "
+                            "band has no demonstrated meaning"
+                        )
+                    breaches.append(Breach("calibration", detail))
                 else:
                     checked.append(
                         f"coverage measured at {calibration['empirical_coverage']:.2f}"

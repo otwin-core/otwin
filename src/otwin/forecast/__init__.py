@@ -33,6 +33,14 @@ from .calibration import (
     recalibrate,
     sharpness,
 )
+from .conformal import (
+    AdaptiveConformal,
+    ConformalBand,
+    conformal_quantile,
+    horizon_conformal,
+    rolling_origin_residuals,
+    split_conformal,
+)
 from .ensemble import Ensemble
 from .metrics import crps, mae, mase, mpiw, nrmse, picp, rmse, skill_score, theil_u
 from .protocol import ForecastInterfaceError, evaluate
@@ -67,6 +75,12 @@ __all__ = [
     "interval_score",
     "recalibrate",
     "sharpness",
+    "conformal_quantile",
+    "split_conformal",
+    "horizon_conformal",
+    "AdaptiveConformal",
+    "ConformalBand",
+    "rolling_origin_residuals",
 ]
 
 

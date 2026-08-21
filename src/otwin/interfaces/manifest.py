@@ -100,10 +100,14 @@ class TwinManifest:
         estimated: Names of parameters estimated from data, as opposed to
             supplied from first principles. The white-box/grey-box distinction
             is exactly this list: empty means white-box.
-        validation: How the twin was validated. Use
-            :meth:`otwin.interfaces.Report.to_dict` rather than hand-rolled keys.
-        calibration: Uncertainty method and measured coverage. Use
-            :meth:`otwin.interfaces.Interval.to_dict`.
+        validation: How the twin was validated. **The key that decides
+            :attr:`is_validated` is ``leakage_free``, and it must be the boolean
+            ``True``.** Everything else in the dict is description; that one key
+            is the claim. Build it with :meth:`validated_by` rather than by hand.
+        calibration: Uncertainty method and measured coverage. **The key that
+            :class:`otwin.advise.Envelope` reads is ``empirical_coverage``** —
+            the coverage actually measured on held-out data, not the nominal
+            level. Build it with :meth:`calibrated_by`.
         provenance: See :class:`Provenance`.
         extra: Fields from a newer manifest version, preserved so that a
             round-trip through an older reader is lossless.
@@ -120,6 +124,28 @@ class TwinManifest:
         ... )
         >>> m.is_white_box
         True
+
+        A twin that has been validated and calibrated says so with two specific
+        keys. Getting either name wrong produces a manifest that looks complete
+        and is refused by :class:`otwin.advise.Envelope`, so build them:
+
+        >>> checked = TwinManifest(
+        ...     name="tank-A",
+        ...     model_class="port_hamiltonian",
+        ...     model_kind="water_tank",
+        ...     n_states=1,
+        ...     n_inputs=1,
+        ...     provenance=Provenance.now("0.1.0"),
+        ...     validation=TwinManifest.validated_by("rolling_origin", horizon=68,
+        ...                                          metrics={"theil_u": 0.64}),
+        ...     calibration=TwinManifest.calibrated_by("split_conformal",
+        ...                                            empirical_coverage=0.87,
+        ...                                            level=0.90),
+        ... )
+        >>> checked.is_validated
+        True
+        >>> checked.calibration["empirical_coverage"]
+        0.87
     """
 
     name: str
@@ -134,6 +160,11 @@ class TwinManifest:
     calibration: dict[str, Any] | None = None
     manifest_version: str = MANIFEST_VERSION
     extra: dict[str, Any] = field(default_factory=dict)
+
+    #: Protocols that do not show a model the values it is scored against. A
+    #: validation recorded under any other protocol name still has to assert
+    #: ``leakage_free`` itself, because only the caller knows what it did.
+    LEAKAGE_FREE_PROTOCOLS = ("temporal_holdout", "rolling_origin", "expanding_window")
 
     VALID_CLASSES = (
         "port_hamiltonian",
@@ -168,6 +199,80 @@ class TwinManifest:
             raise ValueError(
                 f"estimated names not present in parameters: {sorted(unknown)}"
             )
+
+    @staticmethod
+    def validated_by(
+        protocol: str,
+        *,
+        leakage_free: bool | None = None,
+        **fields: Any,
+    ) -> dict[str, Any]:
+        """Build a ``validation`` dict that asserts what :attr:`is_validated` reads.
+
+        The contract is one boolean, ``leakage_free``, and the cost of not
+        knowing that is a manifest carrying a perfectly sensible
+        ``protocol="rolling_origin"`` and a ``theil_u`` that is nonetheless
+        treated as unvalidated. This builder sets the key.
+
+        ``leakage_free`` defaults to ``True`` for the protocols in
+        :data:`LEAKAGE_FREE_PROTOCOLS` and ``False`` otherwise — a random split
+        over a time series is a validation, it is just not this kind, and it must
+        not be able to claim it is by accident.
+
+        Args:
+            protocol: Name of the partitioning protocol used.
+            leakage_free: Override the default judgement for ``protocol``.
+            **fields: Anything else worth recording — metrics, horizon, folds.
+
+        Returns:
+            A dict suitable for ``TwinManifest(validation=...)``.
+
+        Example:
+            >>> TwinManifest.validated_by("rolling_origin")["leakage_free"]
+            True
+            >>> TwinManifest.validated_by("random_split")["leakage_free"]
+            False
+        """
+        if leakage_free is None:
+            leakage_free = protocol in TwinManifest.LEAKAGE_FREE_PROTOCOLS
+        return {"protocol": protocol, "leakage_free": bool(leakage_free), **fields}
+
+    @staticmethod
+    def calibrated_by(
+        method: str, *, empirical_coverage: float, **fields: Any
+    ) -> dict[str, Any]:
+        """Build a ``calibration`` dict carrying measured coverage.
+
+        ``empirical_coverage`` is required rather than optional because a
+        calibration record without it is the thing this builder exists to
+        prevent: a stated 90 % interval whose delivered coverage nobody measured.
+
+        Args:
+            method: How the interval was produced — ``"split_conformal"``,
+                ``"ensemble"``, ``"gp"``.
+            empirical_coverage: Coverage measured on held-out data, in [0, 1].
+            **fields: Anything else — nominal ``level``, band width, horizon.
+
+        Returns:
+            A dict suitable for ``TwinManifest(calibration=...)``.
+
+        Raises:
+            ValueError: If ``empirical_coverage`` is not a fraction in [0, 1].
+                A percentage passed as 87 would otherwise sail through and read
+                as spectacularly well calibrated.
+
+        Example:
+            >>> TwinManifest.calibrated_by("split_conformal",
+            ...                            empirical_coverage=0.87)["method"]
+            'split_conformal'
+        """
+        cov = float(empirical_coverage)
+        if not 0.0 <= cov <= 1.0:
+            raise ValueError(
+                f"empirical_coverage must be a fraction in [0, 1], got {cov!r}. "
+                "A coverage of 87 % is 0.87."
+            )
+        return {"method": method, "empirical_coverage": cov, **fields}
 
     @property
     def is_white_box(self) -> bool:

@@ -222,6 +222,29 @@ print(f"R positive semidefinite: {ok_R} (min eigenvalue {min_eig:.1e})")
 
 This model is available directly as `otwin.model.water_tank`.
 
+### 4.3 Two extensions you will need sooner than you expect
+
+**The port is often feedback, not a schedule.** A converter holding constant
+power, a thermostat, a droop-controlled inverter, a pump-turbine at rated power
+— in all of them `u` depends on the state. Pass a callable instead of an array
+and the law is evaluated at the step midpoint inside the implicit solve, which is
+what keeps the discrete power balance of Section 5.1 intact:
+
+```python
+res = integrate_phs(store, x0, t, u=lambda t, x: np.array([rated_flow(head(x))]))
+res["u"]        # what the port actually did, since there is no schedule to read
+```
+
+**Not every process is reversible-plus-dissipative.** A chemical reaction, heat
+conduction, any process that produces entropy needs the irreversible extension,
+and it comes in two forms because the literature does. `IrreversiblePHS` is the
+additive `ẋ = (J − R)∇H + gu + L(x)∇S(x)` with `σ = ∇SᵀL∇S ≥ 0` enforced through
+`L ⪰ 0`. `IrreversiblePHS.from_modulated(...)` is the Ramírez–Maschke–Sbarbaro
+form `ẋ = γ(x)·J∇H + gu`, which is what most of the papers are written in and
+what a reactor or an exchanger falls out of naturally. There, energy conservation
+is structural (`γJ` is still skew) and the second law is a property of `γ`, so it
+is checked on every call rather than assumed.
+
 
 ## 5. What the two structural conditions give you
 
@@ -293,6 +316,30 @@ measured on held-out data: a stated 90 % interval should contain the true value
 about 90 % of the time. `Interval.is_validated` is `False` until that
 measurement has been made.
 
+`otwin.forecast.conformal` builds the interval as well as measuring it — split,
+horizon-aware and adaptive constructions, all distribution-free, none of them
+assuming the model's likelihood is right:
+
+```python
+from otwin.forecast import rolling_origin_residuals, horizon_conformal
+
+# Refits the whole pipeline at earlier origins and collects genuine
+# h-step-ahead errors. The expensive step, and the one that makes the band mean
+# something.
+residuals, horizons = rolling_origin_residuals(refit_forecast, train, step=5)
+band = horizon_conformal(residuals, horizons, level=0.90, max_horizon=68)
+lower, upper = band.apply(forecast)
+```
+
+Two things it refuses to do, both learned the hard way. It will not build a band
+from a fitted model's own **in-sample residuals** — those are an order of
+magnitude smaller than its h-step-ahead errors, and on a capacity twin that
+mistake delivered 1.5 % coverage against a 90 % target. And when a calibration
+set is too small for the level requested, `conformal_quantile` returns an
+**infinite** half-width rather than clipping the rank and returning the sample
+maximum. An infinite band is useless; a band that is silently narrower than its
+own guarantee is worse than useless.
+
 
 ## 7. Library structure
 
@@ -306,7 +353,7 @@ reference architecture used in condition-monitoring practice.
 | DM — Data Manipulation | `otwin.signal` | Resampling to a uniform grid, gap detection, out-of-order sample handling, measurement-coverage reporting |
 | SD — State Detection | `otwin.estimate` | Extended Kalman filter, moving-horizon estimation with state bounds, energy-consistent observer |
 | HA — Health Assessment | `otwin.model` | The model class, solvers, and a catalogue of worked physical models |
-| PA — Prognostic Assessment | `otwin.forecast` | Partitioning protocols, reference forecasters, error metrics, interval calibration |
+| PA — Prognostic Assessment | `otwin.forecast` | Partitioning protocols, reference forecasters, error metrics, conformal interval construction and calibration |
 | AG — Advisory Generation | `otwin.advise` | Validity envelope: the operating range and horizon over which the model has been validated |
 
 ### 7.1 State estimation
@@ -349,9 +396,10 @@ already provides; the second is what you would contribute.
 
 **Modelling and identification**
 
-1. **Model a physical system not yet in the catalogue** — a heat exchanger
-   network, a hydraulic actuator, a synchronous machine, a distillation column,
-   a pneumatic circuit. *Provided:* the model class, structural checks, solvers.
+1. **Model a physical system not yet in the catalogue** — a hydraulic actuator,
+   a synchronous machine, a distillation column, a pneumatic circuit, or a
+   *distributed* heat exchanger (the catalogue has a lumped two-node one;
+   nothing there reproduces a temperature profile along the tube). *Provided:* the model class, structural checks, solvers.
    *Yours:* the four functions, parameter identification from data, and one
    result known in closed form (a steady state, an efficiency, a conservation
    law) used as a validation test.

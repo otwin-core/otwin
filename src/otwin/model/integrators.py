@@ -52,6 +52,20 @@ the model and decreasing order of cost per step:
     finite-differenced, which is what a bare vector field with no analytic
     Jacobian gets.
 
+State-dependent ports
+---------------------
+``u`` may be an array indexed by time *or* a callable ``u(t, x)``. The second
+form is what a power-controlled machine needs: a pump-turbine holding rated
+electrical power has a volumetric flow fixed by the head, hence by the state, so
+the port is feedback and not a schedule. The port law is evaluated at the
+*midpoint* ``u_m = u(t_m, x_m)`` inside the implicit solve, which keeps it on the
+same footing as every other midpoint quantity and so preserves the discrete power
+balance above. It also makes the vector-field Jacobian incomplete — the true one
+gains a ``g·∂u/∂x`` term — which costs Newton convergence *rate* and nothing else,
+because the residual is still driven to ``newton_tol``. The closed-form
+``"linear"`` path, where a wrong matrix would be a wrong answer rather than a
+slower one, is refused outright for callable ports.
+
 ``"linear"``
     When ``H`` is quadratic (``∇H = Qx``, possibly with a constant offset) and
     the structure matrices are constant, the whole system is affine and the
@@ -93,6 +107,10 @@ __all__ = [
 
 Vector = npt.NDArray[np.floating]
 Matrix = npt.NDArray[np.floating]
+#: A port law: ``u(t, x) -> u``. Used where the port input is a function of the
+#: state rather than a fixed schedule -- a converter holding constant power, a
+#: thermostat, a droop-controlled inverter. See :func:`implicit_midpoint`.
+PortLaw = Callable[[float, Vector], Vector]
 
 #: Armijo sufficient-decrease constant for the Newton line search.
 _ARMIJO = 1e-4
@@ -501,13 +519,14 @@ def _fd_solve_builder(
 
 
 def _prepare_inputs(
-    x0: Vector, t_eval: Vector, u: Vector
-) -> tuple[Vector, Vector, Vector]:
+    x0: Vector, t_eval: Vector, u: Vector | PortLaw
+) -> tuple[Vector, Vector, Vector | PortLaw]:
     t_eval = np.asarray(t_eval, dtype=float)
     x0 = np.asarray(x0, dtype=float).ravel()
-    u = np.asarray(u, dtype=float)
-    if u.ndim == 1:
-        u = u.reshape(-1, 1)
+    if not callable(u):
+        u = np.asarray(u, dtype=float)
+        if u.ndim == 1:
+            u = u.reshape(-1, 1)
     if t_eval.ndim != 1 or t_eval.size < 2:
         raise ValueError("t_eval must be a 1-D array with at least two points")
     if np.any(np.diff(t_eval) <= 0):
@@ -598,6 +617,7 @@ def _integrate_linear(
     return {
         "t": t_eval,
         "x": xs,
+        "u": u,
         "success": True,
         "message": "Integration successful",
         "method": "linear",
@@ -610,7 +630,7 @@ def implicit_midpoint(
     dynamics: Callable[[float, Vector, Vector], Vector],
     x0: Vector,
     t_eval: Vector,
-    u: Vector,
+    u: Vector | PortLaw,
     newton_tol: float = 1e-12,
     max_iter: int = 100,
     *,
@@ -640,7 +660,12 @@ def implicit_midpoint(
         dynamics: Vector field with signature ``(t, x, u) -> dx``.
         x0: Initial state ``(n_states,)``.
         t_eval: Strictly increasing time points ``(n_points,)``.
-        u: Input trajectory ``(n_points, n_inputs)`` (1-D is reshaped to a column).
+        u: Either an input trajectory ``(n_points, n_inputs)`` (1-D is reshaped
+            to a column, and rows are interpolated to step midpoints), or a
+            **port law** ``u(t, x) -> u`` for a port whose value depends on the
+            state. A port law is evaluated at the midpoint inside the implicit
+            solve; see "State-dependent ports" in the module docstring for what
+            that costs and what it protects.
         newton_tol: Residual tolerance for the per-step implicit solve.
         max_iter: Maximum iterations for the per-step solve.
         method: ``"auto"`` (default) uses the cheapest path the supplied
@@ -663,11 +688,14 @@ def implicit_midpoint(
     Returns:
         Dict with ``'t'``, ``'x'`` ``(n_points, n_states)``, ``'success'`` and
         ``'message'``, plus ``'method'`` (the path actually taken),
-        ``'n_newton_iter'`` and ``'n_feval'``.
+        ``'n_newton_iter'``, ``'n_feval'`` and ``'u'`` -- the realised port
+        trajectory on the grid, which for a port law is the only record of what
+        the port actually did.
 
     Raises:
-        ValueError: On a malformed ``t_eval`` / unknown ``method``, or if
-            ``method="linear"`` is requested without a ``linear`` model.
+        ValueError: On a malformed ``t_eval`` / unknown ``method``, if
+            ``method="linear"`` is requested without a ``linear`` model, or if a
+            port law is combined with the closed-form linear path.
         IntegratorConvergenceError: If a step fails and ``raise_on_failure``.
 
     Example:
@@ -681,9 +709,41 @@ def implicit_midpoint(
         ... )
         >>> res["success"]
         True
+
+        A port law instead of a schedule -- here a tank whose inlet is throttled
+        back as it fills, which no fixed ``u`` array can express:
+
+        >>> law = lambda tv, x: np.array([0.5 * max(0.0, 3.0 - float(x[0]))])
+        >>> res = implicit_midpoint(
+        ...     lambda tv, x, uv: tank.dynamics(x, uv), np.array([2.0]), t, law
+        ... )
+        >>> bool(res["u"][0, 0] > res["u"][-1, 0])
+        True
     """
     method = _resolve_method(method)
     x0, t_eval, u = _prepare_inputs(x0, t_eval, u)
+    # Split the two forms apart once, here, so nothing below has to ask again
+    # what `u` is. On the port-law path `u_sched` is a placeholder that is never
+    # read: the schedule does not exist, and the realised port is recorded in
+    # `u_rec` as the integration produces it.
+    port_law: PortLaw | None = None
+    if callable(u):
+        port_law = u
+        u_sched: Vector = np.zeros((t_eval.size, 1))
+    else:
+        u_sched = u
+
+    if port_law is not None and (method == "linear" or linear is not None):
+        # A wrong Jacobian costs Newton convergence rate; a wrong closed-form
+        # matrix is a wrong trajectory. The first is tolerable, the second is
+        # not, so the affine path is refused rather than silently applied to a
+        # system the port law has made nonlinear.
+        raise ValueError(
+            "a port law u(t, x) cannot use the closed-form 'linear' path: the "
+            "feedback term makes the system nonlinear in x, so the affine "
+            "midpoint matrix would not describe it. Use method='newton' or "
+            "method='auto'."
+        )
 
     if method == "linear":
         if linear is None:
@@ -691,15 +751,22 @@ def implicit_midpoint(
                 "method='linear' requires a LinearMidpointSystem; use integrate_phs "
                 "to derive one from a model, or pass linear=... explicitly"
             )
-        return _integrate_linear(linear, x0, t_eval, u)
+        return _integrate_linear(linear, x0, t_eval, u_sched)
     if method == "auto" and linear is not None:
-        return _integrate_linear(linear, x0, t_eval, u)
+        return _integrate_linear(linear, x0, t_eval, u_sched)
 
     n_points = t_eval.size
     n_states = x0.size
     xs = np.empty((n_points, n_states), dtype=float)
     xs[0] = x0
     eye = np.eye(n_states)
+
+    u_rec: Vector
+    if port_law is not None:
+        u_rec = np.empty((n_points, np.atleast_1d(port_law(float(t_eval[0]), x0)).size))
+        u_rec[0] = np.atleast_1d(port_law(float(t_eval[0]), x0))
+    else:
+        u_rec = u_sched
 
     use_newton = method in ("auto", "newton")
     allow_fsolve_fallback = method == "auto"
@@ -709,9 +776,15 @@ def implicit_midpoint(
     # size, ∂F/∂x₁ = I − (Δt/2)·∂f/∂x is the same matrix at every step, so it is
     # factorised once here and applied thousands of times below.
     const_solve: Callable[[Vector], Vector] | None = None
-    if use_newton and jac is not None and constant_jacobian and uniform_grid:
+    if (
+        use_newton
+        and jac is not None
+        and constant_jacobian
+        and uniform_grid
+        and (port_law is None)
+    ):
         t_mid0 = 0.5 * (t_eval[0] + t_eval[1])
-        u_mid0 = 0.5 * (u[0] + u[1])
+        u_mid0 = 0.5 * (u_sched[0] + u_sched[1])
         jac_f = np.asarray(jac(t_mid0, x0, u_mid0), dtype=float)
         try:
             const_solve = _reusable_solve(eye - 0.5 * float(dts[0]) * jac_f)
@@ -730,8 +803,15 @@ def implicit_midpoint(
     for n in range(n_points - 1):
         dt = float(dts[n])
         t_mid = 0.5 * (t_eval[n] + t_eval[n + 1])
-        u_mid = 0.5 * (u[n] + u[n + 1])
         x_n = xs[n]
+        # For a port law the midpoint input is not known until x_mid is: it is
+        # evaluated inside the residual, which is what keeps u_m on the same
+        # footing as every other midpoint quantity and the power balance exact.
+        u_mid = (
+            np.atleast_1d(port_law(t_mid, x_n))
+            if port_law is not None
+            else 0.5 * (u_sched[n] + u_sched[n + 1])
+        )
 
         def residual(
             x_next: Vector,
@@ -739,16 +819,23 @@ def implicit_midpoint(
             dt: float = dt,
             t_mid: float = t_mid,
             u_mid: Vector = u_mid,
+            law: PortLaw | None = port_law,
         ) -> Vector:
             x_mid = 0.5 * (x_n + x_next)
-            return x_next - x_n - dt * np.asarray(dynamics(t_mid, x_mid, u_mid))
+            u_m = np.atleast_1d(law(t_mid, x_mid)) if law is not None else u_mid
+            return x_next - x_n - dt * np.asarray(dynamics(t_mid, x_mid, u_m))
 
         # Warm start: reuse the previous step's increment (rescaled if the grid
         # is non-uniform); fall back to an explicit-Euler predictor on step 0.
         if dx_prev is not None:
             x_guess = x_n + (dt / dt_prev) * dx_prev
         else:
-            x_guess = x_n + dt * np.asarray(dynamics(t_eval[n], x_n, u[n]), dtype=float)
+            u_0 = (
+                np.atleast_1d(port_law(float(t_eval[n]), x_n))
+                if port_law is not None
+                else u_sched[n]
+            )
+            x_guess = x_n + dt * np.asarray(dynamics(t_eval[n], x_n, u_0), dtype=float)
             total_feval += 1
 
         step_failed_msg: str | None = None
@@ -854,12 +941,15 @@ def implicit_midpoint(
             break
 
         xs[n + 1] = x_next
+        if port_law is not None:
+            u_rec[n + 1] = np.atleast_1d(port_law(float(t_eval[n + 1]), x_next))
         dx_prev = x_next - x_n
         dt_prev = dt
 
     return {
         "t": t_eval,
         "x": xs,
+        "u": u_rec,
         "success": success,
         "message": message,
         "method": "newton" if use_newton else "fsolve",
@@ -1057,7 +1147,11 @@ def integrate_phs(
             ``J``, ``R``, ``g``, ``hess_H``, ``jac_rhs``.
         x0: Initial state.
         t_eval: Time points.
-        u: Input trajectory ``(n_points, n_inputs)``; defaults to zeros.
+        u: Input trajectory ``(n_points, n_inputs)``, or a port law
+            ``u(t, x) -> u`` for a state-dependent port (a converter holding
+            constant power, a thermostat, a droop control). Defaults to zeros.
+            A port law disables the closed-form path -- see
+            :func:`implicit_midpoint`.
         constant_structure: Override for the constancy heuristic described
             above. ``None`` (default) probes the model.
         **kwargs: Forwarded to :func:`implicit_midpoint` (``method``,
@@ -1068,14 +1162,30 @@ def integrate_phs(
 
     Raises:
         ValueError: If ``method="linear"`` is requested but the model cannot be
-            shown to be affine. The request is refused, never silently
-            downgraded to a different answer.
+            shown to be affine, or is requested together with a port law. The
+            request is refused, never silently downgraded to a different answer.
+
+    Example:
+        A water tank whose inlet valve closes as the level rises. The port
+        depends on the state, so no ``u`` array can express it:
+
+        >>> import numpy as np
+        >>> from otwin.model import water_tank, integrate_phs
+        >>> tank = water_tank()
+        >>> t = np.linspace(0, 20, 201)
+        >>> res = integrate_phs(
+        ...     tank, np.array([1.0]), t,
+        ...     u=lambda tv, x: np.array([0.4 * max(0.0, 4.0 - float(x[0]))]),
+        ... )
+        >>> res["success"]
+        True
     """
     t_eval = np.asarray(t_eval, dtype=float)
     x0_arr = np.asarray(x0, dtype=float).ravel()
     n_inputs = int(getattr(phs, "n_inputs", 1))
     if u is None:
         u = np.zeros((t_eval.size, n_inputs))
+    port_law = u if callable(u) else None
 
     def dynamics(t: float, x: Vector, u_val: Vector) -> Vector:
         return np.asarray(phs.dynamics(x, u_val, t), dtype=float)
@@ -1083,19 +1193,37 @@ def integrate_phs(
     method = kwargs.get("method", "auto")
     method = _resolve_method(method)
 
+    if port_law is not None and method == "linear":
+        raise ValueError(
+            "a port law u(t, x) cannot use the closed-form 'linear' path: the "
+            "feedback term makes the closed loop nonlinear in x, so the affine "
+            "midpoint matrix describes the open-loop system and not the one being "
+            "integrated. Use method='newton' or method='auto'."
+        )
+
     jac = kwargs.pop("jac", None)
     constant_jacobian = kwargs.pop("constant_jacobian", None)
     linear = kwargs.pop("linear", None)
 
     if method != "fsolve" and (jac is None and linear is None):
-        u_arr = np.asarray(u, dtype=float)
-        u_sample = u_arr[0] if u_arr.ndim > 1 else np.atleast_1d(u_arr[0])
+        if port_law is not None:
+            u_sample = np.atleast_1d(port_law(float(t_eval[0]), x0_arr))
+        else:
+            u_arr = np.asarray(u, dtype=float)
+            u_sample = u_arr[0] if u_arr.ndim > 1 else np.atleast_1d(u_arr[0])
         try:
             jac, detected_const, linear = _analyse_phs(
                 phs, x0_arr, np.asarray(u_sample, dtype=float), constant_structure
             )
         except Exception:  # noqa: BLE001 - inspection must never break integration
             jac, detected_const, linear = None, False, None
+        if port_law is not None:
+            # The affine analysis describes the open-loop system. Under a port
+            # law the closed loop is not that system, so the closed-form path is
+            # dropped; `jac` is kept because an incomplete Jacobian only slows
+            # Newton down, and the residual still decides the answer.
+            linear = None
+            detected_const = False
         if constant_jacobian is None:
             constant_jacobian = detected_const
 
