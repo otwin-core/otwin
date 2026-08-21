@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "otwin"
-version = "0.2.0"
+version = "0.3.0"
 description = "Digital twins whose physics is checked, not claimed. Energy-based models, leakage-free validation, calibrated intervals."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -82,7 +82,21 @@ packages = ["src/otwin"]
 # absolute raw.githubusercontent.com URL, so the 2.1 MB of PNGs under assets/
 # were downloaded by everyone installing from source and displayed to nobody.
 [tool.hatch.build.targets.sdist]
-exclude = ["assets/", ".github/", "docs/_build/", "*.patch"]
+# The first four are things a reader of the sdist does not need. The last four
+# are things a *local* build picks up that a CI build never sees: run the suite
+# once and `.hypothesis/` alone is 67 of the archive's 168 entries. CI builds
+# from a fresh checkout so it never noticed, which is precisely why this is
+# worth pinning rather than relying on.
+exclude = [
+    "assets/",
+    ".github/",
+    "docs/_build/",
+    "*.patch",
+    ".hypothesis/",
+    "__pycache__/",
+    ".venv/",
+    "dist/",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "src"]
