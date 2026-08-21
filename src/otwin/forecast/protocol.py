@@ -42,6 +42,61 @@ to take an integer number of steps.
 """
 
 
+_EXOG_HELP = """
+`exog` was supplied, so the forecaster must be able to take it:
+
+    def forecast(self, history, horizon, exog_past=None, exog_future=None): ...
+
+`exog_past` is the driver aligned with `history`; `exog_future` is the driver
+over the horizon being forecast. Passing the future of a *driver* is not
+leakage -- a planned duty cycle or a commanded current is known in advance --
+but passing the future of the target is, and evaluate() checks for that before
+it gets here.
+"""
+
+
+def _leak_guard(data: npt.NDArray[np.floating], exog: npt.NDArray[np.floating]) -> None:
+    """Refuse an exogenous column that is the target wearing a hat.
+
+    The whole point of the horizon-not-array interface is that the answer cannot
+    reach the model. Handing the target back as a covariate walks straight round
+    it, and it does not look like cheating in the code -- it looks like a column
+    called `capacity_next` in a dataframe someone joined a month ago.
+
+    Only exact matches are rejected, at shifts up to five steps in **either**
+    direction. A lead is the dangerous one -- a column holding tomorrow's target
+    is the answer, and it is what a join against a table with a `_next` suffix
+    produces -- but a lag is checked too, because a target that barely moves
+    between steps makes a one-step lag almost as good as the answer. A merely
+    informative covariate is the entire reason exogenous inputs exist and must
+    not be caught here.
+    """
+    target = np.asarray(data, dtype=float).reshape(len(data), -1)
+    cols = np.asarray(exog, dtype=float).reshape(len(exog), -1)
+    for j in range(cols.shape[1]):
+        col = cols[:, j]
+        for t in range(target.shape[1]):
+            tgt = target[:, t]
+            for shift in range(6):
+                if shift == 0:
+                    pairs = [(col, tgt)]
+                else:
+                    pairs = [
+                        (col[shift:], tgt[:-shift]),  # covariate lags the target
+                        (col[:-shift], tgt[shift:]),  # covariate leads it: the answer
+                    ]
+                for left, right in pairs:
+                    if left.size and np.array_equal(left, right):
+                        raise ForecastInterfaceError(
+                            f"exog column {j} is the target series"
+                            + (f" shifted by {shift} step(s)" if shift else "")
+                            + ". A covariate that carries the answer defeats the "
+                            "leakage-free interface as thoroughly as passing the test "
+                            "array did. Drop the column, or lag it far enough that it "
+                            "is genuinely known at forecast time."
+                        )
+
+
 def _forecast(
     model: Any,
     train: npt.NDArray[np.floating],
@@ -87,12 +142,14 @@ def _forecast(
             f"model {type(model).__name__!r} has none of {names}.\n{_INTERFACE_HELP}"
         )
 
+    has_exog = "exog_past" in kwargs or "exog_future" in kwargs
     try:
         raw = fn(train, horizon, **kwargs) if takes_history else fn(horizon, **kwargs)
     except (TypeError, ValueError, IndexError) as exc:
         raise ForecastInterfaceError(
             f"calling {type(model).__name__}.{fn.__name__} with a horizon of "
-            f"{horizon} failed: {exc}\n{_INTERFACE_HELP}"
+            f"{horizon} failed: {exc}\n"
+            f"{_EXOG_HELP if has_exog else _INTERFACE_HELP}"
         ) from exc
 
     try:
@@ -130,6 +187,7 @@ def evaluate(
     return_uncertainty: bool = False,
     seasonal_period: int | None = None,
     seed: int = 42,
+    exog: npt.NDArray[np.floating] | None = None,
 ) -> EvalReport:
     """
     Evaluate forecasting model rigorously (baselines + temporal split).
@@ -150,6 +208,16 @@ def evaluate(
         return_uncertainty: Whether to compute probabilistic metrics
         seasonal_period: Period for seasonal baselines (optional)
         seed: Random seed
+        exog: Optional exogenous drivers, ``(n_samples, n_exog)``, aligned with
+            ``data``. Split by the same protocol and handed to the forecaster as
+            ``exog_past`` and ``exog_future``. This is for a twin driven by
+            something the target does not determine -- a duty cycle, an ambient
+            temperature, a commanded current. Every column is checked against
+            the target first: a covariate that *is* the target defeats the
+            leakage-free interface as completely as passing the test array, and
+            is refused. The report records that drivers were used, because a
+            skill score computed with the future of the drivers in hand is not
+            comparable with one computed without.
 
     Returns:
         EvalReport with skill scores, baselines, and all metrics
@@ -169,16 +237,39 @@ def evaluate(
         >>> bool(np.isfinite(report.point_metrics['rmse']))
         True
     """
+    if exog is not None:
+        exog = np.asarray(exog, dtype=float)
+        if exog.shape[0] != len(data):
+            raise ValueError(
+                f"exog has {exog.shape[0]} rows but data has {len(data)}; they must be "
+                "aligned sample for sample"
+            )
+        _leak_guard(data, exog)
+
+    def _split(series: npt.NDArray[np.floating]) -> list[tuple[Any, Any]]:
+        """Partition with the protocol in force.
+
+        The splitters cut on position and length alone, so applying the same one
+        to `exog` reproduces the same boundaries by construction rather than by
+        a second implementation of the arithmetic that could drift from it.
+        """
+        if protocol == "temporal_holdout":
+            return [temporal_holdout(series, test_frac=test_frac)]
+        return list(
+            rolling_origin(
+                series,
+                n_folds=n_folds,
+                min_train=max(50, len(data) // 4),
+                horizon=horizon,
+            )
+        )
+
     if protocol == "temporal_holdout":
-        train, test = temporal_holdout(data, test_frac=test_frac)
-        folds = [(train, test)]
+        folds = _split(data)
         n_folds_actual = 1
 
     elif protocol == "rolling_origin":
-        min_train = max(50, len(data) // 4)  # At least 50 or 25% of data
-        folds = list(
-            rolling_origin(data, n_folds=n_folds, min_train=min_train, horizon=horizon)
-        )
+        folds = _split(data)
         n_folds_actual = len(folds)
 
     else:
@@ -200,14 +291,21 @@ def evaluate(
     picp_vals = []
     mpiw_vals = []
 
-    for train, test in folds:
+    exog_folds = _split(exog) if exog is not None else [(None, None)] * len(folds)
+
+    for (train, test), (exog_past, exog_future) in zip(folds, exog_folds, strict=True):
         # Train model (if it has a .fit method)
         if hasattr(model, "fit"):
             model.fit(train)
 
         # Model forecast. `train` and a horizon go in; `test` is not passed and
         # is used only for scoring, below. See module docstring.
-        y_pred = _forecast(model, train, len(test))
+        extra = (
+            {"exog_past": exog_past, "exog_future": exog_future}
+            if exog is not None
+            else {}
+        )
+        y_pred = _forecast(model, train, len(test), **extra)
 
         # Ensure shapes match
         if y_pred.shape != test.shape:
@@ -289,6 +387,8 @@ def evaluate(
         )
 
     # Metadata
+    if exog is not None:
+        report.n_exog = int(np.asarray(exog).reshape(len(exog), -1).shape[1])
     report.seed = seed
     report.data_hash = hashlib.sha256(data.tobytes()).hexdigest()[:16]
     report.model_name = (

@@ -3,6 +3,7 @@
 import numpy as np
 import numpy.typing as npt
 
+from .iphs import ModulatedIPHS
 from .phs import PortHamiltonianSystem
 
 
@@ -369,3 +370,266 @@ def pumped_hydro(
         n_inputs=1,
         grad_H=grad_H,
     )
+
+
+def heat_exchanger(
+    UA: float = 4.0e4,
+    C_hot: float = 5.0e5,
+    C_cold: float = 8.0e5,
+    T_ref: float = 300.0,
+) -> ModulatedIPHS:
+    """Counter-flow heat exchanger as an irreversible port-Hamiltonian system.
+
+    Heat exchangers are named in this package's own scope statement and were not
+    in the catalogue. They are also the cleanest small example of why the
+    irreversible structure exists: conduction between two bodies **conserves
+    energy and produces entropy**, and a model that puts it in ``R`` instead
+    destroys the energy — a first-law violation that produces a perfectly smooth,
+    perfectly plausible temperature curve.
+
+    State: ``x = [S_h, S_c]`` — the entropies of the hot-side and cold-side
+    hold-ups (J/K), measured from the state at ``T_ref``.
+    Input: ``u = [σ_h, σ_c]`` — entropy flows carried in by the two streams
+    (W/K); ``u_i = Q̇_i / T_i`` for a stream delivering ``Q̇_i`` watts.
+    Output: ``y = [T_h, T_c]`` — the two temperatures, so ``yᵀu`` is the heat
+    power crossing the boundary.
+
+    Energy and its gradient:
+
+        T_i(x) = T_ref · exp(S_i / C_i)
+        H(x)   = C_h (T_h − T_ref) + C_c (T_c − T_ref)
+        ∇H     = (T_h, T_c)
+
+    Structure — the modulated form, because that is what conduction is:
+
+        J = [[0, −1], [1, 0]]                       skew: heat leaves one, enters the other
+        γ(x) = UA (T_h − T_c) / (T_h T_c)           Fourier's law, as a modulation
+        ẋ = γ J ∇H = (−Q̇/T_h, +Q̇/T_c),  Q̇ = UA (T_h − T_c)
+
+    so with the ports closed ``dH/dt = ∇Hᵀ γJ ∇H = 0`` exactly — energy moves and
+    is not lost — while the entropy production
+
+        σ = Q̇ (1/T_c − 1/T_h) ≥ 0
+
+    is non-negative whichever body is hotter, and zero only at equality. Both are
+    checked by :meth:`~otwin.model.ModulatedIPHS.check_structure`.
+
+    **Scope.** This is a lumped two-node model: it captures the approach to
+    thermal equilibrium and the entropy cost of getting there. It is not a
+    distributed model and will not reproduce a temperature profile along the
+    tube; for the steady-state duty of a real exchanger use
+    :func:`effectiveness_ntu`. Fouling is not here either — it has no energy
+    function and no port, so it belongs in an empirical law; see
+    :func:`otwin.model.kern_seaton_fouling`.
+
+    Args:
+        UA: Overall heat-transfer coefficient times area (W/K).
+        C_hot: Thermal capacity of the hot-side hold-up (J/K).
+        C_cold: Thermal capacity of the cold-side hold-up (J/K).
+        T_ref: Reference temperature for the entropy datum (K).
+
+    Returns:
+        A :class:`~otwin.model.ModulatedIPHS` for the exchanger.
+
+    Example:
+        >>> hx = heat_exchanger()
+        >>> x = np.array([1.0e5, -1.0e5])          # hot side hot, cold side cold
+        >>> report = hx.check_structure(x)
+        >>> report["energy_conserved"][0]           # first law, exactly
+        True
+        >>> report["sigma_nonneg"][0]               # second law, structurally
+        True
+        >>> bool(hx.entropy_production(x) > 0)      # and strictly positive here
+        True
+        >>> bool(hx.entropy_production(np.zeros(2)) == 0.0)   # at equilibrium, zero
+        True
+    """
+    if UA <= 0 or C_hot <= 0 or C_cold <= 0 or T_ref <= 0:
+        raise ValueError("UA, C_hot, C_cold and T_ref must all be positive")
+
+    caps = np.array([C_hot, C_cold], dtype=float)
+    J_hx = np.array([[0.0, -1.0], [1.0, 0.0]])
+
+    def temperatures(x: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+        return T_ref * np.exp(np.asarray(x, dtype=float) / caps)
+
+    def gamma(x: npt.NDArray[np.floating]) -> float:
+        t_h, t_c = temperatures(x)
+        return float(UA * (t_h - t_c) / (t_h * t_c))
+
+    return ModulatedIPHS(
+        H=lambda x: float(np.dot(caps, temperatures(x) - T_ref)),
+        S=lambda x: float(x[0] + x[1]),
+        J=lambda x: J_hx,
+        gamma=gamma,
+        g=lambda x: np.eye(2),
+        n_states=2,
+        n_inputs=2,
+        grad_H=temperatures,
+        grad_S=lambda x: np.ones(2),
+    )
+
+
+def effectiveness_ntu(
+    UA: float,
+    C_hot: float,
+    C_cold: float,
+    flow: str = "counter",
+) -> float:
+    """Heat-exchanger effectiveness ε by the ε-NTU method.
+
+    The steady-state companion to :func:`heat_exchanger`: the fraction of the
+    thermodynamically maximum duty that an exchanger of a given size actually
+    delivers, ``Q̇ = ε · C_min · (T_h,in − T_c,in)``. This is the quantity that
+    degrades as a unit fouls, and the one a cleaning decision is made on.
+
+    Args:
+        UA: Overall heat-transfer coefficient times area (W/K). For a fouled
+            unit this is ``1 / (1/U_clean + R_f) · A``; see
+            :func:`kern_seaton_fouling`.
+        C_hot: Hot-stream capacity rate ``ṁ·c_p`` (W/K).
+        C_cold: Cold-stream capacity rate (W/K).
+        flow: ``"counter"``, ``"parallel"`` or ``"evaporator"`` (one stream
+            changing phase, i.e. ``C_max → ∞``).
+
+    Returns:
+        Effectiveness in (0, 1]. It saturates to exactly 1.0 in floating point
+        at large NTU, which is the correct asymptote: an infinitely large
+        exchanger brings the outlet to the other stream's inlet temperature.
+
+    Raises:
+        ValueError: On a non-positive capacity rate or an unknown ``flow``.
+
+    Example:
+        >>> round(effectiveness_ntu(4.0e4, 1.44e4, 5.0e4), 4)
+        0.8974
+        >>> # Counter-flow beats parallel flow at the same size, always.
+        >>> counter = effectiveness_ntu(4.0e4, 1.44e4, 5.0e4)
+        >>> parallel = effectiveness_ntu(4.0e4, 1.44e4, 5.0e4, flow="parallel")
+        >>> bool(counter > parallel)
+        True
+    """
+    if UA <= 0 or C_hot <= 0 or C_cold <= 0:
+        raise ValueError("UA and both capacity rates must be positive")
+    c_min, c_max = (C_hot, C_cold) if C_hot <= C_cold else (C_cold, C_hot)
+    ntu = UA / c_min
+    ratio = c_min / c_max
+
+    if flow == "evaporator" or ratio < 1e-12:
+        return float(1.0 - np.exp(-ntu))
+    if flow == "parallel":
+        return float((1.0 - np.exp(-ntu * (1.0 + ratio))) / (1.0 + ratio))
+    if flow != "counter":
+        raise ValueError(
+            f"flow must be 'counter', 'parallel' or 'evaporator', got {flow!r}"
+        )
+    if abs(ratio - 1.0) < 1e-12:
+        return float(ntu / (1.0 + ntu))
+    num = 1.0 - np.exp(-ntu * (1.0 - ratio))
+    return float(num / (1.0 - ratio * np.exp(-ntu * (1.0 - ratio))))
+
+
+def kern_seaton_fouling(
+    R_inf: float = 8.0e-4,
+    tau_days: float = 260.0,
+    U_clean: float = 800.0,
+) -> "FoulingLaw":
+    """Asymptotic fouling resistance over time (Kern–Seaton).
+
+    Deposition and removal reach a balance, so the fouling resistance approaches
+    a plateau rather than growing without bound:
+
+        R_f(t) = R_∞ (1 − exp(−t/τ))
+
+    Returned as an :class:`~otwin.interfaces.EmpiricalLawModel`, not a
+    port-Hamiltonian system, and the distinction is not bookkeeping. Fouling has
+    no conserved energy and no port through which power flows; writing it as an
+    energy balance is the modelling error this package's scope note warns about.
+    What it has instead is a trend law with two estimated parameters and a
+    residual — and from there the workflow is identical.
+
+    **The identifiability trap, stated because it bites.** ``τ`` is only
+    identifiable from a record longer than ``τ``. Fitted to 180 days of a
+    260-day process, ``R_∞`` comes out low — the fit cannot see the plateau it
+    is extrapolating to — and the cleaning date it implies is late. Check the
+    span of your data against the fitted ``τ`` before believing either.
+
+    Args:
+        R_inf: Asymptotic fouling resistance (m²K/W).
+        tau_days: Time constant (days).
+        U_clean: Clean overall heat-transfer coefficient (W/m²K), used to turn
+            the resistance into a cleanliness factor.
+
+    Returns:
+        A :class:`FoulingLaw`.
+
+    Example:
+        >>> law = kern_seaton_fouling()
+        >>> law.param_names
+        ('R_inf', 'tau_days')
+        >>> import numpy as np
+        >>> cf = law.cleanliness(np.array([0.0, 260.0, 1e4]))
+        >>> bool(cf[0] == 1.0 and cf[1] < 1.0 and cf[2] < cf[1])
+        True
+        >>> round(float(law.law(np.array([260.0]))[0]), 6)   # 1 - 1/e of R_inf
+        0.000506
+    """
+    return FoulingLaw(R_inf=R_inf, tau_days=tau_days, U_clean=U_clean)
+
+
+class FoulingLaw:
+    """Kern–Seaton fouling as an empirical trend law.
+
+    Satisfies :class:`otwin.interfaces.EmpiricalLawModel`: it has ``law`` and
+    ``param_names`` and deliberately no ``rhs``, because a fade law has no state
+    derivative and a stub returning zeros would be exactly the conceptual error
+    the protocol exists to prevent.
+
+    Attributes:
+        R_inf: Asymptotic fouling resistance (m²K/W).
+        tau_days: Time constant (days).
+        U_clean: Clean overall heat-transfer coefficient (W/m²K).
+    """
+
+    def __init__(self, R_inf: float, tau_days: float, U_clean: float) -> None:
+        if R_inf < 0 or tau_days <= 0 or U_clean <= 0:
+            raise ValueError("R_inf must be >= 0, tau_days and U_clean must be > 0")
+        self.R_inf = float(R_inf)
+        self.tau_days = float(tau_days)
+        self.U_clean = float(U_clean)
+
+    @property
+    def param_names(self) -> tuple[str, ...]:
+        """Names of the estimated parameters, in a stable order."""
+        return ("R_inf", "tau_days")
+
+    def law(
+        self,
+        t: npt.NDArray[np.floating],
+        params: dict[str, float] | None = None,
+    ) -> npt.NDArray[np.floating]:
+        """Fouling resistance ``R_f(t)`` in m²K/W, with ``t`` in days."""
+        p = params or {}
+        r_inf = float(p.get("R_inf", self.R_inf))
+        tau = float(p.get("tau_days", self.tau_days))
+        return r_inf * (1.0 - np.exp(-np.asarray(t, dtype=float) / tau))
+
+    def cleanliness(
+        self,
+        t: npt.NDArray[np.floating],
+        params: dict[str, float] | None = None,
+    ) -> npt.NDArray[np.floating]:
+        """Cleanliness factor ``U(t) / U_clean`` — 1 when clean, falling as it fouls.
+
+        This is the quantity worth forecasting: it is bounded, dimensionless, and
+        a cleaning threshold is stated on it directly.
+        """
+        return 1.0 / (1.0 + self.U_clean * self.law(t, params))
+
+    def U(
+        self,
+        t: npt.NDArray[np.floating],
+        params: dict[str, float] | None = None,
+    ) -> npt.NDArray[np.floating]:
+        """Overall heat-transfer coefficient at time ``t`` (W/m²K)."""
+        return self.U_clean * self.cleanliness(t, params)

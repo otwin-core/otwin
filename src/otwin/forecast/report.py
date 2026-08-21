@@ -47,6 +47,11 @@ class EvalReport:
     data_hash: str | None = None
     model_name: str | None = None
     seed: int | None = None
+    #: Number of exogenous drivers the forecaster was given. ``None`` means it
+    #: forecast from its own history alone. Recorded because a skill score
+    #: computed with the future of the drivers in hand is not comparable with
+    #: one computed without, and a reader cannot tell from the number.
+    n_exog: int | None = None
     version: str = "2.0.0-alpha"
 
     def add_point_metrics(
@@ -147,6 +152,11 @@ class EvalReport:
                 lines.append(f"Skill Score: {ss:.2f} ({pct_worse}% WORSE than baseline)")
 
         lines.append(f"Baseline: {self.baseline_name}")
+        if self.n_exog:
+            lines.append(
+                f"Exogenous drivers: {self.n_exog} "
+                "(the forecast had them over the horizon; the baselines did not)"
+            )
         lines.append("")
 
         # Point metrics

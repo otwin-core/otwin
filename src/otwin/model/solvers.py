@@ -61,7 +61,8 @@ def integrate_with_inputs(
     ],
     x0: npt.NDArray[np.floating],
     t_eval: npt.NDArray[np.floating],
-    u: npt.NDArray[np.floating],
+    u: npt.NDArray[np.floating]
+    | Callable[[float, npt.NDArray[np.floating]], npt.NDArray[np.floating]],
     method: str = "RK45",
     **kwargs: Any,
 ) -> dict[str, npt.NDArray[np.floating]]:
@@ -72,7 +73,8 @@ def integrate_with_inputs(
         dynamics: Function with signature (t, x, u) -> dx/dt
         x0: Initial state (n_states,)
         t_eval: Time points at which to evaluate (n_points,)
-        u: Input trajectory (n_points, n_inputs)
+        u: Input trajectory ``(n_points, n_inputs)``, or a port law
+            ``u(t, x) -> u`` for a port whose value depends on the state.
         method: Integration method. ``"implicit_midpoint"`` dispatches to the
             structure-preserving integrator; anything else goes to ``solve_ivp``.
         **kwargs: Additional arguments for solve_ivp, or — on the
@@ -93,7 +95,16 @@ def integrate_with_inputs(
         >>> result = integrate_with_inputs(dynamics, x0, t, u)
         >>> result['success']
         True
+
+        A port law works the same way on either path:
+
+        >>> law = lambda tv, x: np.array([1.0 - float(x[0])])
+        >>> result = integrate_with_inputs(dynamics, x0, t, law)
+        >>> result['success']
+        True
     """
+    if callable(u):
+        return _integrate_with_port_law(dynamics, x0, t_eval, u, method, **kwargs)
     if u.ndim == 1:
         u = u.reshape(-1, 1)
 
@@ -125,3 +136,41 @@ def integrate_with_inputs(
 
     t_span = (t_eval[0], t_eval[-1])
     return integrate(dynamics_wrapper, x0, t_span, t_eval=t_eval, method=method, **kwargs)
+
+
+def _integrate_with_port_law(
+    dynamics: Callable[
+        [float, npt.NDArray[np.floating], npt.NDArray[np.floating]],
+        npt.NDArray[np.floating],
+    ],
+    x0: npt.NDArray[np.floating],
+    t_eval: npt.NDArray[np.floating],
+    law: Callable[[float, npt.NDArray[np.floating]], npt.NDArray[np.floating]],
+    method: str,
+    **kwargs: Any,
+) -> dict[str, npt.NDArray[np.floating]]:
+    """Integrate with a state-dependent port ``u(t, x)``.
+
+    On the implicit-midpoint path the law is evaluated at the midpoint inside the
+    solve, so the discrete power balance still holds. On an explicit ``solve_ivp``
+    path there is no midpoint to speak of: the law is simply evaluated at the
+    current state, which is what any explicit method can offer.
+    """
+    if method in ("implicit_midpoint", "implicit-midpoint"):
+        from otwin.model.integrators import implicit_midpoint
+
+        return implicit_midpoint(dynamics, x0, t_eval, law, **kwargs)
+
+    def closed_loop(t: float, x: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+        return dynamics(t, x, np.atleast_1d(law(t, x)))
+
+    res = integrate(
+        closed_loop, x0, (t_eval[0], t_eval[-1]), t_eval=t_eval, method=method, **kwargs
+    )
+    res["u"] = np.array(
+        [
+            np.atleast_1d(law(float(tv), xv))
+            for tv, xv in zip(res["t"], res["x"], strict=False)
+        ]
+    )
+    return res
