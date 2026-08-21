@@ -59,7 +59,7 @@ Otwin provides:
 | A model class | A state-space model written in terms of stored energy, internal power routing, dissipation, and external ports |
 | Numerical solvers | Including one whose discrete energy balance matches the continuous one |
 | State estimators | Extended Kalman filter and moving-horizon estimation, to correct model state from measurements |
-| Forecast validation | Out-of-sample partitioning, reference forecasters, skill scores, calibrated prediction intervals |
+| Forecast validation | Out-of-sample partitioning, reference forecasters, skill scores, conformal prediction intervals and the diagnostics to check them |
 | Field data acquisition | SunSpec Modbus and Modbus TCP/RTU clients, for reading real equipment |
 
 It is **not** a finite-element or CFD package, not an electrochemical simulator
@@ -91,11 +91,14 @@ enough background.
 
 ## 3. Installation and first run
 
-The packages are not yet published on PyPI. Install from source:
-
 ```bash
 pip install otwin
 ```
+
+That is the whole install: NumPy and SciPy, nothing else. The connectors, the
+learned models and the Gaussian-process intervals are extras — see Section 7 —
+so a reader who only wants the modelling and validation layers does not pay for
+a Modbus stack or a 2 GB tensor library.
 
 Then run a damped mass–spring–damper system:
 
@@ -387,6 +390,22 @@ This is the same discipline as stating the calibration range of an instrument.
 A reading outside the calibrated range is reported as such rather than returned
 as a number.
 
+The envelope reads two specific keys off the manifest, and a record that omits
+them is refused however sensible it looks. Build them rather than guessing:
+
+```python
+manifest = TwinManifest(
+    ...,
+    validation=TwinManifest.validated_by("rolling_origin", theil_u=0.64),
+    calibration=TwinManifest.calibrated_by("split_conformal", empirical_coverage=0.87),
+)
+```
+
+`validated_by` derives `leakage_free` from the protocol name and returns `False`
+for `random_split`, so the builder cannot launder a partition into a claim it
+does not support. `calibrated_by` requires the coverage you *measured*, not the
+level you asked for.
+
 
 
 ## 8. Suggested project topics
@@ -455,6 +474,11 @@ contributed to the catalogue carries your name.
 - **Two communication protocols only.** SunSpec Modbus and Modbus TCP/RTU.
   IEC 61850, IEC 60870-5-104 and DNP3 are out of scope: no permissively licensed
   Python implementation exists for them. Use a protocol gateway.
+- **No sampler, no optimiser, no power flow.** Posterior sampling is `emcee` or
+  `numpyro`, receding-horizon control is `cvxpy`, load flow is `pandapower`.
+  Otwin supplies the model, the calibrated band and the validity envelope that
+  those tools consume; it does not reimplement them, and nothing here conflicts
+  with using them alongside.
 - **Single maintainer, pre-1.0.** Expect breaking API changes before version
   1.0. Pin a version in your project.
 - **No production deployment yet.** The library has been presented but not

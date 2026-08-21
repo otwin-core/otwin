@@ -112,6 +112,28 @@ jobs:
         # Scorecard's Signed-Releases check reads GitHub release assets, and
         # a reader who wants to verify the wheel should not have to dig
         # through Actions logs to find the provenance.
+        #
+        # `gh release upload` requires the release to exist already. Pushing a
+        # tag does NOT create one -- only the web UI's "Draft a new release"
+        # does. So a release cut with `git push origin v0.3.0` reached this
+        # step, failed with "release not found", and left a red pipeline behind
+        # a package that had *already* been published to PyPI. That is the worst
+        # available outcome: the version is burned, the upload cannot be
+        # retried, and the failure appears after the irreversible step.
+        #
+        # Creating the release if it is absent makes both paths work, and
+        # `--verify-tag` keeps it honest about which commit it is describing.
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" dist/* attest/* --clobber
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME exists; uploading assets"
+            gh release upload "$GITHUB_REF_NAME" dist/* attest/* --clobber
+          else
+            echo "no release for $GITHUB_REF_NAME; creating it with the assets"
+            gh release create "$GITHUB_REF_NAME" dist/* attest/* \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes \
+              --verify-tag
+          fi
