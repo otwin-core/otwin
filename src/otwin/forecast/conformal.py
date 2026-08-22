@@ -81,6 +81,11 @@ Array = npt.NDArray[np.floating]
 #: ``ceil`` asks for rank 10 out of 10 calibration points and declares a set that
 #: is exactly large enough to be too small. Twelve decimals is far below any
 #: level anyone states and far above the round-off being removed.
+#: A boolean mask over horizons. Named rather than spelled inline because
+#: ``np.bool_`` ends in an underscore, which reStructuredText reads as a
+#: hyperlink reference when autodoc renders the annotation into the docs.
+BoolArray = npt.NDArray[np.bool_]
+
 _RANK_DECIMALS = 12
 
 
@@ -180,9 +185,7 @@ class ConformalBand:
     level: float
     method: str
     n_calibration: int
-    extrapolated: npt.NDArray[np.bool_] = field(
-        default_factory=lambda: np.zeros(0, dtype=bool)
-    )
+    extrapolated: BoolArray = field(default_factory=lambda: np.zeros(0, dtype=bool))
 
     def __post_init__(self) -> None:
         hw = np.atleast_1d(np.asarray(self.half_width, dtype=float))

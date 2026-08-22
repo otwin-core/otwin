@@ -205,19 +205,23 @@ def dc_motor(
     Reference: van der Schaft & Jeltsema (2014), "Port-Hamiltonian Systems
     Theory: An Introductory Overview", Example 2.5, Eq. (2.30).
 
-    State: x = [phi, p]
-        phi - inductor flux-linkage (Wb), electrical energy store
-        p   - rotor angular momentum (kg·m²/s), mechanical energy store
-    Input: u = [V] (applied voltage)
-    Output: y = I (armature current)
-    Energy: H(phi, p) = phi² / (2 L) + p² / (2 inertia)
+    State, ports and energy::
 
-    Dynamics (Eq. 2.30):
+        x = [phi, p]
+            phi - inductor flux-linkage (Wb), electrical energy store
+            p   - rotor angular momentum (kg·m²/s), mechanical energy store
+        u = [V]     applied voltage
+        y = I       armature current
+        H(phi, p) = phi² / (2 L) + p² / (2 inertia)
+
+    Dynamics (Eq. 2.30)::
+
         [phi_dot]   ([ 0  -K ]   [Re  0 ]) [phi/L]   [1]
         [ p_dot ] = ([ K   0 ] - [ 0  b ]) [ p/J ] + [0] V
         y = [1 0] grad_H = phi / L
 
-    Structure:
+    Structure::
+
         J = [[0, -K], [K, 0]]   skew-symmetric (the gyrator couples the
                                 electrical and mechanical domains)
         R = diag(Re, b)         PSD: armature resistance and viscous friction
@@ -295,15 +299,20 @@ def pumped_hydro(
     store is conservative: this is the white-box guarantee a degradation
     (grey-box) model cannot offer.
 
-    State: x = [V_u, V_l] (reservoir volumes, m^3): upper and lower.
-    Input: u = [q] (commanded pump-turbine flow, m^3/s); q > 0 pumps water up
-        (charging), q < 0 generates (discharging).
-    Energy (gravitational potential energy about the lower datum):
-        H = rho g [ z_u V_u + V_u^2 / (2 A_u) + V_l^2 / (2 A_l) ]
-    so the gradient is the pressure head at each free surface:
-        grad_H = rho g [ z_u + V_u/A_u , V_l/A_l ].
+    State and ports::
 
-    Structure:
+        x = [V_u, V_l]   reservoir volumes (m^3), upper and lower
+        u = [q]          commanded pump-turbine flow (m^3/s); q > 0 pumps
+                         water up (charging), q < 0 generates (discharging)
+
+    Energy, taken as gravitational potential about the lower datum, and its
+    gradient, which is the pressure head at each free surface::
+
+        H       = rho g [ z_u V_u + V_u^2 / (2 A_u) + V_l^2 / (2 A_l) ]
+        grad_H  = rho g [ z_u + V_u/A_u , V_l/A_l ]
+
+    Structure::
+
         J = 0                         no lossless internal circulation
         R = (1/R_penstock) [[1, -1], [-1, 1]]
                                       penstock conductance (graph-Laplacian, PSD):

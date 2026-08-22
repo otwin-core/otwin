@@ -1,0 +1,18 @@
+/* Equations sit in their own space rather than crowding the prose above them. */
+div.math {
+  margin: 1.2em 0;
+  overflow-x: auto;
+}
+
+/* Wide API tables scroll inside their own box; the page never scrolls sideways. */
+table.docutils {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* An expected-output block reads as a result, not as more code to copy. */
+div.highlight-text pre {
+  opacity: 0.85;
+  font-size: 0.92em;
+}
