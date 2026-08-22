@@ -1,137 +1,196 @@
 <div align="center">
 
 <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_wm.png"  width="40%">
-  
-# Otwin: building physics-based dynamic models of engineering systems 
 
+ 
+# Model. Estimate. Quantify. Validate.
+
+</div>
+
+
+Otwin builds Digital Twins of physical equipment from whichever mixture of physics and data the equipment justifies — first-principles, empirical, learned, or a combination of them — keeps them in step with the machine from live measurements, and reports forecasts with a realistic uncertainty band.
+
+<br>
+
+<div align="center">
+  
 [![PyPI](https://img.shields.io/pypi/v/otwin?color=1a4fd6&cacheSeconds=3600)](https://pypi.org/project/otwin/)
 [![Python](https://img.shields.io/pypi/pyversions/otwin?cacheSeconds=3600)](https://pypi.org/project/otwin/)
 [![CI](https://github.com/otwin-core/otwin/actions/workflows/ci.yml/badge.svg)](https://github.com/otwin-core/otwin/actions/workflows/ci.yml)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14061/badge)](https://www.bestpractices.dev/projects/14061)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/otwin-core/otwin/badge)](https://scorecard.dev/viewer/?uri=github.com/otwin-core/otwin)
+
+
 [![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen?style=flat-square)](https://opensource.org/license/apache-2-0)
 
+<br>
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/overview.png" width="100%" >
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/overview.png"  width="100%">
 
 </div>
 
-<details>
-<summary><b>Contents</b></summary>
+<br>
 
-1. [What this library does](#1-what-this-library-does)
-2. [Prerequisites](#2-prerequisites)
-3. [Installation and first run](#3-installation-and-first-run)
-4. [The model form](#4-the-model-form)
-   - [4.1 How this relates to what you already know](#41-how-this-relates-to-what-you-already-know)
-   - [4.2 A complete worked model](#42-a-complete-worked-model)
-5. [What the two structural conditions give you](#5-what-the-two-structural-conditions-give-you)
-   - [5.1 Bounded energy](#51-bounded-energy)
-   - [5.2 Composition](#52-composition)
-6. [Validating a forecast](#6-validating-a-forecast)
-7. [Library structure](#7-library-structure)
-   - [7.1 State estimation](#71-state-estimation)
-   - [7.2 Validity envelope](#72-validity-envelope)
-8. [Suggested project topics](#8-suggested-project-topics)
-9. [Scope and limitations](#9-scope-and-limitations)
-10. [Repositories](#10-repositories)
-    - [Open contributor positions](#open-contributor-positions)
-11. [References](#11-references)
-12. [Coming from another tool](#12-coming-from-another-tool)
+## What otwin is for
 
-</details>
+You have a piece of equipment — a battery bank, a pump, a heat exchanger, a hydraulic circuit, a
+drivetrain — and a question about its future:
 
+> *How much capacity does this Li-ion battery still have? When will it cross the retirement threshold?
 
-## 1. What this library does
+A spreadsheet model answers the first question at commissioning and then goes stale. A model fitted
+to historical data answers it well inside the range it was fitted to, and can drift into physically
+impossible territory outside it — reporting a battery gaining capacity, or a tank filling itself.
 
-Otwin lets you write a lumped-parameter dynamic model of a physical system in
-**energy form**, simulate it, correct its state from sensor measurements, and
-measure how good its forecasts actually are.
+Otwin gives you a third option: choose a model structure that matches how much you actually know,
+correct it from live measurements, and attach an uncertainty band whose stated confidence has been
+checked against held-out data.
 
-It is intended for systems that store, move and dissipate energy: batteries and
-battery banks, electrical machines, hydraulic and pneumatic circuits, thermal
-networks, mechanical drivetrains, heat exchangers, pumped storage.
+<br>
+ 
+## Choosing the model structure
 
-Otwin provides:
+Physical assets like real equipment or complete processess are rarely fully known or fully unknown. Otwin provides five model classes and the manifest records which one you used, because the guarantees available to you depend on the answer.
 
-| | |
-|---|---|
-| A model class | A state-space model written in terms of stored energy, internal power routing, dissipation, and external ports |
-| Numerical solvers | Including one whose discrete energy balance matches the continuous one |
-| State estimators | Extended Kalman filter and moving-horizon estimation, to correct model state from measurements |
-| Forecast validation | Out-of-sample partitioning, reference forecasters, skill scores, conformal prediction intervals and the diagnostics to check them |
-| Field data acquisition | SunSpec Modbus and Modbus TCP/RTU clients, for reading real equipment |
-
-It is **not** a finite-element or CFD package, not an electrochemical simulator
-like PyBaMM, and not a replacement for Simulink. Section 9 states the scope
-limits explicitly.
+Digital Twins can be classified as:
+- Whithe-box models: We know the exact equations and it's parameters so we can model the asset behavior for long time horizons and different scales. 
+- Black-box models: These models use real data for modelling the asset using Machine Learning methods. They are black because we do not have the answer to the question why the model ooutput is this?. Data-driven models, despite being widely used, has a limitation for engineering applications: fundamental laws of physics can be violeted because nothing constrain the model with the reallity. So unseen data, longer time horizons or different range scales can't be predicted from the data without the guarantee that they are not going to violate any physical law. 
+- Grey-box models: we have a descriptive equation, rooted in physical principles, that roughly explain asset behavior. We collect data from the real asset and use this data to fine-tune the descriptive equation. These models are also called **Hybrid Digital Twins** because they combine a white-box model (the equation) and a black-box models (the part we learn from the data).
 
 
-## 2. Prerequisites
+| Model class | AI model |What you supply | Where it comes from | What the structure guarantees |
+|---|---|---|---|---|
+| `port_hamiltonian` | White-Box | `H`, `J`, `R`, `g` — energy, exchange, dissipation, ports | Known physics | Energy bounded by port supply, for any parameters and any step size |
+| `irreversible_phs` | White-Box |The above plus entropy `S` and either `L` or a modulating `gamma` | Known physics with irreversible transport | The above, plus entropy production `sigma >= 0` on every call |
+| `empirical_law` | Grey-Box |A trend law and its parameters | Fitted to data; no energy function exists | Nothing structural. Everything here is earned by validation |
+| `learned_phs` | Grey-Box |Network widths; `J`, `R`, `H`, `g` are learned | Data, with physics imposed on the architecture | Skew `J` and PSD `R` hold **by construction**, whatever the weights learn |
+| `composite` | Grey-Box |A physical prior plus a learned or empirical correction | Both | Whatever the prior half guarantees, on the prior half |
 
-We suggest to use this library if you are comfortable with:
 
-- Writing a system as a set of first-order ODEs, `dx/dt = f(x, u)`
-- The idea of a **state vector** and an **input vector**
-- Energy or power balances on a control volume or a circuit
-- Basic Python: NumPy arrays, and defining a function or a class
+The library computes which side you are on rather than taking your word for it:
 
-You do **not** need:
+```
+TwinManifest.is_white_box   ->   True only when estimated == ()
+```
 
-- Prior knowledge of port-Hamiltonian systems (Section 4 explains the form from
-  scratch)
-- Lagrangian or Hamiltonian mechanics
-- Machine learning
-- Any knowledge of this library's internals
+A white-box twin can be validated against an exact answer. A grey-box twin cannot, and must be
+validated against held-out data with a baseline instead. Both paths are supported by Otwin.
 
-If you have written a state-space model in MATLAB or `scipy.integrate`, you have
-enough background.
+<br>
+
+## What makes otwin different
+
+Three things:
+
+- **1. The uncertainty is measured, not declared.** A stated 90 % interval means nothing until
+somebody counts how often it contains the truth. `Interval.is_validated` stays `False` until it has
+been counted. The conformal example below finishes at a measured 90 % on sixty held-out cycles
+against a 90 % target; when the calibration set is too small to support the level requested, the
+library returns an infinite half-width, loudly, rather than a comfortable-looking one.
+
+- **2. The validation is leakage-free and beats something.** Partitions are out-of-sample by default,
+a reference forecaster is mandatory, and the report leads with the skill score against the *hardest*
+of persistence, drift, mean and seasonal-naive. The model is handed history and a horizon, never the
+test values.
+
+- **3. The twin can say no.** Operating range, forecast horizon and calibration status are recorded in
+the manifest, and a request outside them is refused with a reason rather than answered with a
+number.
+
+<br>
+
+## When the physics is known
+
+Choose a port-Hamiltonian structure and conservation stops being something you check and becomes
+something you cannot violate: it is an algebraic property of how the model is written, so it
+survives any parameter set, any step size and any length of run.
+
+In the first example below, stored energy does not rise on a single step of a 400-step simulation
+with the ports closed, where `scipy.integrate.solve_ivp` on the same right-hand side gains
+`3.2e-05 J`. On the reference cases the same structure reproduces closed-form answers to the limit of
+double precision — a pumped-hydro round-trip efficiency agrees with its analytic value to a relative
+error of `9.6e-16` — and the irreversible form holds the second law across a full reactor run in
+which the same process written as a plain energy balance violates it on 91 % of steps.
+
+*What none of this gives you:* accuracy. A model with the wrong parameters is still wrong — it is
+simply wrong without violating the energy balance. Accuracy is measured separately, and that is what
+the rest of the library is for.
 
 ---
 
-## 3. Installation and first run
+## What you can do with it
+
+| Task | Module | Typical use |
+|---|---|---|
+| Write and simulate a physical model | `otwin.model` | Tank, cell, machine, thermal network, drivetrain, reactor, exchanger |
+| Learn what the physics does not tell you | `otwin.model`, `otwin.forecast` | Structure-constrained networks, GP residuals over a physical prior, empirical trend laws |
+| Read live data from equipment | `otwin.io` | SunSpec Modbus, Modbus TCP/RTU, plus simulators so you can work without hardware |
+| Clean and align that data | `otwin.signal` | Resampling, gap detection, out-of-order samples, coverage reporting |
+| Correct model state from measurements | `otwin.estimate` | Extended Kalman filter, moving-horizon estimation with state bounds, energy-consistent observer |
+| Quantify uncertainty | `otwin.forecast` | Conformal bands, ensembles, CRPS, PIT, coverage curves, recalibration |
+| Measure the forecast | `otwin.forecast` | Out-of-sample protocols, reference forecasters, skill scores |
+| Record where the model is valid | `otwin.advise` | Operating range and horizon the model was validated over |
+
+<br<
+
+## Quick install
 
 ```bash
 pip install otwin
 ```
 
-That is the whole install: NumPy and SciPy, nothing else. The connectors, the
-learned models and the Gaussian-process intervals are extras — see Section 7 —
-so a reader who only wants the modelling and validation layers does not pay for
-a Modbus stack or a 2 GB tensor library.
+Otwin uses just NumPy and SciPy libraries. Connectors, learned models and Gaussian-process intervals are
+optional, so if you only want the modelling and validation layers you don't nee to install a Modbus
+stack or a Neural Network library.
 
-Then run a damped mass–spring–damper system:
+```bash
+pip install "otwin[field]"     # Modbus and SunSpec connectors
+pip install "otwin[gp]"        # Gaussian-process residuals and intervals
+pip install "otwin[nn]"        # learned models (pulls in PyTorch)
+pip install "otwin[all]"       # everything
+```
+
+Requires Python 3.10 or later.
+
+<br>
+
+## Get started
+
+A mass on a spring with a damper. Two energy stores — the spring and the moving mass — and one
+lossy element.
 
 ```python
 import numpy as np
 from otwin.model import PortHamiltonianSystem, integrate_phs
 
-# States: x[0] = spring displacement q, x[1] = momentum p = m*v
-# Parameters: stiffness k = 2 N/m, mass m = 1 kg, damping c = 0.3 N·s/m
+# State: x[0] = spring displacement q [m], x[1] = momentum p = m*v [kg m/s]
+# k = 2 N/m, m = 1 kg, c = 0.3 N s/m
 osc = PortHamiltonianSystem(
-    H      = lambda x: 0.5 * 2.0 * x[0]**2 + 0.5 * x[1]**2,   # potential + kinetic energy [J]
+    H      = lambda x: 0.5 * 2.0 * x[0]**2 + 0.5 * x[1]**2,   # stored energy [J]
     grad_H = lambda x: np.array([2.0 * x[0], x[1]]),          # [force, velocity]
-    J      = lambda x: np.array([[0.0, 1.0], [-1.0, 0.0]]),   # exchange between the two stores
+    J      = lambda x: np.array([[0.0, 1.0], [-1.0, 0.0]]),   # spring <-> mass exchange
     R      = lambda x: np.array([[0.0, 0.0], [0.0, 0.3]]),    # the damper
-    g      = lambda x: np.array([[0.0], [1.0]]),              # external force applied to the mass
+    g      = lambda x: np.array([[0.0], [1.0]]),              # external force on the mass
     n_states=2, n_inputs=1,
 )
 
-t = np.linspace(0, 20, 400)                   # 20 s, 400 points
-u = np.zeros((400, 1))                        # no external force
+t   = np.linspace(0, 20, 400)      # 20 s
+u   = np.zeros((400, 1))           # ports closed: no external force
 sol = integrate_phs(osc, np.array([1.0, 0.0]), t, u)
 
 E = np.array([osc.energy(x) for x in sol["x"]])
-print(f"Initial energy: {E[0]:.4f} J")
-print(f"Final energy:   {E[-1]:.4f} J")
-print(f"Largest energy increase over any single step: {np.max(np.diff(E)):.2e} J")
+print(f"Stored energy: {E[0]:.4f} J at t=0  ->  {E[-1]:.4f} J at t=20 s")
+print(f"Largest single-step energy INCREASE: {max(np.max(np.diff(E)), 0.0):.2e} J")
 ```
 
-The last line prints a number at or below `1e-9 J`. That is the point of the
-solver, and Section 5 explains why it matters.
+```
+Stored energy: 1.0000 J at t=0  ->  0.0024 J at t=20 s
+Largest single-step energy INCREASE: 0.00e+00 J
+```
 
-To see the full workflow — reading a device, conditioning the signal,
-estimating state, forecasting, validating — run:
+That second line `Largest single-step energy INCREASE: 0.00e+00 J` show that with no force applied, stored energy never rises because the model form makes it impossible.
+
+If you want to see a full workflow that simulates a grid-scale battery bank end to end. The workflow read the device, condition the signal, estimate state, forecast, validate, and refuse the questions it has not earned the right to answer. No hardware required.
 
 ```bash
 git clone https://github.com/otwin-core/otwin.git
@@ -139,414 +198,486 @@ cd otwin && pip install -e ".[dev]"
 python examples/bess_end_to_end.py
 ```
 
-That example simulates a grid-scale battery bank. It requires no hardware.
+<br>
 
+## Writing a first-principles model using Port Hamniltonian Systems
 
-## 4. The model form
+You describe the system with **four functions of the state**. The dynamics follow from them:
 
-A system is described by **four functions of the state**, plus the state and
-input dimensions. The dynamics follow from them:
+```
+ẋ = dx/dt = ( J(x) - R(x) ) @ grad_H(x)  +  g(x) @ u        # how the state moves (for example how energy changes)
+y     = g(x).T @ grad_H(x)                              # what the port delivers
+```
 
-$$\frac{dx}{dt} = \bigl(J(x) - R(x)\bigr)\,\nabla H(x) + g(x)\,u
-\qquad\qquad
-y = g(x)^{\top}\,\nabla H(x)$$
+| You write | It means | Water tank example |
+|---|---|---|
+| `H(x)` | Total stored energy [J] | `0.5 * rho * g * A * h**2` |
+| `grad_H(x)` | Gradient of that energy — the **effort** variable: pressure, voltage, force, temperature | Pressure at the base |
+| `J(x)` | Power routed **between** internal stores, losslessly. Must satisfy `J = -J.T` | Zero — only one store |
+| `R(x)` | Dissipation to heat. Must be positive semidefinite | Outlet orifice loss |
+| `g(x)` | The ports — where power crosses the boundary | Inlet pipe |
 
-<div align="center">
+`u` is the port input (a flow: m³/s, A, N) and `y` the port output (an effort: Pa, V, m/s). Their
+product `y.T @ u` is power in watts.
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/storage.png" width="100%">
+![storage](https://raw.githubusercontent.com/otwin-core/otwin/main/assets/storage.png)
 
-</div>
+### Applications
 
-
-| Symbol | Meaning | Units | Example: a water tank |
-|---|---|---|---|
-| $x$ | state vector | varies | water height $h$ |
-| $H(x)$ | total stored energy | J | $\tfrac{1}{2}\rho g A h^{2}$ |
-| $\nabla H(x)$ | gradient of stored energy; the **effort** variables | V, N, Pa, K | pressure at the base |
-| $J(x)$ | internal power routing between energy stores; must satisfy $J = -J^{\top}$ | — | zero (one store only) |
-| $R(x)$ | dissipation; must be positive semidefinite | — | outlet orifice loss |
-| $g(x)$ | external ports, where power crosses the system boundary | — | inlet pipe |
-| $u$ | port input (flow variable) | m³/s, A, N | inlet flow rate |
-| $y$ | port output (effort variable) | Pa, V, m/s | pressure at the inlet |
-
-The product $y^{\top}u$ has units of power. This is the standard **effort–flow**
-pairing.
-
-### 4.1 How this relates to what you already know
-
-| Your background | The nearest concept you have already met |
+|  | What `J`, `R`, `H`, `g` already are to you |
 |---|---|
-| **Mechanical** | Bond graphs (Paynter 1959; Karnopp, Margolis & Rosenberg). $J$ is the junction structure with its transformers and gyrators; $R$ is the R-elements; $H$ is the C- and I-elements |
-| **Electrical** | Equivalent-circuit models. $\nabla H$ are node voltages and branch currents; $J$ is the lossless interconnection; $R$ is the resistive network. Tellegen's theorem is the same statement |
-| **Chemical / process** | An energy balance on a control volume, with the internal exchange terms separated from the irreversible loss terms |
-| **Control / telecom** | Passive and dissipative systems in the sense of Willems (1972). $H$ is the storage function; $y^{\top}u$ is the supply rate |
+| Mechanical | A bond graph. `J` is the junction structure with its transformers and gyrators, `R` the R-elements, `H` the C- and I-elements |
+| Electrical | An equivalent circuit. `grad_H` are node voltages and branch currents, `J` the lossless interconnection, `R` the resistive network |
+| Chemical / process | An energy balance on a control volume, with internal exchange separated from irreversible loss |
+| Control | A dissipative system in the sense of Willems. `H` is the storage function, `y.T @ u` the supply rate |
 
-<div align="center">
+The library only asks you to write the four parts down separately instead of collapsing them into a
+single right-hand side.
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/dc.png" width="100%">
+![dc](https://raw.githubusercontent.com/otwin-core/otwin/main/assets/dc.png)
 
-</div>
+### A complete model
 
-If you have drawn a bond graph or an equivalent circuit, you have already
-written $J$, $R$, $H$ and $g$ — the library only asks you to write them down
-separately instead of collapsing them into one right-hand side.
-
-### 4.2 A complete worked model
-
-<div align="center">
-
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/tank_block.png" width="100%">
-
-</div>
-
+![tank](https://raw.githubusercontent.com/otwin-core/otwin/main/assets/tank_block.png)
 
 ```python
 import numpy as np
 from otwin.model import PortHamiltonianSystem
 
-# Water tank, cross-section A, outlet orifice area a, discharge coefficient c_d.
-A, a, c_d, rho, g_acc = 1.0, 0.1, 0.6, 1000.0, 9.81
+A, a, c_d, rho, g_acc = 1.0, 0.1, 0.6, 1000.0, 9.81   # area, orifice, Cd, density, gravity
 
 tank = PortHamiltonianSystem(
-    H      = lambda x: 0.5 * rho * g_acc * A * float(x[0])**2,     # [J]
-    grad_H = lambda x: np.array([rho * g_acc * A * x[0]]),         # [Pa·m²] = [N]
-    J      = lambda x: np.zeros((1, 1)),                           # one store: nothing circulates
+    H      = lambda x: 0.5 * rho * g_acc * A * float(x[0])**2,       # energy of the column
+    grad_H = lambda x: np.array([rho * g_acc * A * x[0]]),           # pressure at the base [Pa]
+    J      = lambda x: np.zeros((1, 1)),                             # one store, nothing circulates
     R      = lambda x: np.array([[c_d * a * np.sqrt(2 * g_acc / max(float(x[0]), 1e-9))
-                                  / (rho * g_acc * A**2)]]),       # Torricelli outflow
-    g      = lambda x: np.array([[1.0]]),                          # inlet
+                                  / (rho * g_acc * A**2)]]),         # Torricelli outflow
+    g      = lambda x: np.array([[1.0]]),                            # inlet pipe
     n_states=1, n_inputs=1,
 )
 
-ok_J, dev_J = tank.check_structure(np.array([2.0]))["J_skew"]
-ok_R, min_eig = tank.check_structure(np.array([2.0]))["R_psd"]
-print(f"J skew-symmetric: {ok_J} (deviation {dev_J:.1e})")
-print(f"R positive semidefinite: {ok_R} (min eigenvalue {min_eig:.1e})")
+for name, (ok, margin) in tank.check_structure(np.array([2.0])).items():
+    print(f"{name:8s} {'pass' if ok else 'FAIL'}   margin {margin:.3e}")
 ```
 
-This model is available directly as `otwin.model.water_tank`.
+```
+J_skew   pass   margin 0.000e+00
+R_psd    pass   margin 1.916e-05
+```
 
-### 4.3 Two extensions you will need sooner than you expect
+`check_structure` is worth running every time you write a model. It catches sign errors and
+mis-transposed matrices immediately, before they turn into a plausible-looking wrong answer.
 
-**The port is often feedback, not a schedule.** A converter holding constant
-power, a thermostat, a droop-controlled inverter, a pump-turbine at rated power
-— in all of them `u` depends on the state. Pass a callable instead of an array
-and the law is evaluated at the step midpoint inside the implicit solve, which is
-what keeps the discrete power balance of Section 5.1 intact:
+This model ships as `otwin.model.water_tank`. Also in the library you can find other examples: `mass_spring_damper`,
+`dc_motor`, `pumped_hydro` and `heat_exchanger`.
+
+### The port as feedback
+
+A converter holding constant power, a thermostat, a droop-controlled inverter, a level valve — in
+all of them `u` depends on the state. If you pass a callable, the control law is evaluated at the step
+midpoint inside the implicit solve, which keeps the discrete power balance intact:
 
 ```python
-res = integrate_phs(store, x0, t, u=lambda t, x: np.array([rated_flow(head(x))]))
-res["u"]        # what the port actually did, since there is no schedule to read
+import numpy as np
+from otwin.model import water_tank, integrate_phs
+
+tank = water_tank()
+t    = np.linspace(0, 600, 601)          # 10 minutes
+
+# Inlet valve on level feedback: u is not a schedule, it is a control law.
+res = integrate_phs(tank, np.array([2.0]), t,
+                    u=lambda t, x: np.array([max(0.0, 5.0 * (1.5 - float(x[0])))]))
+
+h, q = np.array(res["x"])[:, 0], np.array(res["u"])[:, 0]
+print(f"level  {h[0]:.3f} m -> {h[-1]:.3f} m")
+print(f"inflow {q[0]:.3f} -> {q[-1]:.3f} m3/s   (outflow at that level: "
+      f"{0.6 * 0.1 * np.sqrt(2 * 9.81 * h[-1]):.3f} m3/s)")
 ```
 
-**Not every process is reversible-plus-dissipative.** A chemical reaction, heat
-conduction, any process that produces entropy needs the irreversible extension,
-and it comes in two forms because the literature does. `IrreversiblePHS` is the
-additive `ẋ = (J − R)∇H + gu + L(x)∇S(x)` with `σ = ∇SᵀL∇S ≥ 0` enforced through
-`L ⪰ 0`. `IrreversiblePHS.from_modulated(...)` is the Ramírez–Maschke–Sbarbaro
-form `ẋ = γ(x)·J∇H + gu`, which is what most of the papers are written in and
-what a reactor or an exchanger falls out of naturally. There, energy conservation
-is structural (`γJ` is still skew) and the second law is a property of `γ`, so it
-is checked on every call rather than assumed.
+```
+level  2.000 m -> 1.436 m
+inflow 0.000 -> 0.319 m3/s   (outflow at that level: 0.319 m3/s)
+```
 
+The tank settles below its 1.5 m setpoint, because proportional-only control leaves an offset. `res["u"]` is what the port actually did. with a governing law there is no schedule to read back.
 
-## 5. What the two structural conditions give you
+### Processes that produce entropy
 
-The two algebraic conditions, $J = -J^{\top}$ and $R \succeq 0$, have exactly
-two consequences. Both are provable, and both are worth understanding before
-you decide whether this library suits your project.
+A chemical reaction, heat conduction, a heat exchanger — any irreversible process needs more than
+reversible-plus-dissipative. `IrreversiblePHS` adds an entropy term to Port Hamiltonian Systems with `sigma >= 0` enforced
+structurally; `IrreversiblePHS.from_modulated(...)` gives the Ramírez–Maschke–Sbarbaro form that
+most chemical reactor and heat exchanger models fall out. The `IrreversiblePHS` checked on every
+call the second law. `otwin.model.heat_exchanger` is a worked instance, with `effectiveness_ntu` for its steady-state check.
 
-### 5.1 Bounded energy
+<br>
 
-Substituting the dynamics into $\dot{H} = \nabla H^{\top} \dot{x}$ and using
-$\nabla H^{\top} J \nabla H = 0$ (true for any skew-symmetric $J$):
+## The grey area: governing equations are not fully known
 
-$$\frac{dH}{dt} = -\nabla H^{\top} R\, \nabla H + y^{\top} u \;\leq\; y^{\top} u$$
+This is the most common case we can find. Combine all governing equations can be mathematically tricky and computationally unfeasible. These limitation can be managed with an hybrid approach combining basic governing equation plus observed data.
 
-With the ports open ($u = 0$), stored energy is non-increasing. This does not
-depend on the parameter values, the integration step size, or the simulation
-horizon. It is a consequence of the algebra, not of the fit.
+### The system only degrades
 
-**Why this matters in practice.** A model fitted to data reproduces the data it
-was fitted to. Extrapolated beyond that range — a longer horizon, an untested
-operating point — a purely fitted model can drift in a way that violates
-conservation, and nothing in the model reports that it has. Here that specific
-failure mode is excluded by construction. `integrate_phs` preserves the property
-in discrete time as well: the worst per-step energy increase is bounded at
-$10^{-9}$ of the initial value, against roughly $3\times10^{-5}$ for a standard
-adaptive Runge–Kutta solver on the same problem.
+Capacity fade, wear, fatigue and corrosion have no conserved energy function and no port. Forcing
+them into a port-Hamiltonian frame is the most common conceptual error in this field, so otwin
+refuses to help you do it: `EmpiricalLawModel` deliberately does **not** extend `TwinModel`, because
+a fade law has no state derivative and a stub `rhs` returning zeros would be exactly that error
+wearing a disguise.
 
-**What this does not give you.** It does not make the model accurate. A model
-with the wrong parameters is still wrong; it is simply wrong without violating
-the energy balance. Accuracy is measured separately, in Section 6.
+What you write instead is a transparent trend law with fitted parameters and a bounded residual.
+`FoulingLaw` and `kern_seaton_fouling` ship as worked instances for exchanger fouling. Everything
+downstream — estimate, quantify, validate — is unchanged, which is the whole point.
 
-### 5.2 Composition
+### The structure is known and the content is not
 
-If two systems in this form are interconnected through their ports, the result
-is again a system in this form, and the energy bound holds for the assembly
-without refitting. This lets you build a subsystem model, validate it, and then
-use it inside a larger assembly — cell to module to string to bank, or component
-to loop to plant.
+`PortHamiltonianNN` learns `H`, `J`, `R` and `g` as networks, with `J = A - A.T` and `R = L @ L.T`
+so that skew-symmetry and positive semidefiniteness hold **by construction, whatever the weights
+learn**. Passivity is not a training objective that might be reached; it is a property of the
+parameterisation. `derivative_loss` and `passivity_penalty` are the training terms — the penalty
+only conditions the optimisation, since the structure has already made violation impossible.
 
+### The physics is right in form and wrong in detail
 
-## 6. Validating a forecast
+The most useful hybrid in practice. Keep the analytic model as a prior and learn the residual, so
+the mean stays physically consistent and the correction carries calibrated uncertainty:
 
-A model is not validated until its forecasts have been compared, out of sample,
-against a reference forecaster that is hard to beat.
+```python
+import numpy as np
+from otwin.forecast import GPPHS
+
+# The plant has quadratic drag. The analytic model we trust only knows linear damping,
+# so the physics is right in structure and wrong in the loss term.
+def truth(x, u):
+    return np.array([x[1], -2.0*x[0] - 0.9*x[1]*abs(x[1])])
+
+def phs_prior(x, u):
+    return np.array([x[1], -2.0*x[0] - 0.3*x[1]])
+
+rng  = np.random.default_rng(0)
+X    = rng.uniform(-1.2, 1.2, size=(120, 2))
+dXdt = np.array([truth(x, None) for x in X])
+
+np.random.seed(0)   # GPPHS does not yet seed its own hyperparameter restarts
+hybrid = GPPHS(n_states=2, prior_dynamics=phs_prior).fit(X, dXdt)
+
+test  = rng.uniform(-1.0, 1.0, size=(40, 2))
+exact = np.array([truth(x, None) for x in test])
+mean, std = hybrid.predict(test, return_std=True)
+
+err_prior  = np.sqrt(np.mean((np.array([phs_prior(x, None) for x in test]) - exact)**2))
+err_hybrid = np.sqrt(np.mean((mean - exact)**2))
+far        = hybrid.predict(np.array([[3.0, 3.0]]), return_std=True)[1].mean()
+
+print(f"prior alone   RMSE on dx/dt : {err_prior:.4f}")
+print(f"prior + GP    RMSE on dx/dt : {err_hybrid:.4f}")
+print(f"GP std inside the fitted range : {std.mean():.4f}")
+print(f"GP std far outside it          : {far:.4f}")
+```
+
+```
+prior alone   RMSE on dx/dt : 0.1731
+prior + GP    RMSE on dx/dt : 0.0055
+GP std inside the fitted range : 0.0056
+GP std far outside it          : 0.4593
+```
+
+Thirty times closer on the derivative, and — the part that matters operationally — the predictive
+standard deviation is two orders of magnitude larger at a state the GP has never seen. The
+correction knows when it is extrapolating even though the prior does not.
+
+Two notes on running this yourself. scikit-learn will warn that one state dimension has nothing
+to learn — it is right: the prior already gets that row exactly, and a residual GP fitted to
+zeros is the correct answer. And `GPPHS` does not currently seed the restarts of its own
+hyperparameter search, so without the `np.random.seed` line above the last digits move between
+runs.
+
+### The parameters themselves are uncertain
+
+A measured orifice, a tolerance band on a capacitance, a coefficient quoted to two figures. Propagate
+it by making the spread the model:
+
+```python
+import numpy as np
+from otwin.model import water_tank
+from otwin.forecast import Ensemble
+
+# Parameter uncertainty, not measurement noise: the orifice was measured to +/-10 %.
+members = [water_tank(a=a) for a in (0.090, 0.095, 0.100, 0.105, 0.110)]
+ens     = Ensemble(members)
+
+t, u  = np.linspace(0, 5, 101), np.zeros((101, 1))
+band  = ens.forecast_interval(np.array([2.0]), t, u, level=0.90)
+plant = water_tank(a=0.102).forecast(np.array([2.0]), t, u)["x"]   # the real orifice
+
+for k in (0, 50, 100):
+    print(f"t={t[k]:4.2f} s   band {band['lower'][k,0]:.3f}..{band['upper'][k,0]:.3f} m"
+          f"   plant {plant[k,0]:.3f} m")
+print(f"plant inside the band on {np.mean((plant >= band['lower']) & (plant <= band['upper'])):.0%} of steps")
+```
+
+```
+t=0.00 s   band 2.000..2.000 m   plant 2.000 m
+t=2.50 s   band 1.107..1.236 m   plant 1.156 m
+t=5.00 s   band 0.476..0.656 m   plant 0.542 m
+plant inside the band on 100% of steps
+```
+
+An ensemble of identical deterministic members has zero spread. That is correct, not a bug — the
+members must genuinely differ for the spread to mean anything.
+
+---
+
+## Estimating state from measurements
+
+| Estimator | Use it when |
+|---|---|
+| `ExtendedKalmanFilter` | The standard case: nonlinear model, Gaussian-ish noise |
+| `MovingHorizonEstimator` | The state has physical bounds. A state of charge is not allowed to be 1.05 |
+| `EnergyConsistentObserver` | The correction itself must respect the energy balance |
+
+The moving-horizon estimator accepts **box constraints on the state**, and on the reference case it
+is also 39 % more accurate for it. The energy-consistent observer limits any correction so it cannot
+increase stored energy beyond what the ports supplied; the trade-off is in the docstring — with
+ports closed the allowed increase is zero, so a correction that merely reflects an under-energetic
+prior is rejected too.
+
+---
+
+## Quantifying uncertainty
+
+An interval means nothing until its **coverage** has been measured: a stated 90 % interval should
+contain the truth about 90 % of the time.
+
+```python
+import numpy as np
+from otwin.forecast import rolling_origin_residuals, horizon_conformal
+
+rng      = np.random.default_rng(0)
+cycles   = np.arange(300)
+capacity = 1.0 - 2.6e-4*cycles - 4.0e-3*np.sqrt(cycles) + rng.normal(0, 1.5e-3, 300)
+
+class FadeLaw:
+    """Fits C = C0 - a*n - b*sqrt(n) to the history, then extrapolates it."""
+    def forecast(self, history, horizon):
+        h = np.asarray(history, float).ravel()
+        n = np.arange(len(h))
+        coef, *_ = np.linalg.lstsq(np.column_stack([np.ones_like(n), n, np.sqrt(n)]), h, rcond=None)
+        f = np.arange(len(h), len(h) + horizon)
+        return (np.column_stack([np.ones_like(f), f, np.sqrt(f)]) @ coef).reshape(-1, 1)
+
+train = capacity[:240]
+def refit_forecast(history, horizon):
+    return FadeLaw().forecast(history, horizon).ravel()
+
+# Refit at earlier origins and keep genuine h-step-ahead errors -- not in-sample residuals.
+residuals, horizons = rolling_origin_residuals(refit_forecast, train, step=5, max_horizon=60)
+band = horizon_conformal(residuals, horizons, level=0.90, max_horizon=60)
+
+lower, upper = band.apply(refit_forecast(train, 60))
+truth = capacity[240:300]                      # the 60 cycles the band never saw
+
+print(f"{residuals.size} residuals over horizons 1..{horizons.max()}")
+print(f"half-width {(upper[0]-lower[0])/2:.4f} at h=1, {(upper[-1]-lower[-1])/2:.4f} at h=60")
+print(f"measured coverage: {np.mean((truth >= lower) & (truth <= upper)):.0%}  (target 90%)")
+```
+
+```
+1590 residuals over horizons 1..60
+half-width 0.0023 at h=1, 0.0030 at h=60
+measured coverage: 90%  (target 90%)
+```
+
+Two things the library refuses to do, both learned the hard way:
+
+- It will not build a band from a model's **in-sample residuals**. Those are an order of magnitude
+  smaller than its h-step-ahead errors; on a capacity twin that mistake delivered 1.5 % coverage
+  against a 90 % target.
+- When the calibration set is too small for the level requested, `conformal_quantile` returns an
+  **infinite** half-width rather than quietly returning the sample maximum:
+
+```
+UserWarning: 8 calibration residuals cannot support a 99% conformal band: the finite-sample
+rank is 9 of 8. Returning an infinite half-width, which is the honest answer. You need at
+least 99 residuals for this level.
+```
+
+Conformal bands are distribution-free and need only exchangeable residuals. Where you have a
+predictive distribution instead — from an ensemble, a GP, or a learned model — score it as a
+distribution: `crps`, `pit_values`, `coverage_curve`, `expected_calibration_error` and `sharpness`
+are all in `otwin.forecast`, and `recalibrate` fits the correction a miscalibrated one needs.
+`split_conformal` and `AdaptiveConformal` cover the fixed-width and drifting cases.
+
+---
+
+## Validating a forecast
+
+A model is not validated until its forecasts have been compared, out of sample, against a reference
+that is hard to beat. Same series and same `FadeLaw` as above:
 
 ```python
 from otwin.forecast import evaluate
 
-report = evaluate(model, data, protocol="rolling_origin")
-print(report)
+print(evaluate(FadeLaw(), capacity.reshape(-1, 1),
+               protocol="rolling_origin", n_folds=5, horizon=30))
 ```
 
-Three conventions are built into the interface:
+```
+EvalReport (rolling_origin, 5 folds)
+────────────────────────────────────────────────────────────────
+Skill Score (vs best baseline): 0.77 (77% better)
+Baseline: persistence
 
-1. **Out-of-sample partitions by default.** A random train/test partition on a
-   time series trains on Tuesday and Thursday to predict Wednesday. That
-   measures interpolation. `random_split` exists, warns, and marks the report.
-2. **A reference forecaster is required.** The headline number is the **skill
-   score**, model error divided by reference error. Persistence, drift, mean and
-   seasonal-naive references are built in.
-3. **The model is given history and a horizon, never the test values.** The
-   second argument to a forecaster is an integer number of steps.
+Point Metrics:
+  RMSE      0.0017 (baseline: 0.0074)
+  MAE       0.0014 (baseline: 0.0064)
+  NRMSE     0.1141
+  MASE      0.8292
+  THEIL_U   0.2395
+────────────────────────────────────────────────────────────────
+```
 
-$R^2$ is available but not shown first: on a trending series it commonly reads
-above 0.95 for a model that loses to repeating the last observed value.
+Three conventions are built into that one call, because each corrects a mistake that is easy to make
+and hard to notice:
 
-For uncertainty, an interval is only meaningful once its **coverage** has been
-measured on held-out data: a stated 90 % interval should contain the true value
-about 90 % of the time. `Interval.is_validated` is `False` until that
-measurement has been made.
+- **Partitions are out-of-sample by default.** A random split on a time series trains on Tuesday and
+  Thursday to predict Wednesday, which measures interpolation. `random_split` exists, warns loudly,
+  and marks the report.
+- **A reference forecaster is required, and the report leads with the skill score.** Model error
+  divided by reference error, against the *hardest* of persistence, drift, mean and seasonal-naive.
+  `R²` is available but never shown first: on a trending series it commonly reads above 0.95 for a
+  model that loses to repeating the last observed value.
+- **The model is given history and a horizon, never the test values.** If you supply exogenous
+  drivers with `exog=`, every column is checked against the target first, and the report records
+  that drivers were used — a skill score computed with the future of the drivers in hand is not
+  comparable with one computed without.
 
-`otwin.forecast.conformal` builds the interval as well as measuring it — split,
-horizon-aware and adaptive constructions, all distribution-free, none of them
-assuming the model's likelihood is right:
+---
+
+## Recording where the model is valid
+
+The manifest carries which structure you chose, which parameters were estimated, how the model was
+validated and how the band was calibrated. The envelope turns that record into an answer or a
+refusal.
 
 ```python
-from otwin.forecast import rolling_origin_residuals, horizon_conformal
+from otwin.advise import Envelope
+from otwin.interfaces import TwinManifest, Provenance
 
-# Refits the whole pipeline at earlier origins and collects genuine
-# h-step-ahead errors. The expensive step, and the one that makes the band mean
-# something.
-residuals, horizons = rolling_origin_residuals(refit_forecast, train, step=5)
-band = horizon_conformal(residuals, horizons, level=0.90, max_horizon=68)
-lower, upper = band.apply(forecast)
+twin = TwinManifest(
+    name="cell-A3",
+    model_class="empirical_law",          # one of: port_hamiltonian, irreversible_phs,
+    model_kind="capacity_fade",           #         empirical_law, learned_phs, composite
+    n_states=1, n_inputs=1,
+    parameters={"C0": 0.9993, "a": 2.61e-4, "b": 4.02e-3},
+    estimated=("C0", "a", "b"),           # three parameters came from data, so: grey box
+    provenance=Provenance(created="2026-08-22", otwin_version="0.3.0", seed=0),
+    validation=TwinManifest.validated_by("rolling_origin", rmse=0.0017, skill_score=0.77),
+    calibration=TwinManifest.calibrated_by("horizon_conformal", empirical_coverage=0.90,
+                                           level=0.90, max_horizon=60),
+)
+print("white box?", twin.is_white_box, " validated?", twin.is_validated)
+
+envelope = Envelope(state_bounds=[(0.60, 1.00)], max_horizon=60)
+print(envelope.check(state=[0.83], horizon=30,  manifest=twin).explain())
+print(envelope.check(state=[0.83], horizon=180, manifest=twin).explain())
 ```
 
-Two things it refuses to do, both learned the hard way. It will not build a band
-from a fitted model's own **in-sample residuals** — those are an order of
-magnitude smaller than its h-step-ahead errors, and on a capacity twin that
-mistake delivered 1.5 % coverage against a 90 % target. And when a calibration
-set is too small for the level requested, `conformal_quantile` returns an
-**infinite** half-width rather than clipping the rank and returning the sample
-maximum. An infinite band is useless; a band that is silently narrower than its
-own guarantee is worse than useless.
+```
+white box? False  validated? True
+inside the validated envelope (horizon 30 <= 60; operating point inside the identified range;
+validated, leakage-free)
 
+outside the validated envelope:
+  - horizon: beyond the validated forecast horizon (asked for 180, validated to 60)
 
-## 7. Library structure
+This is a refusal, not a failure. The twin has not been shown to answer this question, and
+returning a number anyway would hide that.
+```
 
-The modules follow the six data-processing blocks of **ISO 13374**
-(*Condition monitoring and diagnostics of machines*), so the layout matches the
+Same discipline as stating the calibration range of an instrument: a reading outside the calibrated
+range is reported as such, not returned as a number. `is_validated` is deliberately strict —
+`leakage_free` must be the boolean `True`, not merely truthy, because manifests arrive from MATLAB
+and Julia where a boolean can round-trip as `1` or as the string `"false"`.
+
+---
+
+## The workflow, end to end
+
+The modules follow the six data-processing blocks of **ISO 13374**, so the layout matches the
 reference architecture used in condition-monitoring practice.
 
-| ISO 13374 block | Module | Contents |
+| Stage | Module | What happens |
 |---|---|---|
-| DA — Data Acquisition | `otwin.io` | SunSpec Modbus (models 701, 702, 704, 713, 802–805), Modbus TCP/RTU, unit normalisation, device simulators for testing without hardware |
-| DM — Data Manipulation | `otwin.signal` | Resampling to a uniform grid, gap detection, out-of-order sample handling, measurement-coverage reporting |
-| SD — State Detection | `otwin.estimate` | Extended Kalman filter, moving-horizon estimation with state bounds, energy-consistent observer |
-| HA — Health Assessment | `otwin.model` | The model class, solvers, and a catalogue of worked physical models |
-| PA — Prognostic Assessment | `otwin.forecast` | Partitioning protocols, reference forecasters, error metrics, conformal interval construction and calibration |
-| AG — Advisory Generation | `otwin.advise` | Validity envelope: the operating range and horizon over which the model has been validated |
-
-### 7.1 State estimation
-
-`otwin.estimate` corrects model state from measurements. Two points a
-control-systems reader will care about:
-
-- The moving-horizon estimator accepts **box constraints on the state**. An
-  extended Kalman filter will happily return a state of charge of 1.03; a
-  constrained estimator will not.
-- The energy-consistent observer limits any correction so that it does not
-  increase stored energy beyond what the ports supplied. A standard Kalman
-  correction can raise $H(x)$ with zero input, which breaks the property in
-  Section 5.1. The limitation of this approach is documented in the docstring:
-  with the ports open the allowed increase is zero, so a correction that only
-  reflects an under-energetic prior is also rejected.
-
-### 7.2 Validity envelope
-
-`otwin.advise.Envelope` records the operating range and forecast horizon over
-which a model was validated, and reports when a request falls outside it:
-
-```python
-verdict = envelope.check(state=[0.42], horizon=900, manifest=twin)
-print(verdict.explain())
-# outside the validated envelope:
-#   - horizon: beyond the validated forecast horizon (asked for 900, validated to 500)
-```
-
-This is the same discipline as stating the calibration range of an instrument.
-A reading outside the calibrated range is reported as such rather than returned
-as a number.
-
-The envelope reads two specific keys off the manifest, and a record that omits
-them is refused however sensible it looks. Build them rather than guessing:
-
-```python
-manifest = TwinManifest(
-    ...,
-    validation=TwinManifest.validated_by("rolling_origin", theil_u=0.64),
-    calibration=TwinManifest.calibrated_by("split_conformal", empirical_coverage=0.87),
-)
-```
-
-`validated_by` derives `leakage_free` from the protocol name and returns `False`
-for `random_split`, so the builder cannot launder a partition into a claim it
-does not support. `calibrated_by` requires the coverage you *measured*, not the
-level you asked for.
-
-
-
-## 8. Suggested project topics
-
-Each of these is a self-contained project. The first item lists what the library
-already provides; the second is what you would contribute.
-
-**Modelling and identification**
-
-1. **Model a physical system not yet in the catalogue** — a hydraulic actuator,
-   a synchronous machine, a distillation column, a pneumatic circuit, or a
-   *distributed* heat exchanger (the catalogue has a lumped two-node one;
-   nothing there reproduces a temperature profile along the tube). *Provided:* the model class, structural checks, solvers.
-   *Yours:* the four functions, parameter identification from data, and one
-   result known in closed form (a steady state, an efficiency, a conservation
-   law) used as a validation test.
-2. **Grey-box parameter identification.** Derive the structure from first
-   principles, fit the unknown parameters to measured data, and report which
-   parameters were estimated and how well they are identifiable.
-
-**Estimation and diagnostics**
-
-3. **Compare state estimators on a real asset.** EKF against moving-horizon
-   estimation on constrained states, using logged data. *Provided:* both
-   estimators, the metrics. *Yours:* the data, the tuning study, the analysis of
-   when the constraint handling matters.
-4. **Sensor fault detection from the energy balance.** Use the residual between
-   measured port power and modelled `dH/dt` as a diagnostic signal for drift or
-   bias in an instrument.
-
-**Forecasting**
-
-5. **Remaining useful life with calibrated intervals.** Fit a degradation law,
-   validate out of sample against a reference forecaster, and verify that the
-   stated interval coverage is achieved. Aligns with ISO 13381-1.
-6. **Compare a physics-based model against a purely data-driven one**
-   out-of-sample and beyond the fitted range. `otwin-hybrid` does exactly this
-   for a lithium-ion cell and is a template.
-
-**Instrumentation and integration**
-
-7. **Connect the library to real equipment.** Read a PCS, inverter or BMS over
-   SunSpec Modbus, condition the data, and drive a model in near-real time.
-   *Provided:* SunSpec and Modbus clients, simulators. *Yours:* the register
-   map for your equipment, the deployment, the results.
-
-**Numerical methods**
-
-8. **Implement and evaluate a structure-preserving integrator** — the discrete
-   gradient method is the obvious gap. Assessment is on energy conservation, not
-   only on accuracy.
-
-If you take one of these on, open an issue. The result is citable, and a model
-contributed to the catalogue carries your name.
+| Data acquisition | `otwin.io` | Read the device over SunSpec or Modbus; normalise units |
+| Data manipulation | `otwin.signal` | Resample to a uniform grid, find gaps, report coverage |
+| State detection | `otwin.estimate` | Correct model state from measurements |
+| Health assessment | `otwin.model` | Simulate the physical, learned or empirical model |
+| Prognostic assessment | `otwin.forecast` | Forecast, score against a reference, calibrate the band |
+| Advisory generation | `otwin.advise` | Report whether the request is inside the validated envelope |
 
 ---
 
-## 9. Scope and limitations
+## The otwin project
 
-- **Lumped-parameter only.** Ordinary differential equations in a finite state
-  vector. No spatial discretisation, no PDEs, no finite elements.
-- **Not every system fits this form.** Capacity fade, wear, fatigue and
-  corrosion have no conserved energy function and no port through which power
-  flows. Forcing them into an energy-balance frame is a modelling error. The
-  library handles them separately, as empirical laws.
-- **Two communication protocols only.** SunSpec Modbus and Modbus TCP/RTU.
-  IEC 61850, IEC 60870-5-104 and DNP3 are out of scope: no permissively licensed
-  Python implementation exists for them. Use a protocol gateway.
-- **No sampler, no optimiser, no power flow.** Posterior sampling is `emcee` or
-  `numpyro`, receding-horizon control is `cvxpy`, load flow is `pandapower`.
-  Otwin supplies the model, the calibrated band and the validity envelope that
-  those tools consume; it does not reimplement them, and nothing here conflicts
-  with using them alongside.
-- **Single maintainer, pre-1.0.** Expect breaking API changes before version
-  1.0. Pin a version in your project.
-- **No production deployment yet.** The library has been presented but not
-  deployed on an operating asset. If you deploy it, please say so in an issue.
-
----
-
-## 10. Repositories
-
-| Repository | Contents |
+| Repository | What it is |
 |---|---|
-| [**`otwin`**](https://github.com/otwin-core/otwin) | The library. Start here |
-| [**`otwin-spec`**](https://github.com/otwin-core/otwin-spec) | The specification and its type-test procedure: reference cases with closed-form answers, used to verify that an implementation is correct. Applies to implementations in any language |
-| [**`otwin-hybrid`**](https://github.com/otwin-core/otwin-hybrid) | A worked example in Python, Julia and R: predicting the end of life of a lithium-ion cell from the first 40 % of its life. Opens in Colab in one click |
+| [**otwin**](https://github.com/otwin-core/otwin) | The library. Start here |
+| [**otwin-spec**](https://github.com/otwin-core/otwin-spec) | The specification and its conformance suite — reference cases with closed-form answers, used to verify that any implementation is correct, in any language |
+| [**otwin-hybrid**](https://github.com/otwin-core/otwin-hybrid) | A worked case in Python, Julia and R: predicting end of life of a lithium-ion cell from the first 40 % of its life. Opens in Colab in one click |
+| [**otwin-systems**](https://github.com/otwin-core/otwin-systems) | The growing catalogue of physical models, each shipped with a closed-form result it must reproduce |
 
-### Open contributor positions
-
-`otwin-spec` verifies an implementation over a subprocess interface, so it can
-test an implementation written in a language the Python library knows nothing
-about. This makes a second-language implementation a well-defined piece of work
-with an objective completion criterion: pass the test suite unmodified.
-
-**Julia** and **MATLAB** implementations are both open. Scope is roughly a
-thousand lines — the model class, an energy-consistent integrator, model
-file I/O, and the test adapter. Open an issue titled `Maintainer: <your name>`,
-or email javier@jmarin.info.
+Julia and MATLAB implementations are open for contributors — `otwin-spec` tests over a subprocess
+interface, so a second-language implementation has an objective completion criterion: pass the suite
+unmodified. See [CONTRIBUTING.md](CONTRIBUTING.md) for that and for a list of self-contained project
+topics.
 
 ---
 
-## 11. References
+## What otwin is not
 
-The formulation and methods are not original to this library. If you use it,
-cite the sources:
+- **Not a field solver.** Lumped parameters only — ODEs in a finite state vector. No PDEs, no finite
+  elements, no CFD.
+- **Not an electrochemical simulator.** PyBaMM models the electrochemistry inside a cell; otwin
+  models the system around it.
+- **Not a block-diagram environment, and not a code generator.** It is a Python library with a
+  narrow, checkable model form. Nothing here targets an ECU or a PLC.
+- **Not a stochastic-dynamics engine.** Every integrator here is deterministic. There is no Brownian
+  term, no Langevin or diffusion sampler, no Monte-Carlo sampling of the energy landscape.
+  Uncertainty comes from conformal bands, ensembles and GP posteriors instead. For posterior
+  sampling use `emcee` or `numpyro`, for receding-horizon control `cvxpy`, for load flow
+  `pandapower`; otwin supplies the model, the calibrated band and the validity envelope they
+  consume.
+- **Only two field protocols.** SunSpec Modbus and Modbus TCP/RTU. IEC 61850, IEC 60870-5-104 and
+  DNP3 are out of scope — no permissively licensed Python implementation exists. Use a gateway.
 
-- van der Schaft, A. & Jeltsema, D. (2014). *Port-Hamiltonian Systems Theory: An
-  Introductory Overview.* Foundations and Trends in Systems and Control.
-- Willems, J. C. (1972). *Dissipative dynamical systems.* Archive for Rational
-  Mechanics and Analysis, 45(5).
-- Karnopp, D., Margolis, D. & Rosenberg, R. *System Dynamics: Modeling,
-  Simulation, and Control of Mechatronic Systems.* Wiley.
-- Ramírez, H., Maschke, B. & Sbarbaro, D. (2013). *Irreversible port-Hamiltonian
-  systems.* Chemical Engineering Science, 89.
-- Gneiting, T. & Raftery, A. E. (2007). *Strictly proper scoring rules,
-  prediction, and estimation.* JASA, 102(477).
-- ISO 13374 — *Condition monitoring and diagnostics of machines: data
-  processing, communication and presentation.*
-- ISO 13381-1:2015 — *Condition monitoring and diagnostics of machines:
-  prognostics.*
-
-Each repository carries a `CITATION.cff`.
-
----
-
-## 12. Coming from another tool
-
-- **Simulink / Simscape** — you already model as blocks exchanging power through
-  ports. This is the same decomposition, written as four functions in a state
-  space, with the conservation property following from the algebra rather than
-  from careful block wiring.
-- **PyBaMM** — PyBaMM models the electrochemistry of a cell. Otwin models the
-  system around it and treats capacity fade as an empirical law, not an energy
-  balance.
-- **scikit-learn** — the workflow is the same shape: define a structure, fit,
-  validate. The differences are that the structure comes from the physics, the
-  partition is temporal, and a reference forecaster is required.
+**Versioning.** Pre-1.0 and moving: the API will change before 1.0, so pin a version. Breaking
+changes are listed in [CHANGELOG.md](CHANGELOG.md). What will not change is the discipline the
+library enforces — if a release ever makes a guarantee weaker, that is a bug and worth an issue.
 
 ---
 
-## Licence
+## Help, citing, licence
 
-Apache 2.0.
+- **Questions and bugs** — [open an issue](https://github.com/otwin-core/otwin/issues)
+- **Contributing** — [CONTRIBUTING.md](CONTRIBUTING.md). The catalogue of physical models is the
+  easiest place to start, and each contribution is a system you already know plus one closed-form
+  result it must reproduce
+- **Citing** — each repository carries a `CITATION.cff`
+
+The formulation is not original to this library. If you use it, cite the sources:
+
+- van der Schaft, A. & Jeltsema, D. (2014). *Port-Hamiltonian Systems Theory: An Introductory
+  Overview.* Foundations and Trends in Systems and Control.
+- Willems, J. C. (1972). *Dissipative dynamical systems.* Arch. Rational Mech. Anal. 45(5).
+- Karnopp, D., Margolis, D. & Rosenberg, R. *System Dynamics: Modeling, Simulation, and Control of
+  Mechatronic Systems.* Wiley.
+- Ramírez, H., Maschke, B. & Sbarbaro, D. (2013). *Irreversible port-Hamiltonian systems.* Chemical
+  Engineering Science 89.
+- Greydanus, S., Dzamba, M. & Yosinski, J. (2019). *Hamiltonian Neural Networks.* NeurIPS 32.
+- Rasmussen, C. E. & Williams, C. K. I. (2006). *Gaussian Processes for Machine Learning.* MIT Press.
+- Vovk, V., Gammerman, A. & Shafer, G. (2005). *Algorithmic Learning in a Random World.* Springer.
+- Gneiting, T. & Raftery, A. E. (2007). *Strictly proper scoring rules, prediction, and estimation.*
+  JASA 102(477).
+- ISO 13374 — *Condition monitoring and diagnostics of machines.*
+- ISO 13381-1:2015 — *Condition monitoring and diagnostics of machines: prognostics.*
+
+Licensed under Apache 2.0.
