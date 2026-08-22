@@ -51,67 +51,32 @@ A digital twin is a model of one particular physical asset (machine, pump, batte
 Physical assets like real equipment or complete processess are rarely fully known or fully unknown. Otwin provides five model classes and the manifest records which one you used, because the guarantees available to you depend on the answer.
 
 Digital Twins can be classified as:
-| Type |Description |
-|---|---|
-| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="80"> | Whithe-box models: We know the exact equations and it's parameters so we can model the asset behavior for long time horizons and different scales|
-| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="80">| Grey-box models: we have a descriptive equation, rooted in physical principles, that roughly explain asset behavior. We collect data from the real asset and use this data to fine-tune the descriptive equation. These models are also called **Hybrid Digital Twins** because they combine a white-box model (the equation) and a black-box models (the part we learn from the data) |
-| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Black_box.png" height="80"> | Black-box models: These models use real data for modelling the asset using Machine Learning methods. They are black because we do not have the answer to the question why the model ooutput is this?. Data-driven models, despite being widely used, has a limitation for engineering applications: fundamental laws of physics can be violeted because nothing constrain the model with the reallity. So unseen data, longer time horizons or different range scales can't be predicted from the data without the guarantee that they are not going to violate any physical law | 
+| | | |
+|---|---|---|
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="40"> | **White box** | Every equation and every parameter comes from first principles. Nothing is fitted. The guarantee is structural — and so is the limit: it can only describe what you can write down. |
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="40"> | **Grey box** | The structure is fixed by physics; the unknown parts are estimated from data. Almost every useful industrial twin is here. |
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Black_box.png" height="40"> | **Black box** | The data decides everything. Excellent inside the range it has seen, and no reason to behave outside it. |
 
-
-
-| Model class | AI model | What you provide | Where it comes from | What the structure guarantees |
-|---|---|---|---|---|
-| `port_hamiltonian` | <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="40"> | `H`, `J`, `R`, `g` — energy, exchange, dissipation, ports | Known physics | Energy bounded by port supply, for any parameters and any step size |
-| `irreversible_phs` | <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="40"> |The above plus entropy `S` and either `L` or a modulating `gamma` | Known physics with irreversible transport | The above, plus entropy production `sigma >= 0` on every call |
-| `empirical_law` | <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="40"> |A trend law and its parameters | Fitted to data; no energy function exists | Nothing structural. Everything here is earned by validation |
-| `learned_phs` |<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="40"> |Network widths; `J`, `R`, `H`, `g` are learned | Data, with physics imposed on the architecture | Skew `J` and PSD `R` hold **by construction**, whatever the weights learn |
-| `composite` | <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="40"> |A physical prior plus a learned or empirical correction | Both | Inherits a basic physical structure that is validated with the observed data |
-
-
-The library computes which side you are on rather than taking your word for it:
-
-```
-TwinManifest.is_white_box   ->   True only when estimated == ()
-```
-
-A white-box twin can be validated against an exact answer. A grey-box twin cannot, and must be
-validated against held-out data with a baseline instead. Both paths are supported by Otwin.
 
 <br>
 
 ## What makes otwin different
 
-Three things:
 
-- **1. The uncertainty is measured, not declared.** A stated 90 % interval means nothing until
+- **The uncertainty is measured, not declared.** A stated 90 % interval means nothing until
 somebody counts how often it contains the truth. `Interval.is_validated` stays `False` until it has
 been counted. The conformal example below finishes at a measured 90 % on sixty held-out cycles
 against a 90 % target; when the calibration set is too small to support the level requested, the
 library returns an infinite half-width, loudly, rather than a comfortable-looking one.
 
-- **2. The validation is leakage-free and beats something.** Partitions are out-of-sample by default,
+- **The validation is leakage-free and beats something.** Partitions are out-of-sample by default,
 a reference forecaster is mandatory, and the report leads with the skill score against the *hardest*
 of persistence, drift, mean and seasonal-naive. The model is handed history and a horizon, never the
 test values.
 
-- **3. The twin can say no.** Operating range, forecast horizon and calibration status are recorded in
+- **The twin can say no.** Operating range, forecast horizon and calibration status are recorded in
 the manifest, and a request outside them is refused with a reason rather than answered with a
 number.
-
-<br>
-
-## What you can do with Otwin
-
-| Task | Module | Application|
-|---|---|---|
-| Write and simulate a physical model | `otwin.model` | Tank, cell, machine, thermal network, drivetrain, reactor, exchanger |
-| Learn what the physics does not tell you | `otwin.model`, `otwin.forecast` | Structure-constrained networks, GP residuals over a physical prior, empirical trend laws |
-| Read live data from equipment | `otwin.io` | SunSpec Modbus, Modbus TCP/RTU, plus simulators so you can work without hardware |
-| Clean and align that data | `otwin.signal` | Resampling, gap detection, out-of-order samples, coverage reporting |
-| Correct model state from measurements | `otwin.estimate` | Extended Kalman filter, moving-horizon estimation with state bounds, energy-consistent observer |
-| Quantify uncertainty | `otwin.forecast` | Conformal bands, ensembles, CRPS, PIT, coverage curves, recalibration |
-| Measure the forecast | `otwin.forecast` | Out-of-sample protocols, reference forecasters, skill scores |
-| Record where the model is valid | `otwin.advise` | Operating range and horizon the model was validated over |
 
 <br>
 
@@ -120,26 +85,24 @@ number.
 ```bash
 pip install otwin
 ```
-
-Otwin uses just NumPy and SciPy libraries. Connectors, learned models and Gaussian-process intervals are
-optional, so if you only want the modelling and validation layers you don't nee to install a Modbus
-stack or a Neural Network library.
-
-```bash
-pip install "otwin[field]"     # Modbus and SunSpec connectors
-pip install "otwin[gp]"        # Gaussian-process residuals and intervals
-pip install "otwin[nn]"        # learned models (pulls in PyTorch)
-pip install "otwin[all]"       # everything
+### Package-level tree
 ```
-
-Requires Python 3.10 or later.
-
+otwin/
+├── io          read equipment or a dataset: SunSpec, Modbus, units, quality      [field]
+├── signal      condition the series: resample, find gaps, report coverage
+├── model       the physics: port-Hamiltonian, irreversible, catalogue, learned      [nn]
+├── estimate    correct the state: EKF, bounded MHE, energy-consistent observer
+├── forecast    predict and prove it: baselines, skill, conformal, ensembles         [gp]
+├── advise      the validated envelope: answer, or refuse with a reason
+└── interfaces  the contract the other six compose through — protocols, no algorithms
+```
 <br>
+
+`otwin/interfaces` sits outside the chain: the six packages compose through protocols rather than by importing each other, so you can take one on its own — score a model that has nothing to do with otwin, or write physics and never touch io.
 
 ## Get started
 
-A mass on a spring with a damper. Two energy stores — the spring and the moving mass — and one
-lossy element.
+A white-box example consisting of a mass on a spring with a damper. The system has two energy stores: the spring and the moving mass.
 
 ```python
 import numpy as np
@@ -172,14 +135,6 @@ Largest single-step energy INCREASE: 0.00e+00 J
 
 That second line `Largest single-step energy INCREASE: 0.00e+00 J` show that with no force applied, stored energy never rises because the model form makes it impossible.
 
-If you want to see a full workflow that simulates a grid-scale battery bank end to end. The workflow read the device, condition the signal, estimate state, forecast, validate, and refuse the questions it has not earned the right to answer. No hardware required.
-
-```bash
-git clone https://github.com/otwin-core/otwin.git
-cd otwin && pip install -e ".[dev]"
-python examples/bess_end_to_end.py
-```
-
 <br>
 
 <div align="center">
@@ -188,7 +143,7 @@ python examples/bess_end_to_end.py
 
 </div> 
 
-## When the physics is known
+## When the physics is known (white-box) 
 
 Choose a port-Hamiltonian structure and conservation stops being something you check and becomes
 something you cannot violate: it is an algebraic property of how the model is written, so it
@@ -324,33 +279,11 @@ call the second law. `otwin.model.heat_exchanger` is a worked instance, with `ef
 
 </div> 
 
-## The grey area: governing equations are not fully known
+## Hybrid Digital Twins (grey-box)
 
-This is the most common case we can find. Combine all governing equations can be mathematically tricky and computationally unfeasible. These limitation can be managed with an hybrid approach combining basic governing equation plus observed data.
+This is the most common case we can find. Combine all governing equations can be mathematically tricky and computationally unfeasible. These limitation can be managed with an hybrid approach combining basic governing equations plus observed data.
 
-### The system only degrades
-
-Capacity fade, wear, fatigue and corrosion have no conserved energy function and no port. Forcing
-them into a port-Hamiltonian frame is the most common conceptual error in this field, so otwin
-refuses to help you do it: `EmpiricalLawModel` deliberately does **not** extend `TwinModel`, because
-a fade law has no state derivative and a stub `rhs` returning zeros would be exactly that error
-wearing a disguise.
-
-What you write instead is a transparent trend law with fitted parameters and a bounded residual.
-`FoulingLaw` and `kern_seaton_fouling` ship as worked instances for exchanger fouling. Everything
-downstream — estimate, quantify, validate — is unchanged, which is the whole point.
-
-### The structure is known and the content is not
-
-`PortHamiltonianNN` learns `H`, `J`, `R` and `g` as networks, with `J = A - A.T` and `R = L @ L.T`
-so that skew-symmetry and positive semidefiniteness hold **by construction, whatever the weights
-learn**. Passivity is not a training objective that might be reached; it is a property of the
-parameterisation. `derivative_loss` and `passivity_penalty` are the training terms — the penalty
-only conditions the optimisation, since the structure has already made violation impossible.
-
-### The physics is right in form and wrong in detail
-
-The most useful hybrid in practice. Keep the analytic model as a prior and learn the residual, so
+Hybrid Digital Twins are the most useful models in practice. Keep the analytic model as a prior and learn the residual, so
 the mean stays physically consistent and the correction carries calibrated uncertainty:
 
 ```python
@@ -397,13 +330,9 @@ Thirty times closer on the derivative, and — the part that matters operational
 standard deviation is two orders of magnitude larger at a state the GP has never seen. The
 correction knows when it is extrapolating even though the prior does not.
 
-Two notes on running this yourself. scikit-learn will warn that one state dimension has nothing
-to learn — it is right: the prior already gets that row exactly, and a residual GP fitted to
-zeros is the correct answer. And `GPPHS` does not currently seed the restarts of its own
-hyperparameter search, so without the `np.random.seed` line above the last digits move between
-runs.
+> You can find a specific repository for modelling a Li-ion capacity in the repository [https://github.com/otwin-core/otwin-hybrid.git]
 
-### The parameters themselves are uncertain
+### Uncertainty management
 
 A measured orifice, a tolerance band on a capacitance, a coefficient quoted to two figures. Propagate
 it by making the spread the model:
@@ -437,9 +366,9 @@ plant inside the band on 100% of steps
 An ensemble of identical deterministic members has zero spread. That is correct, not a bug — the
 members must genuinely differ for the spread to mean anything.
 
+## The four steps pipeline
 
-
-## Estimating state from measurements
+### 1. Estimating state from measurements
 
 | Estimator | Use it when |
 |---|---|
@@ -453,9 +382,8 @@ increase stored energy beyond what the ports supplied; the trade-off is in the d
 ports closed the allowed increase is zero, so a correction that merely reflects an under-energetic
 prior is rejected too.
 
----
 
-## Quantifying uncertainty
+### 2. Quantifying uncertainty
 
 An interval has meaning if it's **coverage** has been measured: a stated 90 % interval should
 contain the truth about 90 % of the time.
@@ -500,7 +428,7 @@ measured coverage: 90%  (target 90%)
 ```
 
 
-## Validating a forecast
+### 3. Validating a forecast
 
 A model is not validated until its forecasts have been compared, out of sample, against a reference
 that is hard to beat. Same series and same `FadeLaw` as above:
@@ -543,7 +471,7 @@ and hard to notice:
   comparable with one computed without.
 
 
-## Recording where the model is valid
+### 4. Recording where the model is valid
 
 The manifest carries which structure you chose, which parameters were estimated, how the model was
 validated and how the band was calibrated. The envelope turns that record into an answer or a
@@ -589,9 +517,8 @@ range is reported as such, not returned as a number. `is_validated` is deliberat
 `leakage_free` must be the boolean `True`, not merely truthy, because manifests arrive from MATLAB
 and Julia where a boolean can round-trip as `1` or as the string `"false"`.
 
----
 
-## The workflow, end to end
+### The pipeline, end to end
 
 The modules follow the six data-processing blocks of **ISO 13374**, so the layout matches the
 reference architecture used in condition-monitoring practice.
@@ -605,6 +532,7 @@ reference architecture used in condition-monitoring practice.
 | Prognostic assessment | `otwin.forecast` | Forecast, score against a reference, calibrate the band |
 | Advisory generation | `otwin.advise` | Report whether the request is inside the validated envelope |
 
+<br>
 
 ## The otwin project
 
@@ -620,6 +548,7 @@ interface, so a second-language implementation has an objective completion crite
 unmodified. See [CONTRIBUTING.md](CONTRIBUTING.md) for that and for a list of self-contained project
 topics.
 
+<br>
 
 ## Issues, contribution and citation
 - **Questions and bugs** — [open an issue](https://github.com/otwin-core/otwin/issues)
@@ -628,7 +557,9 @@ topics.
   result it must reproduce
 - **Citing** — each repository carries a `CITATION.cff`
 
-Some references:
+<br>
+
+## References
 
 - van der Schaft, A. & Jeltsema, D. (2014). *Port-Hamiltonian Systems Theory: An Introductory
   Overview.* Foundations and Trends in Systems and Control.
@@ -644,5 +575,3 @@ Some references:
   JASA 102(477).
 - ISO 13374 — *Condition monitoring and diagnostics of machines.*
 - ISO 13381-1:2015 — *Condition monitoring and diagnostics of machines: prognostics.*
-
-Licensed under Apache 2.0.
