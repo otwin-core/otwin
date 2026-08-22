@@ -8,7 +8,7 @@
 </div>
 
 
-Otwin builds Digital Twins of physical equipment from whichever mixture of physics and data the equipment justifies — first-principles, empirical, learned, or a combination of them — keeps them in step with the machine from live measurements, and reports forecasts with a realistic uncertainty band.
+Otwin is a Python library used to build Digital Twins of physical equipment from physics, data or both, keep them in step with the machine from live measurements, and forecast with an uncertainty band whose coverage has been measured and a skill score earned out of sample against a reference that is hard to beat.
 
 <br>
 
@@ -33,18 +33,16 @@ Otwin builds Digital Twins of physical equipment from whichever mixture of physi
 
 ## What otwin is for
 
-You have a piece of equipment — a battery bank, a pump, a heat exchanger, a hydraulic circuit, a
-drivetrain — and a question about its future:
+A digital twin is a model of one particular physical asset (machine, pump, battery bank, heat exchanger, chemical reactor, a complete process) kept up to date from that asset's own measurements and run forward to support decissions about it. 
 
-> *How much capacity does this Li-ion battery still have? When will it cross the retirement threshold?
+> Electrical grid. This distribution transformer keeps running above nameplate on hot afternoons. How much longer can it do that before the winding reaches its thermal limit?
+> 
+> Renewable generation and storage. This battery bank is three years into its life. How much can I commit to the market next week and still be certain of delivering it?
 
-A spreadsheet model answers the first question at commissioning and then goes stale. A model fitted
-to historical data answers it well inside the range it was fitted to, and can drift into physically
-impossible territory outside it — reporting a battery gaining capacity, or a tank filling itself.
+> Water treatment. The transfer pumps need more power every month for the same flow. How many weeks of margin are left before the duty pump can no longer hold its setpoint?
 
-Otwin gives you a third option: choose a model structure that matches how much you actually know,
-correct it from live measurements, and attach an uncertainty band whose stated confidence has been
-checked against held-out data.
+> How much capacity does this Li-ion battery still have? When will it cross the retirement threshold?
+
 
 <br>
  
@@ -53,18 +51,21 @@ checked against held-out data.
 Physical assets like real equipment or complete processess are rarely fully known or fully unknown. Otwin provides five model classes and the manifest records which one you used, because the guarantees available to you depend on the answer.
 
 Digital Twins can be classified as:
-- Whithe-box models: We know the exact equations and it's parameters so we can model the asset behavior for long time horizons and different scales. 
-- Black-box models: These models use real data for modelling the asset using Machine Learning methods. They are black because we do not have the answer to the question why the model ooutput is this?. Data-driven models, despite being widely used, has a limitation for engineering applications: fundamental laws of physics can be violeted because nothing constrain the model with the reallity. So unseen data, longer time horizons or different range scales can't be predicted from the data without the guarantee that they are not going to violate any physical law. 
-- Grey-box models: we have a descriptive equation, rooted in physical principles, that roughly explain asset behavior. We collect data from the real asset and use this data to fine-tune the descriptive equation. These models are also called **Hybrid Digital Twins** because they combine a white-box model (the equation) and a black-box models (the part we learn from the data).
+| Type |Description |
+|---|---|
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="80"> | Whithe-box models: We know the exact equations and it's parameters so we can model the asset behavior for long time horizons and different scales|
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="80">| Grey-box models: we have a descriptive equation, rooted in physical principles, that roughly explain asset behavior. We collect data from the real asset and use this data to fine-tune the descriptive equation. These models are also called **Hybrid Digital Twins** because they combine a white-box model (the equation) and a black-box models (the part we learn from the data) |
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Black_box.png" height="80"> | Black-box models: These models use real data for modelling the asset using Machine Learning methods. They are black because we do not have the answer to the question why the model ooutput is this?. Data-driven models, despite being widely used, has a limitation for engineering applications: fundamental laws of physics can be violeted because nothing constrain the model with the reallity. So unseen data, longer time horizons or different range scales can't be predicted from the data without the guarantee that they are not going to violate any physical law | 
 
 
-| Model class | AI model |What you supply | Where it comes from | What the structure guarantees |
+
+| Model class | AI model | What you provide | Where it comes from | What the structure guarantees |
 |---|---|---|---|---|
-| `port_hamiltonian` | White-Box | `H`, `J`, `R`, `g` — energy, exchange, dissipation, ports | Known physics | Energy bounded by port supply, for any parameters and any step size |
-| `irreversible_phs` | White-Box |The above plus entropy `S` and either `L` or a modulating `gamma` | Known physics with irreversible transport | The above, plus entropy production `sigma >= 0` on every call |
-| `empirical_law` | Grey-Box |A trend law and its parameters | Fitted to data; no energy function exists | Nothing structural. Everything here is earned by validation |
-| `learned_phs` | Grey-Box |Network widths; `J`, `R`, `H`, `g` are learned | Data, with physics imposed on the architecture | Skew `J` and PSD `R` hold **by construction**, whatever the weights learn |
-| `composite` | Grey-Box |A physical prior plus a learned or empirical correction | Both | Whatever the prior half guarantees, on the prior half |
+| `port_hamiltonian` | <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="40"> | `H`, `J`, `R`, `g` — energy, exchange, dissipation, ports | Known physics | Energy bounded by port supply, for any parameters and any step size |
+| `irreversible_phs` | <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="40"> |The above plus entropy `S` and either `L` or a modulating `gamma` | Known physics with irreversible transport | The above, plus entropy production `sigma >= 0` on every call |
+| `empirical_law` | <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="40"> |A trend law and its parameters | Fitted to data; no energy function exists | Nothing structural. Everything here is earned by validation |
+| `learned_phs` |<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="40"> |Network widths; `J`, `R`, `H`, `g` are learned | Data, with physics imposed on the architecture | Skew `J` and PSD `R` hold **by construction**, whatever the weights learn |
+| `composite` | <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="40"> |A physical prior plus a learned or empirical correction | Both | Inherits a basic physical structure that is validated with the observed data |
 
 
 The library computes which side you are on rather than taking your word for it:
@@ -99,28 +100,9 @@ number.
 
 <br>
 
-## When the physics is known
+## What you can do with Otwin
 
-Choose a port-Hamiltonian structure and conservation stops being something you check and becomes
-something you cannot violate: it is an algebraic property of how the model is written, so it
-survives any parameter set, any step size and any length of run.
-
-In the first example below, stored energy does not rise on a single step of a 400-step simulation
-with the ports closed, where `scipy.integrate.solve_ivp` on the same right-hand side gains
-`3.2e-05 J`. On the reference cases the same structure reproduces closed-form answers to the limit of
-double precision — a pumped-hydro round-trip efficiency agrees with its analytic value to a relative
-error of `9.6e-16` — and the irreversible form holds the second law across a full reactor run in
-which the same process written as a plain energy balance violates it on 91 % of steps.
-
-*What none of this gives you:* accuracy. A model with the wrong parameters is still wrong — it is
-simply wrong without violating the energy balance. Accuracy is measured separately, and that is what
-the rest of the library is for.
-
----
-
-## What you can do with it
-
-| Task | Module | Typical use |
+| Task | Module | Application|
 |---|---|---|
 | Write and simulate a physical model | `otwin.model` | Tank, cell, machine, thermal network, drivetrain, reactor, exchanger |
 | Learn what the physics does not tell you | `otwin.model`, `otwin.forecast` | Structure-constrained networks, GP residuals over a physical prior, empirical trend laws |
@@ -131,7 +113,7 @@ the rest of the library is for.
 | Measure the forecast | `otwin.forecast` | Out-of-sample protocols, reference forecasters, skill scores |
 | Record where the model is valid | `otwin.advise` | Operating range and horizon the model was validated over |
 
-<br<
+<br>
 
 ## Quick install
 
@@ -200,7 +182,32 @@ python examples/bess_end_to_end.py
 
 <br>
 
-## Writing a first-principles model using Port Hamniltonian Systems
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="80"> 
+
+</div> 
+
+## When the physics is known
+
+Choose a port-Hamiltonian structure and conservation stops being something you check and becomes
+something you cannot violate: it is an algebraic property of how the model is written, so it
+survives any parameter set, any step size and any length of run.
+
+In the first example below, stored energy does not rise on a single step of a 400-step simulation
+with the ports closed, where `scipy.integrate.solve_ivp` on the same right-hand side gains
+`3.2e-05 J`. On the reference cases the same structure reproduces closed-form answers to the limit of
+double precision — a pumped-hydro round-trip efficiency agrees with its analytic value to a relative
+error of `9.6e-16` — and the irreversible form holds the second law across a full reactor run in
+which the same process written as a plain energy balance violates it on 91 % of steps.
+
+*What none of this gives you:* accuracy. A model with the wrong parameters is still wrong — it is
+simply wrong without violating the energy balance. Accuracy is measured separately, and that is what
+the rest of the library is for.
+
+<br>
+
+### Writing a first-principles model using Port Hamniltonian Systems
 
 You describe the system with **four functions of the state**. The dynamics follow from them:
 
@@ -310,6 +317,12 @@ most chemical reactor and heat exchanger models fall out. The `IrreversiblePHS` 
 call the second law. `otwin.model.heat_exchanger` is a worked instance, with `effectiveness_ntu` for its steady-state check.
 
 <br>
+
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="80"> 
+
+</div> 
 
 ## The grey area: governing equations are not fully known
 
@@ -424,7 +437,7 @@ plant inside the band on 100% of steps
 An ensemble of identical deterministic members has zero spread. That is correct, not a bug — the
 members must genuinely differ for the spread to mean anything.
 
----
+
 
 ## Estimating state from measurements
 
@@ -444,7 +457,7 @@ prior is rejected too.
 
 ## Quantifying uncertainty
 
-An interval means nothing until its **coverage** has been measured: a stated 90 % interval should
+An interval has meaning if it's **coverage** has been measured: a stated 90 % interval should
 contain the truth about 90 % of the time.
 
 ```python
@@ -486,27 +499,6 @@ half-width 0.0023 at h=1, 0.0030 at h=60
 measured coverage: 90%  (target 90%)
 ```
 
-Two things the library refuses to do, both learned the hard way:
-
-- It will not build a band from a model's **in-sample residuals**. Those are an order of magnitude
-  smaller than its h-step-ahead errors; on a capacity twin that mistake delivered 1.5 % coverage
-  against a 90 % target.
-- When the calibration set is too small for the level requested, `conformal_quantile` returns an
-  **infinite** half-width rather than quietly returning the sample maximum:
-
-```
-UserWarning: 8 calibration residuals cannot support a 99% conformal band: the finite-sample
-rank is 9 of 8. Returning an infinite half-width, which is the honest answer. You need at
-least 99 residuals for this level.
-```
-
-Conformal bands are distribution-free and need only exchangeable residuals. Where you have a
-predictive distribution instead — from an ensemble, a GP, or a learned model — score it as a
-distribution: `crps`, `pit_values`, `coverage_curve`, `expected_calibration_error` and `sharpness`
-are all in `otwin.forecast`, and `recalibrate` fits the correction a miscalibrated one needs.
-`split_conformal` and `AdaptiveConformal` cover the fixed-width and drifting cases.
-
----
 
 ## Validating a forecast
 
@@ -550,7 +542,6 @@ and hard to notice:
   that drivers were used — a skill score computed with the future of the drivers in hand is not
   comparable with one computed without.
 
----
 
 ## Recording where the model is valid
 
@@ -614,7 +605,6 @@ reference architecture used in condition-monitoring practice.
 | Prognostic assessment | `otwin.forecast` | Forecast, score against a reference, calibrate the band |
 | Advisory generation | `otwin.advise` | Report whether the request is inside the validated envelope |
 
----
 
 ## The otwin project
 
@@ -630,40 +620,15 @@ interface, so a second-language implementation has an objective completion crite
 unmodified. See [CONTRIBUTING.md](CONTRIBUTING.md) for that and for a list of self-contained project
 topics.
 
----
 
-## What otwin is not
-
-- **Not a field solver.** Lumped parameters only — ODEs in a finite state vector. No PDEs, no finite
-  elements, no CFD.
-- **Not an electrochemical simulator.** PyBaMM models the electrochemistry inside a cell; otwin
-  models the system around it.
-- **Not a block-diagram environment, and not a code generator.** It is a Python library with a
-  narrow, checkable model form. Nothing here targets an ECU or a PLC.
-- **Not a stochastic-dynamics engine.** Every integrator here is deterministic. There is no Brownian
-  term, no Langevin or diffusion sampler, no Monte-Carlo sampling of the energy landscape.
-  Uncertainty comes from conformal bands, ensembles and GP posteriors instead. For posterior
-  sampling use `emcee` or `numpyro`, for receding-horizon control `cvxpy`, for load flow
-  `pandapower`; otwin supplies the model, the calibrated band and the validity envelope they
-  consume.
-- **Only two field protocols.** SunSpec Modbus and Modbus TCP/RTU. IEC 61850, IEC 60870-5-104 and
-  DNP3 are out of scope — no permissively licensed Python implementation exists. Use a gateway.
-
-**Versioning.** Pre-1.0 and moving: the API will change before 1.0, so pin a version. Breaking
-changes are listed in [CHANGELOG.md](CHANGELOG.md). What will not change is the discipline the
-library enforces — if a release ever makes a guarantee weaker, that is a bug and worth an issue.
-
----
-
-## Help, citing, licence
-
+## Issues, contribution and citation
 - **Questions and bugs** — [open an issue](https://github.com/otwin-core/otwin/issues)
 - **Contributing** — [CONTRIBUTING.md](CONTRIBUTING.md). The catalogue of physical models is the
   easiest place to start, and each contribution is a system you already know plus one closed-form
   result it must reproduce
 - **Citing** — each repository carries a `CITATION.cff`
 
-The formulation is not original to this library. If you use it, cite the sources:
+Some references:
 
 - van der Schaft, A. & Jeltsema, D. (2014). *Port-Hamiltonian Systems Theory: An Introductory
   Overview.* Foundations and Trends in Systems and Control.
