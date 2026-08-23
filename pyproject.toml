@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "otwin"
-version = "0.3.0"
+version = "0.3.1"
 description = "Digital twins whose physics is checked, not claimed. Energy-based models, leakage-free validation, calibrated intervals."
 readme = "README.md"
 requires-python = ">=3.10"

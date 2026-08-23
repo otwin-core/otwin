@@ -12,6 +12,42 @@ exact version in anything you depend on.
 
 Nothing yet.
 
+## [0.3.1] — 2026-08-22
+
+Documentation. No change to the library's behaviour, and no change to its public
+API: `pip install otwin==0.3.1` runs the same code as `0.3.0`.
+
+### Added
+
+- **A manual.** Sphinx + MyST at <https://otwin.readthedocs.io/>: install,
+  a quickstart that goes from an energy balance to a calibrated band to a
+  refusal, seven concept pages carrying the equations, one guide per ISO 13374
+  block, and a reference section generated from the docstrings the test suite
+  already executes. `[project.urls] Documentation` now points there rather than
+  at a README anchor, which is the only reason this release exists — a docs site
+  is built from the repository, but the link on PyPI comes from the package
+  metadata.
+- **The documentation examples are tested.** `tests/test_docs_examples.py` runs
+  every ```python block in the manual in document order, one namespace per page,
+  and compares what it prints against the output the page claims. Prose that
+  stays plausible while its code stops running is the normal way documentation
+  fails, and nothing else catches it.
+- **A `docs` job in CI**, building with `-W`, so a broken cross-reference fails a
+  pull request rather than rendering as ordinary text nobody notices.
+
+### Fixed
+
+- Four docstring defects, each invisible to pytest, ruff and mypy and each found
+  by building the manual: a section underline one character short in
+  `estimate/energy.py`; ASCII structure diagrams in `model/library.py` indented
+  under plain text, which reStructuredText reads as definition lists; a bare
+  `|...|` pair in the Jacobian expression in `model/integrators.py`, read as a
+  substitution reference; and a field in `forecast/conformal.py` annotated
+  `npt.NDArray[np.bool_]`, whose trailing underscore is a hyperlink reference to
+  a target that does not exist once autodoc renders it. That one is now a named
+  `BoolArray`, which the source reads better for.
+- The `0.2.0` link at the foot of this file pointed at `github.comit`.
+
 ## [0.3.0] — 2026-08-21
 
 Seven changes, all found by rewriting a ten-notebook digital-twin study to run on the
@@ -166,5 +202,7 @@ this repository.
 - Connectors are read-only. Closed-loop actuation is deliberately out of scope.
 - No production deployment on an operating asset is known to the maintainer.
 
-[Unreleased]: https://github.com/otwin-core/otwin/compare/v0.2.0...HEAD
-[0.2.0]: https://github.comit/otwin-core/otwin/releases/tag/v0.2.0
+[Unreleased]: https://github.com/otwin-core/otwin/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/otwin-core/otwin/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/otwin-core/otwin/releases/tag/v0.3.0
+[0.2.0]: https://github.com/otwin-core/otwin/releases/tag/v0.2.0
