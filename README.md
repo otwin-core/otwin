@@ -139,7 +139,7 @@ That second line `Largest single-step energy INCREASE: 0.00e+00 J` show that wit
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="80"> 
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="80"> 
 
 </div> 
 
