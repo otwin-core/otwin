@@ -1,7 +1,7 @@
 """Energy-consistent state correction for port-Hamiltonian twins.
 
 The problem, in one paragraph
-----------------------------
+-----------------------------
 
 A port-Hamiltonian model is passive by construction: with no input, the stored
 energy ``H(x)`` can only go down, because ``dH/dt = -∇Hᵀ R ∇H + yᵀu ≤ yᵀu``.

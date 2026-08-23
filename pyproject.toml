@@ -68,7 +68,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/otwin-core/otwin"
-Documentation = "https://github.com/otwin-core/otwin#readme"
+Documentation = "https://otwin.readthedocs.io/"
 Source = "https://github.com/otwin-core/otwin"
 Issues = "https://github.com/otwin-core/otwin/issues"
 "Type test" = "https://github.com/otwin-core/otwin-spec"

@@ -40,7 +40,7 @@ the model and decreasing order of cost per step:
 ``"newton"``
     Damped Newton on ``F`` with the analytic Jacobian
 
-        ∂F/∂x₁ = I − (Δt/2) · ∂f/∂x |_{x_m}
+        ``∂F/∂x₁ = I − (Δt/2) · ∂f/∂x |_{x_m}``
 
     which a port-Hamiltonian model hands you almost for free: for
     ``f = (J − R)∇H + g u`` with state-independent ``J``, ``R``, ``g`` it is
