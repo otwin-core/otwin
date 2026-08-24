@@ -36,6 +36,10 @@ else:
         log.warning("refused: %s", breach)
 ```
 
+`requires_identified=True` on the envelope adds a fifth check: every estimated
+parameter must be recorded as identified, or the refusal names the one that is
+not. See [Identifiability](../concepts/identifiability.md).
+
 `wants_interval=True` is what makes the calibration check apply. Asking for a
 point forecast and asking for a band are different questions with different
 evidence requirements, and the envelope treats them that way.

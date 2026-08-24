@@ -3,8 +3,9 @@
 A model that always returns a number is not being careful, it is being polite.
 Every forecast this library produces carries a validity envelope: the operating
 range the model was actually identified over, the horizon it was actually
-validated to, and whether its intervals have actually been checked against
-held-out data. Ask outside that envelope and you get a refusal with a reason,
+validated to, whether its intervals have actually been checked against
+held-out data, and whether the coefficients it extrapolates through were
+actually determined by the data rather than by the noise. Ask outside that envelope and you get a refusal with a reason,
 not a plausible number.
 
 This is the ISO 13374 Advisory Generation block (AG), and it is the difference
@@ -112,6 +113,13 @@ class Envelope:
             leakage-free validation. Default True.
         requires_calibrated: Refuse if interval coverage was never measured.
             Only applies to requests that ask for an interval.
+        requires_identified: Refuse if any estimated parameter is not recorded
+            as identified (see :attr:`otwin.interfaces.TwinManifest.is_identified`).
+            A law whose second term was fitted to noise passes every other
+            check and runs away at the far horizon; this is the check that
+            catches it. Default False for compatibility with manifests written
+            before identification was recorded; set it True for anything that
+            extrapolates.
         max_extrapolation: How far outside ``state_bounds`` to tolerate, as a
             fraction of each range. 0.0 means none at all.
 
@@ -131,6 +139,7 @@ class Envelope:
     max_horizon: int | None = None
     requires_validated: bool = True
     requires_calibrated: bool = True
+    requires_identified: bool = False
     max_extrapolation: float = 0.0
 
     # ------------------------------------------------------------------
@@ -282,6 +291,35 @@ class Envelope:
                     breaches.append(Breach("validation", detail))
                 else:
                     checked.append("validated, leakage-free")
+
+            if self.requires_identified:
+                estimated = tuple(getattr(manifest, "estimated", ()) or ())
+                if getattr(manifest, "is_identified", False):
+                    checked.append(
+                        "estimated parameters identified"
+                        if estimated
+                        else "no estimated parameters (white-box)"
+                    )
+                else:
+                    ident = getattr(manifest, "identification", None) or {}
+                    verdicts = (
+                        ident.get("parameters") if isinstance(ident, dict) else None
+                    )
+                    if isinstance(verdicts, dict):
+                        failed = [n for n in estimated if verdicts.get(n) is not True]
+                        detail = (
+                            "extrapolation depends on parameters the data did not "
+                            f"determine: {', '.join(failed)}. A fitted value the fleet "
+                            "cannot pin down is a value chosen by the noise"
+                        )
+                    else:
+                        detail = (
+                            "identifiability of the estimated parameters "
+                            f"({', '.join(estimated)}) was never recorded; a fitted "
+                            "coefficient is not a determined one until checked. Build "
+                            "it with TwinManifest.identified_by(...)"
+                        )
+                    breaches.append(Breach("identification", detail))
 
             if wants_interval and self.requires_calibrated:
                 calibration = getattr(manifest, "calibration", None) or {}

@@ -12,6 +12,33 @@ exact version in anything you depend on.
 
 Nothing yet.
 
+## [0.4.0] — 2026-08-24
+
+One new capability, and a fourth ground for refusal. Additive: every existing
+call path and every manifest written by 0.3.x is unchanged; the new envelope
+check is off unless asked for.
+
+### Added
+
+- **Identifiability — the fourth ground for refusal.** `otwin.estimate.identifiability(X, y, ...)`
+  reports, per fitted coefficient, whether the data determined it: collinearity of
+  the design columns (the early-life two-term law), record span against a fitted
+  time constant (the Kern–Seaton trap, previously a docstring warning only), and
+  stability under a bootstrap over *units* rather than rows (the field-data case
+  of three tests per system). `TwinManifest.identified_by(...)` records the
+  verdicts and `TwinManifest.is_identified` reads them as strictly as
+  `is_validated`. `Envelope(requires_identified=True)` refuses a forecast that
+  leans on an undetermined coefficient and names it. Default off, so existing
+  manifests are unaffected; set it for anything that extrapolates. Motivation:
+  in the replication series every result — a free exponent on 100 cycles, a
+  second mechanism fitted to three points per system — was decided by
+  identifiability, and the library had no way to say so.
+- **Documentation.** A concept page, *Identifiability*, with the definition,
+  the three failure modes, the executed example and the three cases from the
+  replication series; the envelope rule now has five clauses; the front page
+  has four commitments; the README gains a step between validating the forecast
+  and recording the envelope.
+
 ## [0.3.1] — 2026-08-22
 
 Documentation. No change to the library's behaviour, and no change to its public

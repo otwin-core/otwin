@@ -45,6 +45,27 @@ $[0, 1]$, not merely usually) and robustness to outliers, since a single bad
 measurement is outvoted by the rest of the window rather than dragging the
 estimate with it.
 
+## Was the parameter determined by the data?
+
+The filters above estimate *states*. Fitting a fade law or a fouling law
+estimates *parameters*, and the same question applies with more force, because
+a parameter is extrapolated through. {func}`~otwin.estimate.identifiability`
+answers it per coefficient from the design matrix and the observations:
+
+```{code-block} python
+from otwin.estimate import identifiability
+
+rep = identifiability(X, y, names=("c1", "c2"), groups=cell_id, nonneg=True)
+print(rep)                 # one verdict per parameter, with the reason
+rep.verdicts               # {"c1": True, "c2": False} -> TwinManifest.identified_by(...)
+```
+
+Three checks: collinearity of the design columns, record span against a fitted
+time constant (`span=`, `time_constants=`), and stability under a bootstrap over
+`groups` — units, not rows. The reasoning, and the case each check exists for,
+is in [Identifiability](../concepts/identifiability.md). The verdicts feed the
+manifest, and {class}`~otwin.advise.Envelope` can refuse on them.
+
 ## Next
 
 [Model](model.md) — the structure all of these estimate the state of.

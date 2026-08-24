@@ -66,6 +66,7 @@ Example:
 """
 
 from .energy import EnergyConsistentObserver, EnergyFilterResult
+from .identifiability import IdentifiabilityReport, ParameterVerdict, identifiability
 from .kalman import ExtendedKalmanFilter, FilterResult
 from .linear import KalmanFilter
 from .mhe import MovingHorizonEstimator
@@ -75,6 +76,9 @@ __all__ = [
     "EnergyFilterResult",
     "ExtendedKalmanFilter",
     "FilterResult",
+    "IdentifiabilityReport",
+    "ParameterVerdict",
+    "identifiability",
     "KalmanFilter",
     "MovingHorizonEstimator",
 ]
