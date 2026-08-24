@@ -78,6 +78,13 @@ test values.
 the manifest, and a request outside them is refused with a reason rather than answered with a
 number.
 
+- **A fitted coefficient is not a determined one.** A parameter the data cannot pin down is a
+parameter chosen by the noise, and a forecast that extrapolates through it is extrapolating the
+noise — while passing every in-window check. `otwin.estimate.identifiability` tests each
+coefficient for collinearity, record span and bootstrap stability; the manifest records the verdict;
+the envelope refuses on it and names the parameter. This is the fourth ground for refusal, and the
+one that decided every extrapolation result in the study that built this library.
+
 <br>
 
 ## Quick install
@@ -91,7 +98,7 @@ otwin/
 ├── io          read equipment or a dataset: SunSpec, Modbus, units, quality      [field]
 ├── signal      condition the series: resample, find gaps, report coverage
 ├── model       the physics: port-Hamiltonian, irreversible, catalogue, learned      [nn]
-├── estimate    correct the state: EKF, bounded MHE, energy-consistent observer
+├── estimate    correct the state: EKF, bounded MHE, energy-consistent observer; identifiability
 ├── forecast    predict and prove it: baselines, skill, conformal, ensembles         [gp]
 ├── advise      the validated envelope: answer, or refuse with a reason
 └── interfaces  the contract the other six compose through — protocols, no algorithms
@@ -471,11 +478,55 @@ and hard to notice:
   comparable with one computed without.
 
 
-### 4. Recording where the model is valid
+### 4. Was the parameter determined by the data?
 
-The manifest carries which structure you chose, which parameters were estimated, how the model was
-validated and how the band was calibrated. The envelope turns that record into an answer or a
-refusal.
+A two-term fade law fits its training window at least as well as a one-term law — it has one more
+degree of freedom — and reveals the difference only outside the window, as a curve that runs away.
+By then the manifest says *validated* and *calibrated*, because both were measured inside the
+window. The check that catches it has to run on the fit itself.
+
+`identifiability` takes the design matrix and the observations and returns one verdict per
+coefficient from three tests: **collinearity** (can this column be reproduced from the others — the
+early-life two-term law), **span** (is the record longer than the fitted time constant — the
+asymptotic fouling law), and **stability** (does a bootstrap over *units*, not rows, land on the same
+value — three field tests per system). Here, the same law on a short and a long window of one cell:
+
+```python
+import numpy as np
+from otwin.estimate import identifiability
+
+rng = np.random.default_rng(0)
+n_all = np.arange(1.0, 801.0)
+soh = 1 - 2.0e-3 * n_all**0.5 - 2.0e-9 * n_all**2.5 + rng.normal(0, 1.5e-3, n_all.size)
+
+reports = {}
+for window in (100, 800):
+    n = n_all[:window]
+    X = np.column_stack([n**0.5, n**2.5])                       # the two-term basis
+    reports[window] = identifiability(X, 1 - soh[:window], names=("c_slow", "c_knee"),
+                                      nonneg=True, n_boot=200)
+    print(f"{window} cycles -> {reports[window].verdicts}")
+print(reports[100].parameters[1])
+```
+
+```
+100 cycles -> {'c_slow': True, 'c_knee': False}
+800 cycles -> {'c_slow': True, 'c_knee': True}
+c_knee: NOT identified (collinearity R²=0.758, bootstrap CV=0.72)
+    bootstrap over 100 units gives CV=0.72 > 0.5; refitting on a resampled fleet returns a different value
+    coefficient switches off or changes sign across bootstrap resamples
+```
+
+Same law, same cell, same code. At 100 cycles the knee coefficient was chosen by the noise; at 800 it
+was determined by the data. The report also says *which* test failed: the columns are
+distinguishable in principle (collinearity 0.76), there is simply not enough knee in the window yet —
+so the answer is to wait for data, not to change the law. The verdicts go into the manifest below.
+
+### 5. Recording where the model is valid
+
+The manifest carries which structure you chose, which parameters were estimated, whether they were
+identified, how the model was validated and how the band was calibrated. The envelope turns that
+record into an answer or a refusal.
 
 ```python
 from otwin.advise import Envelope
@@ -492,18 +543,40 @@ twin = TwinManifest(
     validation=TwinManifest.validated_by("rolling_origin", rmse=0.0017, skill_score=0.77),
     calibration=TwinManifest.calibrated_by("horizon_conformal", empirical_coverage=0.90,
                                            level=0.90, max_horizon=60),
+    identification=TwinManifest.identified_by("collinearity+bootstrap",
+                                              parameters={"C0": True, "a": True, "b": False}),
 )
-print("white box?", twin.is_white_box, " validated?", twin.is_validated)
+print("white box?", twin.is_white_box, " validated?", twin.is_validated,
+      " identified?", twin.is_identified)
 
-envelope = Envelope(state_bounds=[(0.60, 1.00)], max_horizon=60)
+envelope = Envelope(state_bounds=[(0.60, 1.00)], max_horizon=60, requires_identified=True)
 print(envelope.check(state=[0.83], horizon=30,  manifest=twin).explain())
-print(envelope.check(state=[0.83], horizon=180, manifest=twin).explain())
 ```
 
 ```
-white box? False  validated? True
+white box? False  validated? True  identified? False
+outside the validated envelope:
+  - identification: extrapolation depends on parameters the data did not determine: b. A fitted
+    value the fleet cannot pin down is a value chosen by the noise
+
+This is a refusal, not a failure. The twin has not been shown to answer this question, and
+returning a number anyway would hide that.
+```
+
+Inside the operating range, inside the validated horizon, validated and calibrated — and refused,
+naming the coefficient. With all three parameters identified the same request is answered:
+
+```python
+twin_ok = TwinManifest.from_dict({**twin.to_dict(),
+    "identification": TwinManifest.identified_by("collinearity+bootstrap",
+                                                 parameters={"C0": True, "a": True, "b": True})})
+print(envelope.check(state=[0.83], horizon=30,  manifest=twin_ok).explain())
+print(envelope.check(state=[0.83], horizon=180, manifest=twin_ok).explain())
+```
+
+```
 inside the validated envelope (horizon 30 <= 60; operating point inside the identified range;
-validated, leakage-free)
+validated, leakage-free; estimated parameters identified)
 
 outside the validated envelope:
   - horizon: beyond the validated forecast horizon (asked for 180, validated to 60)
@@ -515,7 +588,12 @@ returning a number anyway would hide that.
 Same discipline as stating the calibration range of an instrument: a reading outside the calibrated
 range is reported as such, not returned as a number. `is_validated` is deliberately strict —
 `leakage_free` must be the boolean `True`, not merely truthy, because manifests arrive from MATLAB
-and Julia where a boolean can round-trip as `1` or as the string `"false"`.
+and Julia where a boolean can round-trip as `1` or as the string `"false"`. `is_identified` is strict
+the same way: every name in `estimated` must carry the boolean `True`, and an estimated parameter
+with no recorded verdict is not identified — *not yet checked* is not *fine*.
+
+`Envelope(requires_identified=True)` adds the fourth ground for refusal. It is off by default so that
+manifests written before 0.4.0 keep working; turn it on for any twin that extrapolates.
 
 
 ### The pipeline, end to end

@@ -10,6 +10,14 @@ exact version in anything you depend on.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.4.0] — 2026-08-24
+
+One new capability, and a fourth ground for refusal. Additive: every existing
+call path and every manifest written by 0.3.x is unchanged; the new envelope
+check is off unless asked for.
+
 ### Added
 
 - **Identifiability — the fourth ground for refusal.** `otwin.estimate.identifiability(X, y, ...)`
@@ -25,6 +33,11 @@ exact version in anything you depend on.
   in the replication series every result — a free exponent on 100 cycles, a
   second mechanism fitted to three points per system — was decided by
   identifiability, and the library had no way to say so.
+- **Documentation.** A concept page, *Identifiability*, with the definition,
+  the three failure modes, the executed example and the three cases from the
+  replication series; the envelope rule now has five clauses; the front page
+  has four commitments; the README gains a step between validating the forecast
+  and recording the envelope.
 
 ## [0.3.1] — 2026-08-22
 

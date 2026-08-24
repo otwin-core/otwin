@@ -74,7 +74,7 @@ say where a number came from.
 {class}`~otwin.interfaces.TwinManifest` that records how a twin was fitted,
 validated and calibrated.
 
-## Three commitments
+## Four commitments
 
 **Energy structure, not curve fitting.** A port-Hamiltonian model is passive by
 construction. With no input, stored energy can only decrease. That property
@@ -91,6 +91,14 @@ random split on a time series measures interpolation. See
 h-step-ahead residuals, not from the model's own in-sample errors — a shortcut
 that on a lithium-ion capacity twin produced 1.5 % delivered coverage at a 90 %
 target. See [Calibrated intervals](concepts/conformal.md).
+
+**Coefficients that were determined, not chosen.** A fitted parameter the data
+cannot pin down is a parameter chosen by the noise, and a forecast that
+extrapolates through it is extrapolating the noise — while passing every
+in-window check. {func}`~otwin.estimate.identifiability` tests collinearity,
+record span and bootstrap stability per coefficient, the manifest records the
+verdict, and the envelope can refuse on it. See
+[Identifiability](concepts/identifiability.md).
 
 ```{toctree}
 :hidden:

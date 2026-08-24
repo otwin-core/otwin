@@ -42,7 +42,7 @@ Ten seconds:
     True
 """
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 from otwin.interfaces import (
     MANIFEST_VERSION,
