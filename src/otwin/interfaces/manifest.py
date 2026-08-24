@@ -108,6 +108,13 @@ class TwinManifest:
             :class:`otwin.advise.Envelope` reads is ``empirical_coverage``** —
             the coverage actually measured on held-out data, not the nominal
             level. Build it with :meth:`calibrated_by`.
+        identification: Whether each estimated parameter was determined by the
+            data. **The key :attr:`is_identified` reads is ``parameters``, a
+            mapping of every name in ``estimated`` to the boolean ``True``.**
+            A fitted coefficient the data could not pin down extrapolates the
+            noise; recording that is what lets an envelope refuse on it. Build
+            it with :meth:`identified_by`, typically from an
+            :class:`~otwin.estimate.IdentifiabilityReport`.
         provenance: See :class:`Provenance`.
         extra: Fields from a newer manifest version, preserved so that a
             round-trip through an older reader is lossless.
@@ -158,6 +165,7 @@ class TwinManifest:
     estimated: tuple[str, ...] = ()
     validation: dict[str, Any] | None = None
     calibration: dict[str, Any] | None = None
+    identification: dict[str, Any] | None = None
     manifest_version: str = MANIFEST_VERSION
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -273,6 +281,62 @@ class TwinManifest:
                 "A coverage of 87 % is 0.87."
             )
         return {"method": method, "empirical_coverage": cov, **fields}
+
+    @staticmethod
+    def identified_by(
+        method: str, *, parameters: dict[str, bool], **fields: Any
+    ) -> dict[str, Any]:
+        """Build an ``identification`` dict carrying per-parameter verdicts.
+
+        ``parameters`` is required: a record that says "identifiability was
+        checked" without saying *which* parameters passed is the thing this
+        builder exists to prevent. Values must be booleans; a ``1`` that
+        survived a trip through MATLAB is not a verdict.
+
+        Args:
+            method: How the verdicts were obtained — ``"bootstrap_over_units"``,
+                ``"profile_likelihood"``, ``"span_check"``.
+            parameters: ``{parameter_name: identified}`` for every estimated
+                parameter. :attr:`otwin.estimate.IdentifiabilityReport.verdicts`
+                has exactly this shape.
+            **fields: Anything else — thresholds, condition number, the report.
+
+        Returns:
+            A dict suitable for ``TwinManifest(identification=...)``.
+
+        Raises:
+            ValueError: If any verdict is not a boolean.
+
+        Example:
+            >>> TwinManifest.identified_by("bootstrap_over_units",
+            ...                            parameters={"c": True, "z": False})["parameters"]
+            {'c': True, 'z': False}
+        """
+        bad = [k for k, v in parameters.items() if not isinstance(v, bool)]
+        if bad:
+            raise ValueError(
+                f"identification verdicts must be booleans; got non-boolean for {bad}"
+            )
+        return {"method": method, "parameters": dict(parameters), **fields}
+
+    @property
+    def is_identified(self) -> bool:
+        """True only when every estimated parameter is recorded as identified.
+
+        Strict in the same way as :attr:`is_validated`: each verdict must be
+        the boolean ``True``, and every name in :attr:`estimated` must appear.
+        A white-box twin (nothing estimated) is identified by construction.
+        An estimated parameter with no recorded verdict is *not* identified —
+        "not yet checked" is not the same as "fine".
+        """
+        if not self.estimated:
+            return True
+        if not self.identification:
+            return False
+        verdicts = self.identification.get("parameters")
+        if not isinstance(verdicts, dict):
+            return False
+        return all(verdicts.get(name) is True for name in self.estimated)
 
     @property
     def is_white_box(self) -> bool:
