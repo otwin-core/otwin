@@ -106,6 +106,7 @@ filterwarnings = ["error::DeprecationWarning"]
 [tool.ruff]
 line-length = 90
 target-version = "py310"
+extend-exclude = ["examples/*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "NPY"]
