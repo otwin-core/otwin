@@ -1,8 +1,7 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_wm.png"  width="40%">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_wm.png"  width="25%">
 
- 
 # Model. Estimate. Quantify. Validate.
 
 </div>
@@ -20,16 +19,29 @@ Otwin is a Python library used to build Digital Twins of physical equipment from
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14061/badge)](https://www.bestpractices.dev/projects/14061)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/otwin-core/otwin/badge)](https://scorecard.dev/viewer/?uri=github.com/otwin-core/otwin)
 
+<img src="https://cdn.brandfetch.io/idGhRgxsDX/theme/dark/symbol.svg?c=1dxbfHSJFAPEGdCLU4o5B"  width="5%">
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen?style=flat-square)](https://opensource.org/license/apache-2-0)
+[Apache License 2.0](https://spdx.org/licenses/Apache-2.0.html)
 
 <br>
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/overview.png"  width="100%">
+[What otwin is for](#what-otwin-is-for)  -  [Quick Install](#quick-install)   -   [Get Started](#get-started)
+
+<br>
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/overview.png"  width="75%">
+
+<br>
+
+[Model](#model-structure)  -  [Estimate](#estimating-state-from-measurements)   -   [Quantify](#quantifying-uncertainty)   -   [Validate](#validation)
+
+<br>
+
+[Examples](#examples)  -   [The Otwin project](#the-otwin-project)  -  [Issues](#issues)   -   [Contributing](#contributing)   -   [Citing](#citing)
+
+<br>
 
 </div>
-
-<br>
 
 ## What otwin is for
 
@@ -43,24 +55,9 @@ A digital twin is a model of one particular physical asset (machine, pump, batte
 
 > How much capacity does this Li-ion battery still have? When will it cross the retirement threshold?
 
-
-<br>
- 
-## Choosing the model structure
-
-Physical assets like real equipment or complete processess are rarely fully known or fully unknown. Otwin provides five model classes and the manifest records which one you used, because the guarantees available to you depend on the answer.
-
-Digital Twins can be classified as:
-| | | |
-|---|---|---|
-| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="40"> | **White box** | Every equation and every parameter comes from first principles. Nothing is fitted. The guarantee is structural — and so is the limit: it can only describe what you can write down. |
-| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="40"> | **Grey box** | The structure is fixed by physics; the unknown parts are estimated from data. Almost every useful industrial twin is here. |
-| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Black_box.png" height="40"> | **Black box** | The data decides everything. Excellent inside the range it has seen, and no reason to behave outside it. |
-
-
 <br>
 
-## What makes otwin different
+### What makes otwin different
 
 
 - **The uncertainty is measured, not declared.** A stated 90 % interval means nothing until
@@ -143,6 +140,17 @@ Largest single-step energy INCREASE: 0.00e+00 J
 That second line `Largest single-step energy INCREASE: 0.00e+00 J` show that with no force applied, stored energy never rises because the model form makes it impossible.
 
 <br>
+ 
+## Model structure
+
+Physical assets like real equipment or complete processess are rarely fully known or fully unknown. Otwin provides five model classes and the manifest records which one you used, because the guarantees available to you depend on the answer.
+
+Digital Twins can be classified as:
+| | | |
+|---|---|---|
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="40"> | **White box** | Every equation and every parameter comes from first principles. Nothing is fitted. The guarantee is structural — and so is the limit: it can only describe what you can write down. |
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="40"> | **Grey box** | The structure is fixed by physics; the unknown parts are estimated from data. Almost every useful industrial twin is here. |
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Black_box.png" height="40"> | **Black box** | The data decides everything. Excellent inside the range it has seen, and no reason to behave outside it. |
 
 <div align="center">
 
@@ -150,7 +158,7 @@ That second line `Largest single-step energy INCREASE: 0.00e+00 J` show that wit
 
 </div> 
 
-## When the physics is known (white-box) 
+### When the physics is known (white-box) 
 
 Choose a port-Hamiltonian structure and conservation stops being something you check and becomes
 something you cannot violate: it is an algebraic property of how the model is written, so it
@@ -169,13 +177,13 @@ the rest of the library is for.
 
 <br>
 
-### Writing a first-principles model using Port Hamniltonian Systems
+#### Writing a first-principles model using Port-Hamniltonian Systems **(PHS)**
 
 You describe the system with **four functions of the state**. The dynamics follow from them:
 
 ```
 ẋ = dx/dt = ( J(x) - R(x) ) @ grad_H(x)  +  g(x) @ u        # how the state moves (for example how energy changes)
-y     = g(x).T @ grad_H(x)                              # what the port delivers
+y = g(x).T @ grad_H(x)                                      # what the port delivers
 ```
 
 | You write | It means | Water tank example |
@@ -189,9 +197,13 @@ y     = g(x).T @ grad_H(x)                              # what the port delivers
 `u` is the port input (a flow: m³/s, A, N) and `y` the port output (an effort: Pa, V, m/s). Their
 product `y.T @ u` is power in watts.
 
-![storage](https://raw.githubusercontent.com/otwin-core/otwin/main/assets/storage.png)
+<div align="center">
 
-### Applications
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/storage.png"  width="75%">
+
+</div>
+
+#### Applications
 
 |  | What `J`, `R`, `H`, `g` already are to you |
 |---|---|
@@ -203,11 +215,25 @@ product `y.T @ u` is power in watts.
 The library only asks you to write the four parts down separately instead of collapsing them into a
 single right-hand side.
 
-![dc](https://raw.githubusercontent.com/otwin-core/otwin/main/assets/dc.png)
+<br>
 
-### A complete model
+<div align="center">
 
-![tank](https://raw.githubusercontent.com/otwin-core/otwin/main/assets/tank_block.png)
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/dc.png"  width="75%">
+
+</div>
+
+#### A complete model
+
+<br>
+
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/tank_block.png"  width="75%">
+
+</div>
+
+<br>
 
 ```python
 import numpy as np
@@ -240,7 +266,7 @@ mis-transposed matrices immediately, before they turn into a plausible-looking w
 This model ships as `otwin.model.water_tank`. Also in the library you can find other examples: `mass_spring_damper`,
 `dc_motor`, `pumped_hydro` and `heat_exchanger`.
 
-### The port as feedback
+#### The port as feedback
 
 A converter holding constant power, a thermostat, a droop-controlled inverter, a level valve — in
 all of them `u` depends on the state. If you pass a callable, the control law is evaluated at the step
@@ -270,7 +296,7 @@ inflow 0.000 -> 0.319 m3/s   (outflow at that level: 0.319 m3/s)
 
 The tank settles below its 1.5 m setpoint, because proportional-only control leaves an offset. `res["u"]` is what the port actually did. with a governing law there is no schedule to read back.
 
-### Processes that produce entropy
+#### Processes that produce entropy: Irreversible Port-Hamiltonian Systems **(I-PHS)**
 
 A chemical reaction, heat conduction, a heat exchanger — any irreversible process needs more than
 reversible-plus-dissipative. `IrreversiblePHS` adds an entropy term to Port Hamiltonian Systems with `sigma >= 0` enforced
@@ -286,7 +312,7 @@ call the second law. `otwin.model.heat_exchanger` is a worked instance, with `ef
 
 </div> 
 
-## Hybrid Digital Twins (grey-box)
+### Hybrid Digital Twins (grey-box)
 
 This is the most common case we can find. Combine all governing equations can be mathematically tricky and computationally unfeasible. These limitation can be managed with an hybrid approach combining basic governing equations plus observed data.
 
@@ -339,43 +365,9 @@ correction knows when it is extrapolating even though the prior does not.
 
 > You can find a specific repository for modelling a Li-ion capacity in the repository [https://github.com/otwin-core/otwin-hybrid.git]
 
-### Uncertainty management
+<br>
 
-A measured orifice, a tolerance band on a capacitance, a coefficient quoted to two figures. Propagate
-it by making the spread the model:
-
-```python
-import numpy as np
-from otwin.model import water_tank
-from otwin.forecast import Ensemble
-
-# Parameter uncertainty, not measurement noise: the orifice was measured to +/-10 %.
-members = [water_tank(a=a) for a in (0.090, 0.095, 0.100, 0.105, 0.110)]
-ens     = Ensemble(members)
-
-t, u  = np.linspace(0, 5, 101), np.zeros((101, 1))
-band  = ens.forecast_interval(np.array([2.0]), t, u, level=0.90)
-plant = water_tank(a=0.102).forecast(np.array([2.0]), t, u)["x"]   # the real orifice
-
-for k in (0, 50, 100):
-    print(f"t={t[k]:4.2f} s   band {band['lower'][k,0]:.3f}..{band['upper'][k,0]:.3f} m"
-          f"   plant {plant[k,0]:.3f} m")
-print(f"plant inside the band on {np.mean((plant >= band['lower']) & (plant <= band['upper'])):.0%} of steps")
-```
-
-```
-t=0.00 s   band 2.000..2.000 m   plant 2.000 m
-t=2.50 s   band 1.107..1.236 m   plant 1.156 m
-t=5.00 s   band 0.476..0.656 m   plant 0.542 m
-plant inside the band on 100% of steps
-```
-
-An ensemble of identical deterministic members has zero spread. That is correct, not a bug — the
-members must genuinely differ for the spread to mean anything.
-
-## The four steps pipeline
-
-### 1. Estimating state from measurements
+## Estimating state from measurements
 
 | Estimator | Use it when |
 |---|---|
@@ -390,7 +382,7 @@ ports closed the allowed increase is zero, so a correction that merely reflects 
 prior is rejected too.
 
 
-### 2. Quantifying uncertainty
+## Quantifying uncertainty
 
 An interval has meaning if it's **coverage** has been measured: a stated 90 % interval should
 contain the truth about 90 % of the time.
@@ -435,7 +427,7 @@ measured coverage: 90%  (target 90%)
 ```
 
 
-### 3. Validating a forecast
+## Validation 
 
 A model is not validated until its forecasts have been compared, out of sample, against a reference
 that is hard to beat. Same series and same `FadeLaw` as above:
@@ -478,7 +470,7 @@ and hard to notice:
   comparable with one computed without.
 
 
-### 4. Was the parameter determined by the data?
+### Was the parameter determined by the data?
 
 A two-term fade law fits its training window at least as well as a one-term law — it has one more
 degree of freedom — and reveals the difference only outside the window, as a curve that runs away.
@@ -522,7 +514,7 @@ was determined by the data. The report also says *which* test failed: the column
 distinguishable in principle (collinearity 0.76), there is simply not enough knee in the window yet —
 so the answer is to wait for data, not to change the law. The verdicts go into the manifest below.
 
-### 5. Recording where the model is valid
+### Recording where the model is valid
 
 The manifest carries which structure you chose, which parameters were estimated, whether they were
 identified, how the model was validated and how the band was calibrated. The envelope turns that
@@ -596,21 +588,27 @@ with no recorded verdict is not identified — *not yet checked* is not *fine*.
 manifests written before 0.4.0 keep working; turn it on for any twin that extrapolates.
 
 
-### The pipeline, end to end
+## Examples
 
-The modules follow the six data-processing blocks of **ISO 13374**, so the layout matches the
-reference architecture used in condition-monitoring practice.
+Eight notebook that opens with the question it answers, what otwin does, and
+what you write yourself; each ends with something to break on purpose. Run them in order the
+first time. All open in Colab; 01, 02 and 06 need no data file.
 
-| Stage | Module | What happens |
-|---|---|---|
-| Data acquisition | `otwin.io` | Read the device over SunSpec or Modbus; normalise units |
-| Data manipulation | `otwin.signal` | Resample to a uniform grid, find gaps, report coverage |
-| State detection | `otwin.estimate` | Correct model state from measurements |
-| Health assessment | `otwin.model` | Simulate the physical, learned or empirical model |
-| Prognostic assessment | `otwin.forecast` | Forecast, score against a reference, calibrate the band |
-| Advisory generation | `otwin.advise` | Report whether the request is inside the validated envelope |
+| # | notebook | the question | data |
+|---|---|---|---|
+| 01 | [A model that cannot invent energy](examples/otwin_01_a_model_that_cannot_invent_energy.ipynb) | How do you know your equations obey physics everywhere, not just where you checked? | simulation |
+| 02 | [When the process makes entropy](examples/otwin_02_when_the_process_makes_entropy.ipynb) | How do you write a reactor model that cannot violate the second law? | simulation |
+| 03 | [Scoring a forecast so it cannot flatter you](examples/otwin_03_scoring_a_forecast.ipynb) | A model forecasts 68 cycles ahead. How good is it, honestly? | NASA PCoE |
+| 04 | [A band whose 90 % means 90 %](examples/otwin_04_a_band_whose_90_means_90.ipynb) | How wide should the interval be, and how do you know? | NASA PCoE |
+| 05 | [From a noisy sensor to a state you can trust](examples/otwin_05_from_a_noisy_sensor_to_a_state.ipynb) | The sensor says 106 %. What is the state? | NASA PCoE |
+| 06 | [The twin that says no](examples/otwin_06_the_twin_that_says_no.ipynb) | What should a twin say when asked something it was never validated for? | simulation |
+| 07 | [All of it, on eight years of field data](examples/otwin_07_field_data.ipynb) | Does the protocol hold on 18 real systems with manual capacity tests as truth? | RWTH field data |
+| 08 | [Does the physics earn its place?](examples/otwin_08_does_the_physics_earn_its_place.ipynb) | Would a structured fade law, or a learned residual, narrow that band? | RWTH field data |
 
-<br>
+Notebooks 03–05 ask for the NASA `discharge.csv` (upload in Colab). Notebooks 07–08 download
+the Source Data spreadsheet of Figgener et al. (2024) from Nature, or accept an upload; without
+it they run on a synthetic fleet stamped DEMO. Each notebook's last cell is a regression check —
+for CI, not for you.
 
 ## The otwin project
 
@@ -628,12 +626,17 @@ topics.
 
 <br>
 
-## Issues, contribution and citation
-- **Questions and bugs** — [open an issue](https://github.com/otwin-core/otwin/issues)
-- **Contributing** — [CONTRIBUTING.md](CONTRIBUTING.md). The catalogue of physical models is the
-  easiest place to start, and each contribution is a system you already know plus one closed-form
-  result it must reproduce
-- **Citing** — each repository carries a `CITATION.cff`
+## Issues
+
+[open an issue](https://github.com/otwin-core/otwin/issues)
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md). The catalogue of physical models is the easiest place to start, and each contribution is a system you already know plus one closed-form result it must reproduce
+
+## Citing
+
+Each repository in otwin prokect include a `CITATION.cff`
 
 <br>
 
