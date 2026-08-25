@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_wm.png"  width="25%">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_wm.png"  width="35%">
 
 # Model. Estimate. Quantify. Validate.
 
@@ -19,7 +19,7 @@ Otwin is a Python library used to build Digital Twins of physical equipment from
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14061/badge)](https://www.bestpractices.dev/projects/14061)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/otwin-core/otwin/badge)](https://scorecard.dev/viewer/?uri=github.com/otwin-core/otwin)
 
-<img src="https://cdn.brandfetch.io/idGhRgxsDX/theme/dark/symbol.svg?c=1dxbfHSJFAPEGdCLU4o5B"  width="5%">
+<img src="https://cdn.brandfetch.io/idGhRgxsDX/theme/dark/symbol.svg?c=1dxbfHSJFAPEGdCLU4o5B"  width="3%">
 
 [Apache License 2.0](https://spdx.org/licenses/Apache-2.0.html)
 
@@ -29,7 +29,7 @@ Otwin is a Python library used to build Digital Twins of physical equipment from
 
 <br>
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/overview.png"  width="75%">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/overview.png"  width="80%">
 
 <br>
 
