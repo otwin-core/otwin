@@ -29,7 +29,7 @@ Otwin is a Python library used to build Digital Twins of physical equipment from
 
 <br>
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/overview.png"  width="80%">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/overview.png"  width="90%">
 
 <br>
 
@@ -106,38 +106,64 @@ otwin/
 
 ## Get started
 
-A white-box example consisting of a mass on a spring with a damper. The system has two energy stores: the spring and the moving mass.
+A white-box example: a mass hanging from a spring with a damper, under gravity. The system has two energy stores, the spring and the moving mass, and one conservative field, gravity, which belongs in the Hamiltonian rather than on a port. The state is the spring extension q from its natural length (positive downward, see the figure) and the momentum p = m·v.
+
+<br>
+
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Spring.png" height="200"> 
+
+</div> 
 
 ```python
 import numpy as np
 from otwin.model import PortHamiltonianSystem, integrate_phs
 
-# State: x[0] = spring displacement q [m], x[1] = momentum p = m*v [kg m/s]
-# k = 2 N/m, m = 1 kg, c = 0.3 N s/m
+# State: x[0] = q, spring extension from natural length [m], positive downward
+#        x[1] = p = m*v, momentum [kg m/s], positive downward
+k, m, c, g0 = 20.0, 1.0, 0.3, 9.81          # N/m, kg, N s/m, m/s^2
+
 osc = PortHamiltonianSystem(
-    H      = lambda x: 0.5 * 2.0 * x[0]**2 + 0.5 * x[1]**2,   # stored energy [J]
-    grad_H = lambda x: np.array([2.0 * x[0], x[1]]),          # [force, velocity]
-    J      = lambda x: np.array([[0.0, 1.0], [-1.0, 0.0]]),   # spring <-> mass exchange
-    R      = lambda x: np.array([[0.0, 0.0], [0.0, 0.3]]),    # the damper
-    g      = lambda x: np.array([[0.0], [1.0]]),              # external force on the mass
+    H      = lambda x: 0.5*k*x[0]**2 + 0.5*x[1]**2/m - m*g0*x[0],  # spring + kinetic + gravity
+    grad_H = lambda x: np.array([k*x[0] - m*g0, x[1]/m]),          # [net conservative force, velocity]
+    J      = lambda x: np.array([[0.0, 1.0], [-1.0, 0.0]]),        # spring <-> mass power routing
+    R      = lambda x: np.array([[0.0, 0.0], [0.0, c]]),           # the damper
+    g      = lambda x: np.array([[0.0], [1.0]]),                   # port for an external force
     n_states=2, n_inputs=1,
 )
 
-t   = np.linspace(0, 20, 400)      # 20 s
-u   = np.zeros((400, 1))           # ports closed: no external force
-sol = integrate_phs(osc, np.array([1.0, 0.0]), t, u)
+t   = np.linspace(0, 20, 400)              # 20 s
+u   = np.zeros((400, 1))                   # ports closed: no external force
+sol = integrate_phs(osc, np.array([0.0, 0.0]), t, u)   # released at rest from the natural length
 
-E = np.array([osc.energy(x) for x in sol["x"]])
-print(f"Stored energy: {E[0]:.4f} J at t=0  ->  {E[-1]:.4f} J at t=20 s")
+q, p   = sol["x"][:, 0], sol["x"][:, 1]
+E      = np.array([osc.energy(x) for x in sol["x"]])
+q_star = m*g0/k                            # static equilibrium below the natural length
+H_min  = -0.5*m**2*g0**2/k                 # stored energy at rest
+
+print(f"Static equilibrium q* = m g / k = {q_star:.3f} m")
+print(f"Stored energy: {E[0]:.4f} J at t=0  ->  {E[-1]:.4f} J at t=20 s   (minimum possible: {H_min:.4f} J)")
+print(f"Lowest point reached: q = {q.max():.3f} m  (2 q* = {2*q_star:.3f} m)")
+print(f"Final position: q = {q[-1]:.3f} m")
 print(f"Largest single-step energy INCREASE: {max(np.max(np.diff(E)), 0.0):.2e} J")
 ```
 
 ```
-Stored energy: 1.0000 J at t=0  ->  0.0024 J at t=20 s
+Static equilibrium q* = m g / k = 0.491 m
+Stored energy: 0.0000 J at t=0  ->  -2.3993 J at t=20 s   (minimum possible: -2.4059 J)
+Lowest point reached: q = 0.932 m  (2 times q* = 0.981 m)
+Final position: q = 0.477 m
 Largest single-step energy INCREASE: 0.00e+00 J
 ```
 
-That second line `Largest single-step energy INCREASE: 0.00e+00 J` show that with no force applied, stored energy never rises because the model form makes it impossible.
+Three things to read off those lines.
+
+- The mass does not settle at $q = 0$. The Hamiltonian has its minimum at $q^* = mg/k = 0.491 m$ below the natural length, and the trajectory converges there. Gravity shifts the rest position; it does not change the dynamics, which is exactly what putting it inside $H$ rather than on a port expresses.
+
+- Stored energy is negative and that is correct. $H$ is defined up to an additive constant; with the reference at the natural length, the gravitational term makes the resting state the lowest energy the system can hold, −2.406 J. After 20 s, the damper has dissipated all but 7 mJ of the 2.4 J released by the fall.
+
+- The last line is the point of the library. With the ports closed, the model form gives $dH/dt = −c·v² ≤ 0$, so stored energy can never rise. The integrator is the implicit midpoint rule, which preserves that inequality step by step for this class of models; the zero is exact, not a rounding artifact. An undamped oscillator would show the same line with constant energy, and an integrator that did not respect the structure would not.
 
 <br>
  
@@ -148,9 +174,9 @@ Physical assets like real equipment or complete processess are rarely fully know
 Digital Twins can be classified as:
 | | | |
 |---|---|---|
-| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="40"> | **White box** | Every equation and every parameter comes from first principles. Nothing is fitted. The guarantee is structural — and so is the limit: it can only describe what you can write down. |
-| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="40"> | **Grey box** | The structure is fixed by physics; the unknown parts are estimated from data. Almost every useful industrial twin is here. |
-| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Black_box.png" height="40"> | **Black box** | The data decides everything. Excellent inside the range it has seen, and no reason to behave outside it. |
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/White_box.png" height="80"> | **White box** | Every equation and every parameter comes from first principles. Nothing is fitted. The guarantee is structural — and so is the limit: it can only describe what you can write down. |
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Grey_box.png" height="80"> | **Grey box** | The structure is fixed by physics; the unknown parts are estimated from data. Almost every useful industrial twin is here. |
+| <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Black_box.png" height="80"> | **Black box** | The data decides everything. Excellent inside the range it has seen, and no reason to behave outside it. |
 
 <div align="center">
 
