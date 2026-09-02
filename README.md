@@ -6,7 +6,6 @@
 
 </div>
 
-
 Otwin is a Python library used to build Digital Twins of physical equipment from physics, data or both, keep them in step with the machine from live measurements, and forecast with an uncertainty band whose coverage has been measured and a skill score earned out of sample against a reference that is hard to beat.
 
 <br>
