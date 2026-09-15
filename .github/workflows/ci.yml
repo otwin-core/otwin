@@ -67,25 +67,68 @@ jobs:
           test "$installed" = "numpy scipy " \
             || { echo "::error::base install pulled more than numpy and scipy"; exit 1; }
       - name: The README quickstart, copy-pasted, from outside the source tree
+        # No engine wheel in this venv, on purpose: this is the NumPy fallback
+        # path, the one a user without a binary wheel gets.
         run: |
-          cd /tmp && /tmp/fresh/bin/python - <<'PY'
-          import numpy as np
-          from otwin.model import PortHamiltonianSystem, integrate_phs
+          cd /tmp && /tmp/fresh/bin/python -W ignore::otwin.EngineNotAvailable - <<'PY'
+          import otwin
+          from otwin.components.mechanical import Mass, Spring, Damper, ForceSource, Fixed
 
-          osc = PortHamiltonianSystem(
-              H      = lambda x: 0.5 * 2.0 * x[0]**2 + 0.5 * x[1]**2,
-              grad_H = lambda x: np.array([2.0 * x[0], x[1]]),
-              J      = lambda x: np.array([[0.0, 1.0], [-1.0, 0.0]]),
-              R      = lambda x: np.array([[0.0, 0.0], [0.0, 0.3]]),
-              g      = lambda x: np.array([[0.0], [1.0]]),
-              n_states=2, n_inputs=1,
-          )
-          t = np.linspace(0, 20, 400)
-          sol = integrate_phs(osc, np.array([1.0, 0.0]), t, np.zeros((400, 1)))
-          E = np.array([osc.energy(x) for x in sol["x"]])
-          assert np.all(np.diff(E) <= 1e-9), "energy bound violated"
-          print("quickstart ok, worst step gain:", float(np.max(np.diff(E))))
+          k, m, c, g0 = 20.0, 1.0, 0.3, 9.81
+          mass, spring, damper = Mass(m, name="mass"), Spring(k, name="spring"), Damper(c, name="damper")
+          weight, ceiling = ForceSource(m * g0, name="weight"), Fixed(name="ceiling")
+
+          system = otwin.System(mass, spring, damper, weight, ceiling)
+          system.connect(mass.flange, spring.a, damper.a, weight.flange)
+          system.connect(spring.b, damper.b, ceiling.terminal)
+
+          model = otwin.compile(system)
+          run = model.simulate(t_span=(0, 20), dt=0.05)
+          q = run["spring.extension"]
+          assert abs(q[-1] - m * g0 / k) < 0.02, q[-1]
+          assert run.energy_balance()["max_violation"] <= 1e-12, "energy balance violated"
+          print("quickstart ok on the", model.backend, "backend; final extension", float(q[-1]))
           PY
+
+  # The engine crate on its own: formatting, lints, unit tests. No Python.
+  rust:
+    name: cargo test / clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo fmt --all --check
+      - run: cargo clippy -p otwin-core -- -D warnings
+      - run: cargo test -p otwin-core
+
+  # The whole Python suite with the compiled engine installed. The `test` job
+  # above runs the same suite on the NumPy fallback; the two together are the
+  # parity guarantee the runtime makes.
+  engine:
+    name: engine wheel + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build the engine wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release -m crates/otwin-engine/Cargo.toml -o dist
+      - name: Install
+        run: |
+          pip install -e ".[dev]"
+          pip install dist/otwin_engine-*.whl
+          python -c "import otwin; assert otwin.engine_available()"
+      - name: Test
+        run: pytest -q
+      - name: Benchmark, for the log
+        run: python benchmarks/bench_engine.py
 
   lint:
     runs-on: ubuntu-latest

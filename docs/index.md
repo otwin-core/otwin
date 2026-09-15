@@ -1,11 +1,13 @@
 # otwin
 
-**A digital twin you are allowed to trust — or that tells you why you are not.**
+**Describe the machine. Otwin derives the physics.**
 
-`otwin` builds twins of physical assets out of their energy structure, evaluates
-their forecasts under protocols that cannot see the future, attaches intervals
-whose coverage has been measured rather than assumed, and refuses to answer
-questions outside the range it has been shown to work over.
+`otwin` is a physics-based digital-twin framework with a compiled dynamics
+engine. You describe a physical asset as components and connections, the way
+you would draw it. Otwin compiles the description into a physically consistent
+model, runs it in a Rust engine, keeps it in step with the asset from
+measurements, forecasts with intervals whose coverage has been measured, and
+refuses to answer questions the twin was never validated for.
 
 That last part is the unusual one. Most forecasting libraries always return a
 number. This one returns a refusal with a reason when the number would be
@@ -16,7 +18,7 @@ horizon: beyond the validated forecast horizon (asked for 90, validated to 60)
 ```
 
 ```{code-block} bash
-pip install otwin
+pip install "otwin[engine]"
 ```
 
 ::::{grid} 1 1 2 2
@@ -26,24 +28,26 @@ pip install otwin
 :link: quickstart
 :link-type: doc
 
-Twenty lines: integrate a pumped-hydro store, forecast a capacity fade with a
-calibrated band, and watch the twin decline a question it cannot support.
+Twenty lines: build a drive from components, compile it, simulate it in the
+engine, estimate its state from a noisy sensor, and watch the twin decline a
+question it cannot support.
 :::
 
 :::{grid-item-card} {octicon}`book` Concepts
 :link: concepts/index
 :link-type: doc
 
-The equations. Port-Hamiltonian form, entropy production, structure-preserving
-integration, leakage-free evaluation, conformal bands.
+What a component is, what the compiler does with it, and the mathematics
+underneath: port-Hamiltonian form, structure-preserving integration,
+leakage-free evaluation, conformal bands.
 :::
 
 :::{grid-item-card} {octicon}`tools` Guides
 :link: guides/index
 :link-type: doc
 
-One page per ISO 13374 block: acquire, condition, estimate, model, forecast,
-advise.
+Task by task: model in each physical domain, simulate, add what the physics
+leaves out, estimate, forecast, advise.
 :::
 
 :::{grid-item-card} {octicon}`code` API reference
@@ -57,29 +61,33 @@ Every public name, generated from the docstrings the test suite executes.
 
 ## The shape of the library
 
-`otwin` is organised as the six data-processing blocks of **ISO 13374**, the
-condition-monitoring standard. This is not decoration: it is why the package can
-say where a number came from.
+Two layers. The **engine** compiles and executes physical systems. The
+**framework** describes them and does everything a twin needs around them.
 
-| Block | Module | What it does |
+| Layer | Module | What it does |
 |---|---|---|
-| Data Acquisition | {mod}`otwin.io` | Read a device or a dataset, with a quality flag on every value |
-| Data Manipulation | {mod}`otwin.signal` | Put irregular samples on a grid without inventing data |
-| State Detection | {mod}`otwin.estimate` | Recover the state you cannot measure |
-| Health Assessment | {mod}`otwin.model` | What the asset *is*, written as an energy balance |
-| Prognostic Assessment | {mod}`otwin.forecast` | What happens next, and how sure |
-| Advisory Generation | {mod}`otwin.advise` | What to do — or why the twin will not say |
+| framework | {mod}`otwin.components` | The physical primitives: electrical, mechanical, rotational, hydraulic, thermal, two-ports, composites |
+| framework | {class}`otwin.System` | The component graph: what exists and what is connected |
+| engine | {func}`otwin.compile` | The model compiler: graph to intermediate representation to executable model |
+| engine | {class}`otwin.Model` | The compiled model: simulate, step, energy, outputs, structure |
+| framework | {mod}`otwin.hybrid` | Grey-box models: symbolic residuals, learned residuals, parameter fitting |
+| framework | {mod}`otwin.estimate` | Recover the state you cannot measure |
+| framework | {mod}`otwin.forecast` | What happens next, and how sure |
+| framework | {mod}`otwin.advise` | What to do, or why the twin will not say |
+| framework | {mod}`otwin.io`, {mod}`otwin.signal` | Read a device or a dataset; put irregular samples on a grid |
+| advanced | {mod}`otwin.model` | Hand-written port-Hamiltonian and irreversible models |
 
-{mod}`otwin.interfaces` sits underneath all six: the protocols and the
-{class}`~otwin.interfaces.TwinManifest` that records how a twin was fitted,
-validated and calibrated.
+{mod}`otwin.interfaces` sits underneath all of it: the protocols and the
+{class}`~otwin.interfaces.TwinManifest` that records how a twin was built,
+fitted, validated and calibrated.
 
 ## Four commitments
 
-**Energy structure, not curve fitting.** A port-Hamiltonian model is passive by
-construction. With no input, stored energy can only decrease. That property
-holds outside the training data, which is exactly where a fitted curve stops
-being trustworthy. See [Port-Hamiltonian systems](concepts/port-hamiltonian.md).
+**The equations come from the description.** You connect a mass, a spring and
+a damper; the compiler writes Newton's law in port-Hamiltonian form, with the
+energy balance built into the structure. With no input, stored energy can only
+decrease, and the default integrator preserves that step by step. See
+[Compilation](concepts/compilation.md).
 
 **Evaluation that cannot cheat.** {func}`~otwin.forecast.evaluate` never hands
 the held-out targets to the model, a reference forecaster is compulsory rather
@@ -88,16 +96,14 @@ random split on a time series measures interpolation. See
 [Leakage-free evaluation](concepts/leakage.md).
 
 **Intervals whose coverage was measured.** A conformal band built from genuine
-h-step-ahead residuals, not from the model's own in-sample errors — a shortcut
-that on a lithium-ion capacity twin produced 1.5 % delivered coverage at a 90 %
-target. See [Calibrated intervals](concepts/conformal.md).
+h-step-ahead residuals, not from the model's own in-sample errors. See
+[Calibrated intervals](concepts/conformal.md).
 
 **Coefficients that were determined, not chosen.** A fitted parameter the data
-cannot pin down is a parameter chosen by the noise, and a forecast that
-extrapolates through it is extrapolating the noise — while passing every
-in-window check. {func}`~otwin.estimate.identifiability` tests collinearity,
-record span and bootstrap stability per coefficient, the manifest records the
-verdict, and the envelope can refuse on it. See
+cannot pin down is a parameter chosen by the noise.
+{func}`~otwin.estimate.identifiability` tests collinearity, record span and
+bootstrap stability per coefficient; {func}`otwin.fit_parameters` runs it on
+every fit; the manifest records the verdict; the envelope can refuse on it. See
 [Identifiability](concepts/identifiability.md).
 
 ```{toctree}
@@ -108,6 +114,7 @@ install
 quickstart
 concepts/index
 guides/index
+developer/index
 api/index
 changelog
 ```

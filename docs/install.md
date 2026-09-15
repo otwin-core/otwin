@@ -1,20 +1,26 @@
 # Installation
 
 ```bash
-pip install otwin
+pip install "otwin[engine]"
 ```
 
-Python 3.10 or newer. The base install pulls exactly two packages — NumPy and
-SciPy — and that is deliberate: everything heavier is an extra, and nothing
-under a copyleft licence is ever a hard requirement.
+Python 3.10 or newer. `otwin` itself pulls exactly two packages, NumPy and
+SciPy. The `engine` extra adds `otwin-engine`, the compiled Rust runtime,
+as a binary wheel for Linux, macOS and Windows.
+
+Without the engine every model still compiles and runs, on a NumPy reference
+backend that executes the same intermediate representation. It is about a
+hundred times slower and it prints one warning the first time it is used.
+`otwin.engine_available()` tells you which one you have.
 
 ## Extras
 
 | Extra | Install | Brings in | For |
 |---|---|---|---|
+| `engine` | `pip install "otwin[engine]"` | otwin-engine | The compiled runtime |
 | `modbus` | `pip install "otwin[modbus]"` | pymodbus | Generic Modbus TCP/RTU |
 | `sunspec` | `pip install "otwin[sunspec]"` | pysunspec2, pymodbus | SunSpec model chains |
-| `gp` | `pip install "otwin[gp]"` | scikit-learn | Gaussian-process intervals |
+| `gp` | `pip install "otwin[gp]"` | scikit-learn | Gaussian-process residuals and intervals |
 | `nn` | `pip install "otwin[nn]"` | PyTorch | Learned port-Hamiltonian models |
 | `field` | `pip install "otwin[field]"` | modbus + sunspec | A field deployment |
 | `all` | `pip install "otwin[all]"` | everything above | |
@@ -26,7 +32,7 @@ that reason; the torch-free path is tested on every commit.
 
 ```python
 import otwin
-print(otwin.__version__)
+print(otwin.__version__, otwin.engine_available())
 ```
 
 The package ships a PEP 561 `py.typed` marker, so a project that installs
@@ -42,10 +48,19 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
+To build the engine from source you need a Rust toolchain
+([rustup](https://rustup.rs)) and `maturin`:
+
+```bash
+pip install maturin
+maturin develop --release -m crates/otwin-engine/Cargo.toml
+cargo test -p otwin-core
+```
+
 :::{warning}
 Install into a virtual environment. `pip install -e ".[dev]"` against a system
 Python pulls a large dependency tree into a place the OS package manager also
-manages, and on some systems the resolver is killed part-way through — leaving
+manages, and on some systems the resolver is killed part-way through, leaving
 an environment that imports `otwin` but not NumPy.
 :::
 

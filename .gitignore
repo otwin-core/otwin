@@ -15,3 +15,7 @@ htmlcov/
 # Sphinx build output and the pages autosummary generates.
 docs/_build/
 docs/api/generated/
+
+# Rust
+target/
+crates/otwin-engine/*.so

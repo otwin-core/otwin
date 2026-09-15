@@ -90,3 +90,32 @@ def test_the_test_suite_does_not_import_beyond_the_supported_python():
         "these imports are newer than the supported Python floor:\n  "
         + "\n  ".join(offenders)
     )
+
+
+def test_engine_crates_carry_the_same_version():
+    """One release, one number: the Rust workspace and the otwin-engine wheel
+    must say what pyproject.toml says. Otherwise `pip install otwin[engine]`
+    resolves a wheel whose version never matches the library it serves."""
+    declared = _declared_version()
+    cargo = (ROOT / "Cargo.toml").read_text()
+    m = re.search(
+        r'^\[workspace\.package\][^\[]*?^version = "([^"]+)"',
+        cargo,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert m is not None, "no workspace.package version in Cargo.toml"
+    assert m.group(1) == declared, (
+        f"Cargo.toml workspace version {m.group(1)!r} != {declared!r}"
+    )
+    engine = (ROOT / "crates" / "otwin-engine" / "pyproject.toml").read_text()
+    m = re.search(r'^version = "([^"]+)"', engine, re.MULTILINE)
+    assert m is not None and m.group(1) == declared, (
+        "crates/otwin-engine/pyproject.toml version differs"
+    )
+    dep = re.search(
+        r'otwin-core = \{[^}]*version = "([^"]+)"',
+        (ROOT / "crates" / "otwin-engine" / "Cargo.toml").read_text(),
+    )
+    assert dep is not None and dep.group(1) == declared, (
+        "otwin-engine's dependency on otwin-core pins a different version"
+    )

@@ -2,18 +2,25 @@
 
 Practices follow [ColPrac](https://github.com/SciML/ColPrac).
 
-## The three most useful contributions
+## The four most useful contributions
 
-1. **A reference case.** A physical system with a closed-form answer that no
+1. **A component.** A physical primitive the library lacks (a check valve, a
+   thermal contact, a battery with a state of charge) or a composite device
+   built from primitives (a pump, a heat exchanger). It is a class with
+   terminals, parameters and one constitutive law, plus a closed-form result
+   it must reproduce as a test in `tests/engine/test_golden.py`.
+   [docs/developer/components.md](docs/developer/components.md) walks through
+   both kinds.
+2. **A reference case.** A physical system with a closed-form answer that no
    current case covers, for [`otwin-spec`](https://github.com/otwin-core/otwin-spec).
    It needs four things: the system and its parameters, an analytically known
    result, a stated rationale for what goes wrong without the check, and a
    **fault injection test** proving the check catches the fault it was written
    for. The last is not optional — a check without one is untested code
    protecting untested code.
-2. **A Julia or MATLAB implementation.** See [MAINTAINERS.md](MAINTAINERS.md).
+3. **A Julia or MATLAB implementation.** See [MAINTAINERS.md](MAINTAINERS.md).
    Both slots are open and the definition of done is objective.
-3. **A register map.** If you run a PCS or BMS whose Modbus map is not SunSpec,
+4. **A register map.** If you run a PCS or BMS whose Modbus map is not SunSpec,
    the map itself is useful even with no code attached.
 
 ## Dependency licence policy
@@ -72,10 +79,26 @@ pip install -e ".[dev,nn]"
 
 Doctests run as part of the suite, so every example in a docstring is executed.
 
+The engine is a Rust crate. The Python suite runs without it (on the NumPy
+reference backend) and with it; CI does both. To build it locally:
+
+```bash
+pip install maturin
+maturin build --release -m crates/otwin-engine/Cargo.toml -o dist
+pip install dist/otwin_engine-*.whl
+cargo fmt --all --check && cargo clippy -p otwin-core -- -D warnings && cargo test -p otwin-core
+```
+
 New code needs the test that would fail without it. In particular:
 
+- A new component needs a **golden test** against a closed form, and, if it
+  is dissipative, a check that `R` stays positive semidefinite over its range.
+- A new compiler refusal needs a test that triggers it and asserts the message
+  names the components involved.
 - A new integrator needs an **energy-conservation** test, not only an accuracy
-  test. That distinction is the point of the package.
+  test, and it is implemented in `crates/otwin-core/src/solver.rs` and mirrored
+  in `otwin/runtime/backends.py` so both backends agree; the parity test
+  enforces that.
 - A new splitter needs a **leakage** test — a demonstration that no test index
   precedes a train index it should not.
 - A new reference forecaster needs to be **genuinely hard to beat**. A straw man

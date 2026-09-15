@@ -192,10 +192,7 @@ def main() -> int:
     print("=" * 72)
     print(f"python {platform.python_version()}  numpy {np.__version__}  ")
     print(f"{platform.machine()} / {platform.system()}")
-    print(
-        f"seed={SEED}  steps={N_STEPS}  dt={DT}  repeats={N_REPEAT} "
-        f"(minimum reported)"
-    )
+    print(f"seed={SEED}  steps={N_STEPS}  dt={DT}  repeats={N_REPEAT} (minimum reported)")
 
     methods = [
         ("fsolve (old)", "fsolve", True),
@@ -213,9 +210,7 @@ def main() -> int:
         nonlinear_phs,
         [m for m in methods if m[0] != "linear (closed form)"],
     )
-    print_table(
-        nonlinear_rows, [m[0] for m in methods if m[0] != "linear (closed form)"]
-    )
+    print_table(nonlinear_rows, [m[0] for m in methods if m[0] != "linear (closed form)"])
 
     # ------------------------------------------------------------------
     # acceptance gate
@@ -250,8 +245,7 @@ def main() -> int:
         m = linear_rows[GATE_N][label]
         verdict = "keeps up" if m.us_per_step < 1000.0 else "TOO SLOW"
         print(
-            f"  1 kHz real time at n=50, {label:<21} "
-            f"{m.us_per_step:8.2f} us  {verdict}"
+            f"  1 kHz real time at n=50, {label:<21} {m.us_per_step:8.2f} us  {verdict}"
         )
 
     gate_ok = default_path.speedup >= GATE_SPEEDUP
