@@ -98,7 +98,7 @@ def test_gp_residual_plugs_in():
     rng = np.random.default_rng(0)
     X = rng.uniform(-1.2, 1.2, size=(80, 2))
     truth = np.array([m.rhs(x) + np.array([0.0, -0.9 * x[1] * abs(x[1])]) for x in X])
-    np.random.seed(0)
+    np.random.seed(0)  # noqa: NPY002 - GPPHS seeds its restarts from the legacy global state
     gp = GPPHS(n_states=2, prior_dynamics=lambda x, u: m.rhs(x)).fit(X, truth)
     # GPPHS predicts the full derivative (prior + correction); feed only the correction
     hybrid = HybridModel(
