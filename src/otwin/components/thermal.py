@@ -88,8 +88,9 @@ class ThermalResistance(Component):
         super().__init__(name)
         self.terminal("a")
         self.terminal("b")
-        self.R = self.param("resistance", resistance, "K/W")
         self._law = law
+        if law is None:
+            self.R = self.param("resistance", resistance, "K/W")
 
     def branches(self) -> list[Branch]:
         law = self._law if self._law is not None else (lambda dT: dT / self.R)

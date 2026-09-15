@@ -52,8 +52,9 @@ class Resistor(_TwoTerminal):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.R = self.param("resistance", resistance, "ohm")
         self._law = law
+        if law is None:
+            self.R = self.param("resistance", resistance, "ohm")
 
     def branches(self) -> list[Branch]:
         law = self._law if self._law is not None else (lambda v: v / self.R)

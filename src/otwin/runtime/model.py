@@ -844,7 +844,14 @@ class Model:
             "midpoint" if method in ("auto", "linear", "newton", "fsolve") else method
         )
         tr = self.simulate(t=t, x0=x0, inputs=u, solver=solver, **kwargs)
-        return {"t": tr.t, "x": tr.x, "u": tr.u, "energy": tr.energy, "trajectory": tr}
+        return {
+            "t": tr.t,
+            "x": tr.x,
+            "u": tr.u,
+            "energy": tr.energy,
+            "method": f"{solver} ({tr.backend})",
+            "trajectory": tr,
+        }
 
     # ---------------------------------------------------------- inspection
     def summary(self) -> str:

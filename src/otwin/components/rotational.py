@@ -112,8 +112,11 @@ class RotationalDamper(Component):
         super().__init__(name)
         self.terminal("a")
         self.terminal("b")
-        self.b_ = self.param("damping", damping, "N m s/rad", nonneg=True, positive=False)
         self._law = law
+        if law is None:
+            self.b_ = self.param(
+                "damping", damping, "N m s/rad", nonneg=True, positive=False
+            )
 
     def branches(self) -> list[Branch]:
         law = self._law if self._law is not None else (lambda w: self.b_ * w)

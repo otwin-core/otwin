@@ -119,8 +119,9 @@ class Damper(Component):
         super().__init__(name)
         self.terminal("a")
         self.terminal("b")
-        self.c = self.param("damping", damping, "N s/m", nonneg=True, positive=False)
         self._law = law
+        if law is None:
+            self.c = self.param("damping", damping, "N s/m", nonneg=True, positive=False)
 
     def branches(self) -> list[Branch]:
         law = self._law if self._law is not None else (lambda v: self.c * v)

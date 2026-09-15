@@ -17,12 +17,13 @@ Run it:
 
 import numpy as np
 
+import otwin
 from otwin.advise import Envelope
+from otwin.components.electrical import Capacitor, CurrentSource, Ground, Resistor
 from otwin.estimate import EnergyConsistentObserver
 from otwin.forecast import evaluate
 from otwin.interfaces import Provenance, TwinManifest
 from otwin.io import SunSpecSimulator, SunSpecSource, to_si
-from otwin.model import PortHamiltonianSystem
 from otwin.signal import coverage, resample, sort_samples
 
 RULE = "─" * 74
@@ -84,15 +85,17 @@ print("  the outage is not interpolated across. A model must not learn the inter
 banner("HA", "Health Assessment — the energy-based model")
 
 # One store (charge), one dissipative path (self-discharge), one port (current).
-bank = PortHamiltonianSystem(
-    H=lambda x: 0.5 * 40.0 * float(x[0]) ** 2,  # 40 MWh at full charge
-    grad_H=lambda x: np.array([40.0 * x[0]]),
-    J=lambda x: np.zeros((1, 1)),  # nothing circulates in 1-D
-    R=lambda x: np.array([[1.9e-10]]),  # self-discharge, ~2%/month
-    g=lambda x: np.array([[1.0]]),  # the terminals
-    n_states=1,
-    n_inputs=1,
-)
+# Described as components, in bank units: the state is the state of charge, the
+# stored energy is 0.5 * 40 * soc^2 MWh, the terminal effort is 40 * soc.
+store = Capacitor(1.0 / 40.0, voltage=40.0 * 0.82, name="store")  # 40 MWh at full charge
+leak = Resistor(1.0 / 1.9e-10, name="leak")  # self-discharge, ~2%/month
+terminals = CurrentSource(None, name="terminals")  # the port: an input
+gnd = Ground(name="ground")
+bess = otwin.System(store, leak, terminals, gnd, name="bank")
+bess.connect(store.p, leak.p, terminals.p)
+bess.connect(store.n, leak.n, terminals.n, gnd.terminal)
+bank = otwin.compile(bess)  # H, J, R, G written by the compiler
+print(f"  states            {bank.state_names}   inputs {bank.input_names}")
 struct = bank.check_structure(np.array([0.82]))
 for name, (ok, violation) in struct.items():
     print(

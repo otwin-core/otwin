@@ -25,6 +25,7 @@ account for.
 
 from __future__ import annotations
 
+import math
 import warnings
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -493,14 +494,20 @@ def _through_nonpin(ctx: _Ctx, b: Branch, structural: bool, side: int = 1) -> Ex
 
 
 def _secant(b: ResistorBranch, v: Expr) -> Expr:
-    """law(v) / v as a conductance, exact for linear laws, guarded at v = 0."""
+    """law(v) / v as a conductance: exact for a linear law, and at v = 0 the
+    slope of the law there when that slope is finite, zero otherwise."""
     vs = ex.symbol("param", "__v")
     law = ex.trace(b.law, vs)
     d = law.diff(vs)
     if not d.depends_on_symbol(vs) and law.substitute({vs: ex.const(0.0)}).is_zero():
         return d.substitute({vs: v})
-    sec = ex.where(abs(v) > _TINY, law.substitute({vs: v}) / v, 0.0)
-    return sec
+    try:
+        at_zero: Expr = d.substitute({vs: ex.const(0.0)})
+        if at_zero.is_const and not math.isfinite(at_zero.value or 0.0):
+            at_zero = ex.const(0.0)
+    except ZeroDivisionError:
+        at_zero = ex.const(0.0)
+    return ex.where(abs(v) > _TINY, law.substitute({vs: v}) / v, at_zero)
 
 
 def _incident(ctx: _Ctx) -> dict[_Node, list[tuple[Branch, int, float]]]:

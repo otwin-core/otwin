@@ -1,0 +1,38 @@
+{
+  "platform": "Linux-6.18.44-fc-v33-x86_64-with-glibc2.39",
+  "python": "3.11.15",
+  "otwin": "1.0.0",
+  "engine_available": true,
+  "cases": {
+    "mass_spring_damper": {
+      "steps": 20000,
+      "python_0_4_s": 0.8741500480000468,
+      "numpy_s": 1.5585721180000291,
+      "compile_s": 0.0027155789998687396,
+      "rust_midpoint_s": 0.008067539999956352,
+      "rust_rk4_s": 0.006460626000261982,
+      "rust_batch_per_run_s": 0.0005060024499971405,
+      "batch_steps": 2222
+    },
+    "water_tank": {
+      "steps": 60000,
+      "python_0_4_s": 1.262357300000076,
+      "numpy_s": 1.7899137319996044,
+      "compile_s": 0.004388929000015196,
+      "rust_midpoint_s": 0.029055128999971203,
+      "rust_rk4_s": 0.04535144000010405,
+      "rust_batch_per_run_s": 0.0005430784200007111,
+      "batch_steps": 2068
+    },
+    "dc_motor": {
+      "steps": 50000,
+      "python_0_4_s": 1.552950083000269,
+      "numpy_s": 2.1055969340000047,
+      "compile_s": 0.0032375490000049467,
+      "rust_midpoint_s": 0.017012077999879693,
+      "rust_rk4_s": 0.020689191999736067,
+      "rust_batch_per_run_s": 0.00042797772000085387,
+      "batch_steps": 2083
+    }
+  }
+}
