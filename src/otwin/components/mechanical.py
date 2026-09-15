@@ -145,7 +145,12 @@ class ForceSource(Component):
     def branches(self) -> list[Branch]:
         return [
             SourceBranch(
-                self, self.flange, None, kind="through", value=self.force, unit="N",
+                self,
+                self.flange,
+                None,
+                kind="through",
+                value=self.force,
+                unit="N",
                 quantity="force",
             )
         ]
@@ -165,7 +170,12 @@ class VelocitySource(Component):
     def branches(self) -> list[Branch]:
         return [
             SourceBranch(
-                self, self.flange, None, kind="across", value=self.velocity, unit="m/s",
+                self,
+                self.flange,
+                None,
+                kind="across",
+                value=self.velocity,
+                unit="m/s",
                 quantity="velocity",
             )
         ]

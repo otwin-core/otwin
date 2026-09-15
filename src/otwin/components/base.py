@@ -248,7 +248,13 @@ class Component:
         return self.symbol(name)
 
     def symbol(self, name: str) -> Expr:
-        return ex.symbol("param", f"{self.name}.{name}")
+        """The symbol of a parameter, stable under renaming (composites rename
+        their parts). The compiler maps it to ``<component>.<name>``."""
+        return ex.symbol("param", f"{self.uid}.{name}")
+
+    @property
+    def uid(self) -> str:
+        return f"#{id(self)}"
 
     def value(self, name: str) -> float:
         return self.parameters[name].value

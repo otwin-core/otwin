@@ -28,6 +28,7 @@ from __future__ import annotations
 import warnings
 from collections import defaultdict
 from dataclasses import dataclass, field
+
 from . import expr as ex
 from .components.base import (
     DOMAINS,
@@ -118,6 +119,7 @@ class _Ctx:
     pin_parent: dict[_Node, _Pin] = field(default_factory=dict)
     pin_order: list[_Node] = field(default_factory=list)
     secants: dict[Expr, Expr] = field(default_factory=dict)
+    rename: dict[Expr, Expr] = field(default_factory=dict)
     representation: str = "port-hamiltonian"
 
 
@@ -155,23 +157,30 @@ def compile_system(
     if jacobian:
         jac = [[e.diff(s) for s in ctx.state_syms] for e in rhs]
     physical = _physical_ir(system, ctx, name)
+
+    def fin(e: Expr) -> Expr:
+        return e.substitute(ctx.rename)
+
+    def fin_mat(m: list[list[Expr]]) -> list[list[Expr]]:
+        return [[fin(e) for e in row] for row in m]
+
     ir = PHSIR(
         name=physical.name,
         states=list(ctx.states),
         params=list(ctx.params),
         inputs=list(ctx.inputs),
-        energy=energy,
-        grad_H=list(ctx.grad_H),
-        J=J,
-        R=R,
+        energy=fin(energy),
+        grad_H=[fin(e) for e in ctx.grad_H],
+        J=fin_mat(J),
+        R=fin_mat(R),
         ports=list(ctx.ports),
-        port_values=list(ctx.port_values),
-        G=G,
-        D=D,
-        rhs=rhs,
-        port_outputs=port_outputs,
-        outputs=outputs,
-        jacobian=jac,
+        port_values=[fin(e) for e in ctx.port_values],
+        G=fin_mat(G),
+        D=fin_mat(D),
+        rhs=[fin(e) for e in rhs],
+        port_outputs=[fin(e) for e in port_outputs],
+        outputs={k: OutputVar(k, o.unit, fin(o.expr)) for k, o in outputs.items()},
+        jacobian=fin_mat(jac) if jac is not None else None,
         representation=ctx.representation,
         physical=physical,
         metadata={"n_nodes": len(ctx.nodes) - 1},
@@ -216,7 +225,9 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
     terminals: list[Terminal] = [t for c in comps for t in c.terminals.values()]
     for t in terminals:
         find(t)
-    ref_terminals = [t for c in comps if isinstance(c, Ground) for t in c.terminals.values()]
+    ref_terminals = [
+        t for c in comps if isinstance(c, Ground) for t in c.terminals.values()
+    ]
     for link in links:
         for t in link:
             if t not in parent:
@@ -244,7 +255,7 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
         for t in groups.pop(ref_root):
             ref.terminals.append(t)
             node_of[t] = ref
-    for root, members in groups.items():
+    for members in groups.values():
         n = _Node(len(nodes))
         n.terminals = members
         domains = {t.domain for t in members if t.domain != "any"}
@@ -256,8 +267,10 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
                 "Transformer or a Gyrator."
             )
         n.domain = domains.pop() if domains else "any"
-        n.name = members[0].qualified if len(members) == 1 else "+".join(
-            sorted(t.qualified for t in members)
+        n.name = (
+            members[0].qualified
+            if len(members) == 1
+            else "+".join(sorted(t.qualified for t in members))
         )
         nodes.append(n)
         for t in members:
@@ -266,7 +279,8 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
     dangling = [
         n.terminals[0]
         for n in nodes[1:]
-        if len(n.terminals) == 1 and not isinstance(n.terminals[0].component, Ground)
+        if len(n.terminals) == 1
+        and not isinstance(n.terminals[0].component, Ground)
         and len(n.terminals[0].component.terminals) > 1
     ]
     if dangling:
@@ -276,10 +290,11 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
             "two-terminal component must be connected; use Ground (Fixed, Atmosphere) "
             "for the ones that are nailed down."
         )
-    for n in nodes[1:]:
-        if len(n.terminals) == 1 and isinstance(n.terminals[0].component, Ground):
+    linked = {t for link in links for t in link}
+    for t in ref_terminals:
+        if t not in linked:
             warnings.warn(
-                f"{n.terminals[0].qualified} is not connected to anything",
+                f"{t.qualified} is not connected to anything",
                 UserWarning,
                 stacklevel=4,
             )
@@ -294,11 +309,14 @@ def _collect_branches(ctx: _Ctx) -> None:
             ctx.branches.append(b)
             if isinstance(b, StorageBranch):
                 if b.kind not in ("across", "through"):
-                    raise CompileError(f"{c.name}: storage kind must be across or through")
+                    raise CompileError(
+                        f"{c.name}: storage kind must be across or through"
+                    )
                 ctx.storage_branches.append(b)
-                if b.domain == "thermal" or not DOMAINS.get(
-                    b.domain, DOMAINS["electrical"]
-                ).power_conjugate:
+                if (
+                    b.domain == "thermal"
+                    or not DOMAINS.get(b.domain, DOMAINS["electrical"]).power_conjugate
+                ):
                     ctx.representation = "pseudo-port-hamiltonian"
     if not ctx.storage_branches:
         raise CompileError(
@@ -315,15 +333,25 @@ def _declare_symbols(ctx: _Ctx) -> None:
     for c in ctx.comps:
         for pname, p in c.parameters.items():
             ctx.params.append(
-                ParamVar(f"{c.name}.{pname}", p.value, p.unit, c.name, p.description or pname)
+                ParamVar(
+                    f"{c.name}.{pname}", p.value, p.unit, c.name, p.description or pname
+                )
             )
+            ctx.rename[c.symbol(pname)] = ex.symbol("param", f"{c.name}.{pname}")
     for i, b in enumerate(ctx.storage_branches):
         sname = f"{b.component.name}.{b.state}"
         s = ex.symbol("state", sname)
         e = ex.symbol("param", f"__effort.{i}")
         h = b.energy(s)
         ctx.states.append(
-            StateVar(sname, b.state_unit, b.component.name, b.quantity, float(b.initial), b.kind)
+            StateVar(
+                sname,
+                b.state_unit,
+                b.component.name,
+                b.quantity,
+                float(b.initial),
+                b.kind,
+            )
         )
         ctx.state_syms.append(s)
         ctx.effort_syms.append(e)
@@ -338,7 +366,9 @@ def _declare_symbols(ctx: _Ctx) -> None:
             ctx.port_values.append(ex.symbol("input", pname))
         else:
             ctx.params.append(
-                ParamVar(f"{pname}.{b.quantity}", b.value, b.unit, b.component.name, b.quantity)
+                ParamVar(
+                    f"{pname}.{b.quantity}", b.value, b.unit, b.component.name, b.quantity
+                )
             )
             ctx.port_values.append(ex.symbol("param", f"{pname}.{b.quantity}"))
         ctx.ports.append(pname)
@@ -394,7 +424,9 @@ def _pin_potentials(ctx: _Ctx) -> list[tuple[Expr, list[_Node]]]:
                 sign = 1.0 if p.node_a is n else -1.0
                 # potential(a) - potential(b) = across
                 ctx.potentials[other] = (
-                    ctx.potentials[n] - p.across if sign > 0 else ctx.potentials[n] + p.across
+                    ctx.potentials[n] - p.across
+                    if sign > 0
+                    else ctx.potentials[n] + p.across
                 )
                 visited.add(other)
                 ctx.pin_parent[other] = p
@@ -415,11 +447,7 @@ def _pin_potentials(ctx: _Ctx) -> list[tuple[Expr, list[_Node]]]:
 
 def _dependent_message(p: _Pin, adj: dict[_Node, list[_Pin]]) -> str:
     involved = sorted(
-        {
-            q.branch.component.name
-            for node in (p.node_a, p.node_b)
-            for q in adj[node]
-        }
+        {q.branch.component.name for node in (p.node_a, p.node_b) for q in adj[node]}
     )
     what = ", ".join(involved)
     return (
@@ -502,7 +530,7 @@ def _solve_unknowns(ctx: _Ctx, unknown_groups: list[tuple[Expr, list[_Node]]]) -
 
     inc = _incident(ctx)
     equations: list[tuple[Expr, str]] = []
-    for sym, members in unknown_groups:
+    for _sym, members in unknown_groups:
         total = ex.const(0.0)
         for n in members:
             for b, side, sign in inc[n]:
@@ -657,7 +685,11 @@ def _assemble(
             q = quantities.setdefault(c, ComponentQuantities())
             for pname in c.parameters:
                 q.params[pname] = c.symbol(pname)
-    return [r for r in rhs if r is not None], [p for p in port_out if p is not None], quantities
+    return (
+        [r for r in rhs if r is not None],
+        [p for p in port_out if p is not None],
+        quantities,
+    )
 
 
 def _extract_structure(
@@ -681,7 +713,9 @@ def _extract_structure(
 
 
 def _outputs(
-    ctx: _Ctx, quantities: dict[Component, ComponentQuantities], effort_map: dict[Expr, Expr]
+    ctx: _Ctx,
+    quantities: dict[Component, ComponentQuantities],
+    effort_map: dict[Expr, Expr],
 ) -> dict[str, OutputVar]:
     out: dict[str, OutputVar] = {}
 
@@ -735,7 +769,9 @@ def _physical_ir(system: System, ctx: _Ctx, name: str | None) -> PhysicalSystemI
         if isinstance(b, TwoPortBranch):
             kind = b.kind
         branches.append(
-            BranchRecord(b.component.name, kind, _node(ctx, b.a).name, _node(ctx, b.b).name)
+            BranchRecord(
+                b.component.name, kind, _node(ctx, b.a).name, _node(ctx, b.b).name
+            )
         )
     return PhysicalSystemIR(
         name=name or system.name,

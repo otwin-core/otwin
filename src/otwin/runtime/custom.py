@@ -86,7 +86,9 @@ class CustomDynamics:
 
     # --- TwinModel surface
     def _u(self, u: Any) -> Array:
-        return np.zeros(self.n_inputs) if u is None else np.asarray(u, dtype=float).ravel()
+        return (
+            np.zeros(self.n_inputs) if u is None else np.asarray(u, dtype=float).ravel()
+        )
 
     def rhs(self, x: Array, u: Array | None = None, t: float = 0.0) -> Array:
         return np.asarray(self._f(np.asarray(x, dtype=float), self._u(u), t), dtype=float)
@@ -133,10 +135,20 @@ class CustomDynamics:
             return State(x, time, self.state_names)
         return State(np.asarray(values, dtype=float), time, self.state_names)
 
-    def step(self, state: Any, inputs: Any = None, dt: float = 1e-3, *, solver: str = "midpoint", **options: Any) -> State:
+    def step(
+        self,
+        state: Any,
+        inputs: Any = None,
+        dt: float = 1e-3,
+        *,
+        solver: str = "midpoint",
+        **options: Any,
+    ) -> State:
         s = self.state(state)
         u = self._u(inputs)
-        xn = _bk._step(self.rhs, self.jacobian, s.values, lambda th: u, s.time, dt, solver, options)
+        xn = _bk._step(
+            self.rhs, self.jacobian, s.values, lambda th: u, s.time, dt, solver, options
+        )
         return State(xn, s.time + dt, self.state_names)
 
     def simulate(
@@ -185,7 +197,14 @@ class CustomDynamics:
         )
         return Trajectory(raw, self)  # type: ignore[arg-type]
 
-    def _feedback(self, x0: Array, t: Array, law: Callable[..., Array], solver: str, options: dict[str, Any]) -> Trajectory:
+    def _feedback(
+        self,
+        x0: Array,
+        t: Array,
+        law: Callable[..., Array],
+        solver: str,
+        options: dict[str, Any],
+    ) -> Trajectory:
         nt = t.shape[0]
         X = np.zeros((nt, self.n_states))
         U = np.zeros((nt, self.n_inputs))
@@ -197,13 +216,39 @@ class CustomDynamics:
             if self._H is not None:
                 E[k] = self.energy(x)
             if k < nt - 1:
-                x = _bk._step(self.rhs, self.jacobian, x, lambda th, u=u: u, t[k], t[k + 1] - t[k], solver, options)
-        raw = {"t": t, "x": X, "u": U, "energy": E, "supplied_power": np.zeros(0), "outputs": np.zeros((nt, 0)),
-               "stats": {"method": solver, "steps": nt - 1, "feedback": True}, "backend": "numpy"}
+                x = _bk._step(
+                    self.rhs,
+                    self.jacobian,
+                    x,
+                    lambda th, u=u: u,
+                    t[k],
+                    t[k + 1] - t[k],
+                    solver,
+                    options,
+                )
+        raw = {
+            "t": t,
+            "x": X,
+            "u": U,
+            "energy": E,
+            "supplied_power": np.zeros(0),
+            "outputs": np.zeros((nt, 0)),
+            "stats": {"method": solver, "steps": nt - 1, "feedback": True},
+            "backend": "numpy",
+        }
         return Trajectory(raw, self)  # type: ignore[arg-type]
 
-    def forecast(self, x0: Array, t: Array, u: Array | None = None, method: str = "midpoint", **kw: Any) -> dict[str, Any]:
-        solver = "midpoint" if method in ("auto", "linear", "newton", "fsolve") else method
+    def forecast(
+        self,
+        x0: Array,
+        t: Array,
+        u: Array | None = None,
+        method: str = "midpoint",
+        **kw: Any,
+    ) -> dict[str, Any]:
+        solver = (
+            "midpoint" if method in ("auto", "linear", "newton", "fsolve") else method
+        )
         tr = self.simulate(t=t, x0=x0, inputs=u, solver=solver, **kw)
         return {"t": tr.t, "x": tr.x, "u": tr.u, "energy": tr.energy, "trajectory": tr}
 

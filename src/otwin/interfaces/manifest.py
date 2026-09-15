@@ -90,7 +90,8 @@ class TwinManifest:
 
     Attributes:
         name: Human-readable identifier for this twin.
-        model_class: Which structure — ``"port_hamiltonian"``,
+        model_class: Which structure — ``"compiled"`` (built from components by
+            :func:`otwin.compile`), ``"port_hamiltonian"``,
             ``"irreversible_phs"``, ``"empirical_law"``, ``"learned_phs"`` or
             ``"composite"``.
         model_kind: The specific model, e.g. ``"water_tank"``, ``"dc_motor"``.
@@ -180,6 +181,7 @@ class TwinManifest:
         "empirical_law",
         "learned_phs",
         "composite",
+        "compiled",
     )
 
     def __post_init__(self) -> None:

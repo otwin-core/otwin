@@ -12,6 +12,71 @@ exact version in anything you depend on.
 
 Nothing yet.
 
+## [1.0.0] — 2026-09-15
+
+The library becomes an engine. A physical system is described with components
+and connections, compiled into a physically consistent model, and executed in
+a Rust runtime. Port-Hamiltonian systems move from the API to the intermediate
+representation: the compiler writes `H`, `J`, `R` and `G`; the user no longer
+does. Nothing from 0.4 is removed.
+
+### Added
+
+- **Component library.** `otwin.components` with electrical (`Resistor`,
+  `Capacitor`, `Inductor`, `VoltageSource`, `CurrentSource`, `Ground`),
+  mechanical (`Mass`, `Spring`, `Damper`, `ForceSource`, `VelocitySource`,
+  `Fixed`), rotational (`Inertia`, `TorsionSpring`, `RotationalDamper`,
+  `TorqueSource`, `SpeedSource`, `Housing`), hydraulic (`Tank`, `Orifice`,
+  `Pipe`, `FluidInertance`, `FlowSource`, `PressureSource`, `Atmosphere`),
+  thermal (`ThermalMass`, `ThermalResistance`, `Convection`, `HeatSource`,
+  `Ambient`) primitives, the two-ports `Transformer` and `Gyrator`, the
+  composite `DCMotor`, and a `catalogue` that rebuilds every reference system
+  of `otwin.model.library` from components. Resistive elements take a
+  nonlinear `law=`.
+- **`otwin.System`** — the component graph. `connect` joins terminals into a
+  node and checks domains; `a >> b >> c` chains two-terminal parts.
+- **`otwin.compile`** — the model compiler. Nodal analysis with symbolic
+  elimination produces a `PHSIR` whose entries are expressions: `J` exactly
+  skew, `R` read off the dissipative laws, `G` and `D` for the ports, the
+  right-hand side and its analytic Jacobian. Errors name terminals and
+  components: incompatible domains, dangling terminals, dependent storages,
+  nonlinear algebraic loops, singular networks.
+- **`otwin.Model`** — the compiled model: `simulate`, `step`, `simulate_batch`,
+  `rhs`, `jacobian`, `energy`, `outputs`, `observe`, `power_balance`,
+  `check_structure`, `structure`, `summary`, `set_parameters`,
+  `with_parameters`, `closed_loop`, `save`/`load`. It satisfies `TwinModel`,
+  so `otwin.estimate` and `otwin.forecast` take it directly.
+- **Compiled control laws.** `model.symbol("tank.level")` and
+  `model.closed_loop(inlet=...)` (or `simulate(inputs={"inlet": expr})`) fold a
+  feedback law into the model so the engine evaluates it at every solver
+  stage. Python callables `f(t, x)` are still accepted and run sample-and-hold.
+- **`otwin.expr`** — the symbolic expression type behind all of the above:
+  differentiation, simplification, JSON serialisation, lowering to the engine.
+- **The Rust engine.** `otwin-core` (expression bytecode, compiled model,
+  integrators: implicit midpoint, RK4, adaptive Dormand-Prince, Euler, and
+  parallel batches) and `otwin-engine` (PyO3 bindings, published as its own
+  wheel). `pip install otwin[engine]` installs it; without it the same models
+  run on a NumPy reference backend with identical results.
+- **`otwin.CustomDynamics`** — the advanced escape hatch: a user-written
+  `f(x, u, t)` with the `Model` surface, and `CustomDynamics.from_phs(...)` to
+  wrap a hand-written `PortHamiltonianSystem`.
+- **Tests.** `tests/engine`: expressions, compiler, golden models against
+  closed forms, regression against the 0.4 hand-written models to 1e-8,
+  Rust/NumPy parity on every solver, property tests on random passive
+  networks. `cargo test` on the core crate.
+
+### Changed
+
+- The README, the documentation and notebooks 01 and 05 describe systems with
+  components; the mathematics moves to *Compilation* and *Advanced API*.
+- `TwinManifest.model_class` accepts `"compiled"`.
+
+### Unchanged, on purpose
+
+- Every name in `otwin.model`, `otwin.estimate`, `otwin.forecast`,
+  `otwin.advise`, `otwin.io`, `otwin.signal` and `otwin.interfaces`. The
+  hand-written port-Hamiltonian API is the advanced layer, not a deprecated one.
+
 ## [0.4.0] — 2026-08-24
 
 One new capability, and a fourth ground for refusal. Additive: every existing

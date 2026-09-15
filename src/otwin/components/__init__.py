@@ -10,7 +10,17 @@ compiler turns into equations. Adding a component means subclassing
 :class:`~otwin.components.base.Component`; see ``docs/developer/components.md``.
 """
 
-from . import base, catalogue, composite, electrical, hydraulic, mechanical, rotational, thermal, twoport
+from . import (
+    base,
+    catalogue,
+    composite,
+    electrical,
+    hydraulic,
+    mechanical,
+    rotational,
+    thermal,
+    twoport,
+)
 from .base import Component, Composite, Ground, Terminal
 
 __all__ = [

@@ -86,9 +86,14 @@ class Tank(Component):
                 state_unit="m^3",
                 quantity="volume",
                 initial=self.initial_level * self.value("area"),
-                energy=lambda V: self.rho
-                * self.g
-                * (self.z * ex.maximum(V, 0.0) + ex.maximum(V, 0.0) ** 2 / (2 * self.A)),
+                energy=lambda V: (
+                    self.rho
+                    * self.g
+                    * (
+                        self.z * ex.maximum(V, 0.0)
+                        + ex.maximum(V, 0.0) ** 2 / (2 * self.A)
+                    )
+                ),
             )
         ]
 
@@ -151,7 +156,9 @@ class Pipe(Component):
         self.terminal("b")
         given = sum(v is not None for v in (resistance, friction, law))
         if given != 1:
-            raise ValueError(f"{self.name}: give exactly one of resistance, friction, law")
+            raise ValueError(
+                f"{self.name}: give exactly one of resistance, friction, law"
+            )
         self._law = law
         self.R = self.K = None
         if resistance is not None:
@@ -221,7 +228,12 @@ class FlowSource(Component):
     def branches(self) -> list[Branch]:
         return [
             SourceBranch(
-                self, self.a, self.b, kind="through", value=self.flow, unit="m^3/s",
+                self,
+                self.a,
+                self.b,
+                kind="through",
+                value=self.flow,
+                unit="m^3/s",
                 quantity="flow",
             )
         ]
@@ -242,7 +254,12 @@ class PressureSource(Component):
     def branches(self) -> list[Branch]:
         return [
             SourceBranch(
-                self, self.a, self.b, kind="across", value=self.pressure, unit="Pa",
+                self,
+                self.a,
+                self.b,
+                kind="across",
+                value=self.pressure,
+                unit="Pa",
                 quantity="pressure",
             )
         ]

@@ -21,7 +21,13 @@ import numpy.typing as npt
 from ..expr import Expr
 from ..ir import PHSIR
 
-__all__ = ["Backend", "NumpyBackend", "RustBackend", "select_backend", "EngineNotAvailable"]
+__all__ = [
+    "Backend",
+    "NumpyBackend",
+    "RustBackend",
+    "select_backend",
+    "EngineNotAvailable",
+]
 
 Array = npt.NDArray[np.floating]
 SOLVERS = ("euler", "rk4", "rk45", "midpoint")
@@ -75,7 +81,9 @@ class Backend:
     def supplied_power(self, x: Array, u: Array, t: float) -> float:
         raise NotImplementedError
 
-    def step(self, x: Array, u: Array, t: float, dt: float, method: str, **opts: Any) -> Array:
+    def step(
+        self, x: Array, u: Array, t: float, dt: float, method: str, **opts: Any
+    ) -> Array:
         raise NotImplementedError
 
     def simulate(
@@ -143,15 +151,24 @@ class RustBackend(Backend):
     def supplied_power(self, x: Array, u: Array, t: float) -> float:
         return float(self._m.supplied_power(_c(x), _c(u), float(t)))
 
-    def step(self, x: Array, u: Array, t: float, dt: float, method: str, **opts: Any) -> Array:
-        return self._m.step(_c(x), _c(u), float(t), float(dt), method=method, **_engine_opts(opts))
+    def step(
+        self, x: Array, u: Array, t: float, dt: float, method: str, **opts: Any
+    ) -> Array:
+        return self._m.step(
+            _c(x), _c(u), float(t), float(dt), method=method, **_engine_opts(opts)
+        )
 
     def simulate(
         self, x0: Array, t: Array, u: Array | None, method: str, interp: str, **opts: Any
     ) -> dict[str, Any]:
         uu = None if u is None else np.ascontiguousarray(u, dtype=float)
         out = self._m.simulate(
-            _c(x0), _c(t), uu, method=method, interp=interp, **_engine_opts(opts, sim=True)
+            _c(x0),
+            _c(t),
+            uu,
+            method=method,
+            interp=interp,
+            **_engine_opts(opts, sim=True),
         )
         out["backend"] = self.name
         return out
@@ -169,7 +186,12 @@ class RustBackend(Backend):
         uu = None if u is None else np.ascontiguousarray(u, dtype=float)
         pp = None if params is None else np.ascontiguousarray(params, dtype=float)
         out = self._m.simulate_batch(
-            np.ascontiguousarray(x0s, dtype=float), _c(t), uu, pp, method=method, interp=interp,
+            np.ascontiguousarray(x0s, dtype=float),
+            _c(t),
+            uu,
+            pp,
+            method=method,
+            interp=interp,
             **_engine_opts(opts),
         )
         out["backend"] = self.name
@@ -274,7 +296,9 @@ def _codegen(e: Expr, order: dict[str, int]) -> str:
     raise ValueError(op)
 
 
-def _compile_vector(exprs: list[Expr], order: dict[str, int]) -> Callable[[list[float]], list[float]]:
+def _compile_vector(
+    exprs: list[Expr], order: dict[str, int]
+) -> Callable[[list[float]], list[float]]:
     if not exprs:
         return lambda v: []
     body = ", ".join(_codegen(e, order) for e in exprs)
@@ -292,10 +316,16 @@ class NumpyBackend(Backend):
         order = ir.symbol_order()
         self._params = np.array(ir.param_values(), dtype=float)
         self._rhs = _compile_vector(ir.rhs, order)
-        self._jac = _compile_vector([e for row in ir.jacobian for e in row], order) if ir.jacobian else None
+        self._jac = (
+            _compile_vector([e for row in ir.jacobian for e in row], order)
+            if ir.jacobian
+            else None
+        )
         self._energy = _compile_vector([ir.energy], order)
         self._grad = _compile_vector(ir.grad_H, order)
-        self._out = _compile_vector([ir.outputs[k].expr for k in self.output_names], order)
+        self._out = _compile_vector(
+            [ir.outputs[k].expr for k in self.output_names], order
+        )
         self._ports = _compile_vector(ir.port_outputs, order)
         self._port_vals = _compile_vector(ir.port_values, order)
 
@@ -313,7 +343,9 @@ class NumpyBackend(Backend):
             else:
                 us = np.asarray(u, dtype=float).ravel()
                 if us.shape[0] != m:
-                    raise ValueError(f"input has {us.shape[0]} entries, the model has {m} inputs")
+                    raise ValueError(
+                        f"input has {us.shape[0]} entries, the model has {m} inputs"
+                    )
                 v[n : n + m] = us.tolist()
         v[n + m : n + m + self.n_params] = self._params.tolist()
         v[-1] = float(t)
@@ -325,7 +357,9 @@ class NumpyBackend(Backend):
     def set_params(self, values: Array) -> None:
         vals = np.asarray(values, dtype=float).ravel()
         if vals.shape[0] != self.n_params:
-            raise ValueError(f"expected {self.n_params} parameter values, got {vals.shape[0]}")
+            raise ValueError(
+                f"expected {self.n_params} parameter values, got {vals.shape[0]}"
+            )
         self._params = vals.copy()
 
     def rhs(self, x: Array, u: Array, t: float) -> Array:
@@ -366,7 +400,9 @@ class NumpyBackend(Backend):
         return float(sum(a * b for a, b in zip(y, uu, strict=True)))
 
     # integration
-    def step(self, x: Array, u: Array, t: float, dt: float, method: str, **opts: Any) -> Array:
+    def step(
+        self, x: Array, u: Array, t: float, dt: float, method: str, **opts: Any
+    ) -> Array:
         _engine_opts(opts)
         f = self.rhs
         x = np.asarray(x, dtype=float)
@@ -411,12 +447,19 @@ class NumpyBackend(Backend):
             for i in range(x0s.shape[0]):
                 if params is not None:
                     self.set_params(np.asarray(params)[i])
-                r = self.simulate(x0s[i], t, u, method, interp, record_outputs=False, **opts)
+                r = self.simulate(
+                    x0s[i], t, u, method, interp, record_outputs=False, **opts
+                )
                 xs.append(r["x"])
                 es.append(r["energy"])
         finally:
             self._params = saved
-        return {"t": np.asarray(t, dtype=float), "x": np.stack(xs), "energy": np.stack(es), "backend": self.name}
+        return {
+            "t": np.asarray(t, dtype=float),
+            "x": np.stack(xs),
+            "energy": np.stack(es),
+            "backend": self.name,
+        }
 
 
 # ----------------------------------------------------------------------------
@@ -435,7 +478,9 @@ _DP_A = np.array(
     ]
 )
 _DP_B = np.array([35 / 384, 0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84, 0])
-_DP_E = _DP_B - np.array([5179 / 57600, 0, 7571 / 16695, 393 / 640, -92097 / 339200, 187 / 2100, 1 / 40])
+_DP_E = _DP_B - np.array(
+    [5179 / 57600, 0, 7571 / 16695, 393 / 640, -92097 / 339200, 187 / 2100, 1 / 40]
+)
 
 
 def _step(
@@ -463,7 +508,9 @@ def _step(
         st["rhs_evals"] = st.get("rhs_evals", 0) + 4
         return x + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
     if method == "rk45":
-        return _rk45(f, x, u_of, t, t + h, opts, st, h_guess if h_guess is not None else [0.0])
+        return _rk45(
+            f, x, u_of, t, t + h, opts, st, h_guess if h_guess is not None else [0.0]
+        )
     if method == "midpoint":
         return _midpoint_halving(f, jac, x, u_of(0.5), t, h, opts, st, 0)
     raise ValueError(f"unknown solver {method!r}; choose one of {SOLVERS}")
@@ -575,7 +622,9 @@ def _midpoint(
         try:
             dx = np.linalg.solve(lu, res)
         except np.linalg.LinAlgError:
-            raise RuntimeError(f"the Newton iteration matrix is singular at t = {t}") from None
+            raise RuntimeError(
+                f"the Newton iteration matrix is singular at t = {t}"
+            ) from None
         x1 = x1 - dx
         st["newton_iterations"] = st.get("newton_iterations", 0) + 1
     return x1  # pragma: no cover
@@ -615,7 +664,9 @@ def _simulate_generic(
         if u.ndim == 1:
             u = u.reshape(-1, 1)
         if u.shape != (nt, n_inputs):
-            raise ValueError(f"inputs must have shape (len(t), n_inputs) = {(nt, n_inputs)}, got {u.shape}")
+            raise ValueError(
+                f"inputs must have shape (len(t), n_inputs) = {(nt, n_inputs)}, got {u.shape}"
+            )
     else:
         u = np.zeros((nt, n_inputs))
     record_outputs = bool(opts.get("record_outputs", True)) and outputs is not None
@@ -624,7 +675,13 @@ def _simulate_generic(
     E = np.zeros(nt if record_energy else 0)
     P = np.zeros(nt if record_energy else 0)
     Y = np.zeros((nt, n_outputs if record_outputs else 0))
-    stats: dict[str, int] = {"steps": 0, "rhs_evals": 0, "newton_iterations": 0, "jacobian_evals": 0, "rejected_steps": 0}
+    stats: dict[str, int] = {
+        "steps": 0,
+        "rhs_evals": 0,
+        "newton_iterations": 0,
+        "jacobian_evals": 0,
+        "rejected_steps": 0,
+    }
     h_guess = [0.0]
 
     def record(k: int) -> None:

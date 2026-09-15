@@ -13,9 +13,9 @@ The one place the type surfaces is a nonlinear law::
     >>> h = symbol("state", "tank.volume")
     >>> law = 0.6 * 0.1 * sqrt(2 * 9.81 * h)
     >>> law.diff(h)
-    0.0588600000000001 * (2 * 9.81 / (2 * sqrt(2 * 9.81 * state:tank.volume)))
-    >>> law.evaluate({"state:tank.volume": 2.0})
-    0.3758...
+    0.5886 / sqrt(19.62 * state:tank.volume)
+    >>> round(law.evaluate({"state:tank.volume": 2.0}), 3)
+    0.376
 
 Symbols carry a *kind* (``state``, ``param``, ``input`` or ``time``) and a
 name. Structural equality is by value, so ``a - a`` folds to ``0`` even when
@@ -107,9 +107,7 @@ class Expr:
         return _fmt(self, 0)
 
     def __bool__(self) -> bool:
-        raise TypeError(
-            "an Expr has no truth value; use is_zero() or evaluate() instead"
-        )
+        raise TypeError("an Expr has no truth value; use is_zero() or evaluate() instead")
 
     def is_zero(self) -> bool:
         return self.is_const and self.value == 0.0
@@ -298,9 +296,14 @@ def add(a: Expr, b: Expr) -> Expr:
         return sub(a, const(-b.value))
     if a.op == "div" and b.op == "div" and a.args[1] == b.args[1]:
         return div(add(a.args[0], b.args[0]), a.args[1])
-    if a.op == "mul" and b.op == "mul" and a.args[0].is_const and b.args[0].is_const:
-        if a.args[1] == b.args[1]:
-            return mul(const(a.args[0].value + b.args[0].value), a.args[1])
+    if (
+        a.op == "mul"
+        and b.op == "mul"
+        and a.args[0].is_const
+        and b.args[0].is_const
+        and a.args[1] == b.args[1]
+    ):
+        return mul(const(a.args[0].value + b.args[0].value), a.args[1])
     return _binary("add", a, b)
 
 
@@ -317,9 +320,14 @@ def sub(a: Expr, b: Expr) -> Expr:
         return add(a, const(-b.value))
     if a.op == "div" and b.op == "div" and a.args[1] == b.args[1]:
         return div(sub(a.args[0], b.args[0]), a.args[1])
-    if a.op == "mul" and b.op == "mul" and a.args[0].is_const and b.args[0].is_const:
-        if a.args[1] == b.args[1]:
-            return mul(const(a.args[0].value - b.args[0].value), a.args[1])
+    if (
+        a.op == "mul"
+        and b.op == "mul"
+        and a.args[0].is_const
+        and b.args[0].is_const
+        and a.args[1] == b.args[1]
+    ):
+        return mul(const(a.args[0].value - b.args[0].value), a.args[1])
     return _binary("sub", a, b)
 
 
@@ -636,7 +644,7 @@ def _fmt(e: Expr, parent: int) -> str:
         return f"({s})" if p < parent else s
     if op == "neg":
         s = f"-{_fmt(e.args[0], 3)}"
-        return f"({s})" if 3 < parent else s
+        return f"({s})" if parent > 3 else s
     return f"{op}({', '.join(_fmt(a, 0) for a in e.args)})"
 
 

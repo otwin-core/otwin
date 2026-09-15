@@ -134,7 +134,12 @@ class TorqueSource(Component):
     def branches(self) -> list[Branch]:
         return [
             SourceBranch(
-                self, self.shaft, None, kind="through", value=self.torque, unit="N m",
+                self,
+                self.shaft,
+                None,
+                kind="through",
+                value=self.torque,
+                unit="N m",
                 quantity="torque",
             )
         ]
@@ -154,7 +159,12 @@ class SpeedSource(Component):
     def branches(self) -> list[Branch]:
         return [
             SourceBranch(
-                self, self.shaft, None, kind="across", value=self.speed, unit="rad/s",
+                self,
+                self.shaft,
+                None,
+                kind="across",
+                value=self.speed,
+                unit="rad/s",
                 quantity="angular velocity",
             )
         ]

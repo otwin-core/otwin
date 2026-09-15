@@ -68,8 +68,14 @@ from otwin.interfaces import (
     TwinModel,
     UncertaintyModel,
 )
-
-from otwin.runtime import CustomDynamics, EngineNotAvailable, Model, State, Trajectory, engine_available
+from otwin.runtime import (
+    CustomDynamics,
+    EngineNotAvailable,
+    Model,
+    State,
+    Trajectory,
+    engine_available,
+)
 from otwin.system import System, chain
 
 __all__ = [

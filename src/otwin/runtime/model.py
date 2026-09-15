@@ -63,7 +63,9 @@ class State:
         return len(self.names)
 
     def __repr__(self) -> str:
-        body = ", ".join(f"{n}={v:.6g}" for n, v in zip(self.names, self.values, strict=True))
+        body = ", ".join(
+            f"{n}={v:.6g}" for n, v in zip(self.names, self.values, strict=True)
+        )
         return f"State(t={self.time:g}; {body})"
 
 
@@ -81,8 +83,12 @@ class Trajectory:
         self.x: Array = np.asarray(raw["x"], dtype=float)
         self.u: Array = np.asarray(raw["u"], dtype=float)
         self.energy: Array = np.asarray(raw.get("energy", []), dtype=float)
-        self.supplied_power: Array = np.asarray(raw.get("supplied_power", []), dtype=float)
-        self._outputs: Array = np.asarray(raw.get("outputs", np.zeros((len(self.t), 0))), dtype=float)
+        self.supplied_power: Array = np.asarray(
+            raw.get("supplied_power", []), dtype=float
+        )
+        self._outputs: Array = np.asarray(
+            raw.get("outputs", np.zeros((len(self.t), 0))), dtype=float
+        )
         self.stats: dict[str, Any] = dict(raw.get("stats", {}))
         self.backend: str = raw.get("backend", "")
         self.state_names = tuple(model.state_names)
@@ -112,7 +118,15 @@ class Trajectory:
         )
 
     def keys(self) -> list[str]:
-        return ["t", "x", "u", "energy", "supplied_power", *self.state_names, *self.output_names]
+        return [
+            "t",
+            "x",
+            "u",
+            "energy",
+            "supplied_power",
+            *self.state_names,
+            *self.output_names,
+        ]
 
     def outputs(self) -> dict[str, Array]:
         return {k: self._outputs[:, i] for i, k in enumerate(self.output_names)}
@@ -151,7 +165,9 @@ class Trajectory:
 class Model:
     """A compiled physical system. Create it with :func:`otwin.compile`."""
 
-    def __init__(self, ir: PHSIR, backend: str = "auto", measurements: Sequence[str] | None = None) -> None:
+    def __init__(
+        self, ir: PHSIR, backend: str = "auto", measurements: Sequence[str] | None = None
+    ) -> None:
         self._ir = ir
         self._backend = _bk.select_backend(ir, backend)
         self.state_names: list[str] = ir.state_names()
@@ -196,7 +212,9 @@ class Model:
         vals = self._backend.get_params()
         return {n: float(v) for n, v in zip(self.param_names, vals, strict=True)}
 
-    def set_parameters(self, values: Mapping[str, float] | None = None, **kw: float) -> Model:
+    def set_parameters(
+        self, values: Mapping[str, float] | None = None, **kw: float
+    ) -> Model:
         """Change parameter values in place. Structure is untouched; nothing is recompiled."""
         updates = dict(values or {})
         updates.update(kw)
@@ -210,7 +228,9 @@ class Model:
         self._backend.set_params(current)
         return self
 
-    def with_parameters(self, values: Mapping[str, float] | None = None, **kw: float) -> Model:
+    def with_parameters(
+        self, values: Mapping[str, float] | None = None, **kw: float
+    ) -> Model:
         """A copy of the model with different parameter values."""
         m = Model(self._ir, backend=self.backend)
         m.set_parameters(self.parameters)
@@ -225,7 +245,11 @@ class Model:
     def reset(self) -> State:
         return self.initial_state()
 
-    def state(self, values: Mapping[str, float] | Sequence[float] | Array | State | None = None, time: float = 0.0) -> State:
+    def state(
+        self,
+        values: Mapping[str, float] | Sequence[float] | Array | State | None = None,
+        time: float = 0.0,
+    ) -> State:
         """Build a :class:`State`, from a dict by name, a sequence, or the initial state."""
         if values is None:
             return State(self._x0, time, self.state_names)
@@ -251,13 +275,23 @@ class Model:
             return out
         return np.asarray(u, dtype=float).ravel()
 
-    def rhs(self, x: Array | State, u: Array | Mapping[str, float] | None = None, t: float = 0.0) -> Array:
+    def rhs(
+        self,
+        x: Array | State,
+        u: Array | Mapping[str, float] | None = None,
+        t: float = 0.0,
+    ) -> Array:
         """dx/dt. The contract name in :class:`otwin.interfaces.TwinModel`."""
         return self._backend.rhs(np.asarray(x, dtype=float), self._u(u), t)
 
     dynamics = rhs
 
-    def jacobian(self, x: Array | State, u: Array | Mapping[str, float] | None = None, t: float = 0.0) -> Array:
+    def jacobian(
+        self,
+        x: Array | State,
+        u: Array | Mapping[str, float] | None = None,
+        t: float = 0.0,
+    ) -> Array:
         return self._backend.jacobian(np.asarray(x, dtype=float), self._u(u), t)
 
     def energy(self, x: Array | State) -> float:
@@ -269,15 +303,31 @@ class Model:
     def grad_H(self, x: Array | State) -> Array:
         return self._backend.grad_h(np.asarray(x, dtype=float))
 
-    def outputs(self, x: Array | State, u: Array | Mapping[str, float] | None = None, t: float = 0.0) -> dict[str, float]:
+    def outputs(
+        self,
+        x: Array | State,
+        u: Array | Mapping[str, float] | None = None,
+        t: float = 0.0,
+    ) -> dict[str, float]:
         """Every named quantity at one state."""
         vals = self._backend.outputs(np.asarray(x, dtype=float), self._u(u), t)
         return {k: float(v) for k, v in zip(self.output_names, vals, strict=True)}
 
-    def output(self, name: str, x: Array | State, u: Array | Mapping[str, float] | None = None, t: float = 0.0) -> float:
+    def output(
+        self,
+        name: str,
+        x: Array | State,
+        u: Array | Mapping[str, float] | None = None,
+        t: float = 0.0,
+    ) -> float:
         return self.outputs(x, u, t)[name]
 
-    def port_outputs(self, x: Array | State, u: Array | Mapping[str, float] | None = None, t: float = 0.0) -> Array:
+    def port_outputs(
+        self,
+        x: Array | State,
+        u: Array | Mapping[str, float] | None = None,
+        t: float = 0.0,
+    ) -> Array:
         """The conjugate of every port: ``y = G^T grad_H + D u``."""
         return self._backend.port_outputs(np.asarray(x, dtype=float), self._u(u), t)
 
@@ -293,7 +343,12 @@ class Model:
             raise KeyError(f"not outputs of this model: {bad}. See model.output_names.")
         self._measurements = list(names)
 
-    def observe(self, x: Array | State, u: Array | Mapping[str, float] | None = None, t: float = 0.0) -> Array:
+    def observe(
+        self,
+        x: Array | State,
+        u: Array | Mapping[str, float] | None = None,
+        t: float = 0.0,
+    ) -> Array:
         """What the sensors read: the selected ``measurements``, or the port outputs.
 
         The contract name in :class:`otwin.interfaces.TwinModel`.
@@ -306,7 +361,12 @@ class Model:
 
     output_fn = observe
 
-    def power_balance(self, x: Array | State, u: Array | Mapping[str, float] | None = None, t: float = 0.0) -> dict[str, float]:
+    def power_balance(
+        self,
+        x: Array | State,
+        u: Array | Mapping[str, float] | None = None,
+        t: float = 0.0,
+    ) -> dict[str, float]:
         """``dH/dt``, the power dissipated and the power supplied through the ports."""
         xx = np.asarray(x, dtype=float)
         g = self.grad_H(xx)
@@ -315,9 +375,14 @@ class Model:
         dH = float(g @ dx)
         return {"dH_dt": dH, "dissipated": dH - supplied, "supplied": supplied}
 
-    def check_structure(self, x: Array | State | None = None, tol: float = 1e-10) -> dict[str, tuple[bool, float]]:
+    def check_structure(
+        self, x: Array | State | None = None, tol: float = 1e-10
+    ) -> dict[str, tuple[bool, float]]:
         """Skew-symmetry of J and positive semidefiniteness of R at a state."""
-        env = self._ir.environment(np.asarray(x if x is not None else self._x0, dtype=float), params=self._backend.get_params())
+        env = self._ir.environment(
+            np.asarray(x if x is not None else self._x0, dtype=float),
+            params=self._backend.get_params(),
+        )
         J = np.array([[e.evaluate(env) for e in row] for row in self._ir.J], dtype=float)
         R = np.array([[e.evaluate(env) for e in row] for row in self._ir.R], dtype=float)
         skew = float(np.max(np.abs(J + J.T))) if J.size else 0.0
@@ -326,12 +391,20 @@ class Model:
 
     def structure(self, x: Array | State | None = None) -> dict[str, Array]:
         """Numerical J, R, G, D at a state."""
-        env = self._ir.environment(np.asarray(x if x is not None else self._x0, dtype=float), params=self._backend.get_params())
+        env = self._ir.environment(
+            np.asarray(x if x is not None else self._x0, dtype=float),
+            params=self._backend.get_params(),
+        )
 
         def mat(m: list[list[Any]]) -> Array:
             return np.array([[e.evaluate(env) for e in row] for row in m], dtype=float)
 
-        return {"J": mat(self._ir.J), "R": mat(self._ir.R), "G": mat(self._ir.G), "D": mat(self._ir.D)}
+        return {
+            "J": mat(self._ir.J),
+            "R": mat(self._ir.R),
+            "G": mat(self._ir.G),
+            "D": mat(self._ir.D),
+        }
 
     # ------------------------------------------------------------ dynamics
     def step(
@@ -349,7 +422,9 @@ class Model:
         xn = self._backend.step(s.values, u, s.time, dt, solver, **options)
         return State(xn, s.time + dt, self.state_names)
 
-    def _time_grid(self, t_span: tuple[float, float] | None, dt: float | None, t: Array | None) -> Array:
+    def _time_grid(
+        self, t_span: tuple[float, float] | None, dt: float | None, t: Array | None
+    ) -> Array:
         if t is not None:
             return np.asarray(t, dtype=float).ravel()
         if t_span is None:
@@ -362,7 +437,9 @@ class Model:
             raise ValueError("t_span is shorter than dt")
         return t0 + dt * np.arange(n + 1)
 
-    def _input_matrix(self, inputs: Any, t: Array, x0: Array) -> tuple[Array | None, Callable[..., Array] | None]:
+    def _input_matrix(
+        self, inputs: Any, t: Array, x0: Array
+    ) -> tuple[Array | None, Callable[..., Array] | None]:
         """Expand the user's inputs to a (len(t), m) array, or return a feedback law."""
         nt, m = t.shape[0], self.n_inputs
         if inputs is None:
@@ -374,7 +451,9 @@ class Model:
             laws: dict[int, Callable[..., Any]] = {}
             for k, v in inputs.items():
                 if k not in self.input_names:
-                    raise KeyError(f"{k!r} is not an input; inputs are {self.input_names}")
+                    raise KeyError(
+                        f"{k!r} is not an input; inputs are {self.input_names}"
+                    )
                 j = self.input_names.index(k)
                 if callable(v):
                     laws[j] = v
@@ -392,7 +471,12 @@ class Model:
             if not laws:
                 return U, None
 
-            def combined(tt: float, x: Array, U: Array = U, laws: dict[int, Callable[..., Any]] = laws) -> Array:
+            def combined(
+                tt: float,
+                x: Array,
+                U: Array = U,
+                laws: dict[int, Callable[..., Any]] = laws,
+            ) -> Array:
                 k = int(np.searchsorted(t, tt, side="right") - 1)
                 u = U[min(max(k, 0), nt - 1)].copy()
                 for j, f in laws.items():
@@ -408,11 +492,17 @@ class Model:
                 return np.tile(arr, (nt, 1)), None
             if m == 1:
                 if arr.shape[0] != nt:
-                    raise ValueError(f"inputs has {arr.shape[0]} samples for {nt} time points")
+                    raise ValueError(
+                        f"inputs has {arr.shape[0]} samples for {nt} time points"
+                    )
                 return arr.reshape(nt, 1), None
-            raise ValueError("a 1-D inputs array is ambiguous here; pass shape (len(t), n_inputs)")
+            raise ValueError(
+                "a 1-D inputs array is ambiguous here; pass shape (len(t), n_inputs)"
+            )
         if arr.shape != (nt, m):
-            raise ValueError(f"inputs must have shape (len(t), n_inputs) = {(nt, m)}, got {arr.shape}")
+            raise ValueError(
+                f"inputs must have shape (len(t), n_inputs) = {(nt, m)}, got {arr.shape}"
+            )
         return arr, None
 
     # --------------------------------------------------------- closed loops
@@ -481,7 +571,9 @@ class Model:
         outputs = {k: OutputVar(k, o.unit, sub(o.expr)) for k, o in ir.outputs.items()}
         for i in ir.inputs:
             if ex.symbol("input", i.name) in mapping:
-                outputs[i.name] = OutputVar(i.name, i.unit, mapping[ex.symbol("input", i.name)])
+                outputs[i.name] = OutputVar(
+                    i.name, i.unit, mapping[ex.symbol("input", i.name)]
+                )
         new_ir = PHSIR(
             name=ir.name,
             states=list(ir.states),
@@ -498,7 +590,9 @@ class Model:
             rhs=rhs,
             port_outputs=[sub(e) for e in ir.port_outputs],
             outputs=outputs,
-            jacobian=[[e.diff(s) for s in states] for e in rhs] if ir.jacobian is not None else None,
+            jacobian=[[e.diff(s) for s in states] for e in rhs]
+            if ir.jacobian is not None
+            else None,
             representation=ir.representation,
             physical=ir.physical,
             metadata={**ir.metadata, "closed_loop": sorted(k.name for k in mapping)},
@@ -538,24 +632,41 @@ class Model:
             record: record the named outputs along the trajectory.
             options: ``rtol``, ``atol`` (rk45); ``newton_tol``, ``max_newton`` (midpoint).
         """
-        if isinstance(inputs, Mapping) and any(isinstance(v, Expr) for v in inputs.values()):
+        if isinstance(inputs, Mapping) and any(
+            isinstance(v, Expr) for v in inputs.values()
+        ):
             laws = {k: v for k, v in inputs.items() if isinstance(v, Expr)}
             rest = {k: v for k, v in inputs.items() if not isinstance(v, Expr)}
             return self.closed_loop(laws).simulate(
-                t_span, dt, t=t, x0=x0, inputs=rest or None, solver=solver, interp=interp,
-                record=record, **options
+                t_span,
+                dt,
+                t=t,
+                x0=x0,
+                inputs=rest or None,
+                solver=solver,
+                interp=interp,
+                record=record,
+                **options,
             )
         grid = self._time_grid(t_span, dt, t)
         s0 = self.state(x0, grid[0])
         U, law = self._input_matrix(inputs, grid, s0.values)
         self._last_solver = solver
         if law is None:
-            raw = self._backend.simulate(s0.values, grid, U, solver, interp, record_outputs=record, **options)
+            raw = self._backend.simulate(
+                s0.values, grid, U, solver, interp, record_outputs=record, **options
+            )
             return Trajectory(raw, self)
         return self._simulate_feedback(s0.values, grid, law, solver, record, options)
 
     def _simulate_feedback(
-        self, x0: Array, t: Array, law: Callable[..., Array], solver: str, record: bool, options: dict[str, Any]
+        self,
+        x0: Array,
+        t: Array,
+        law: Callable[..., Array],
+        solver: str,
+        record: bool,
+        options: dict[str, Any],
     ) -> Trajectory:
         """A control law that reads the state: sample it at each grid point and
         step with the input held. Runs one engine call per step."""
@@ -569,7 +680,9 @@ class Model:
         for k in range(nt):
             u = np.asarray(law(float(t[k]), x), dtype=float).ravel()
             if u.shape[0] != m:
-                raise ValueError(f"the control law returned {u.shape[0]} values for {m} inputs")
+                raise ValueError(
+                    f"the control law returned {u.shape[0]} values for {m} inputs"
+                )
             X[k], U[k] = x, u
             E[k] = self._backend.energy(x)
             P[k] = self._backend.supplied_power(x, u, t[k])
@@ -577,8 +690,16 @@ class Model:
                 Y[k] = self._backend.outputs(x, u, t[k])
             if k < nt - 1:
                 x = self._backend.step(x, u, t[k], t[k + 1] - t[k], solver, **options)
-        raw = {"t": t, "x": X, "u": U, "energy": E, "supplied_power": P, "outputs": Y,
-               "stats": {"method": solver, "steps": nt - 1, "feedback": True}, "backend": self.backend}
+        raw = {
+            "t": t,
+            "x": X,
+            "u": U,
+            "energy": E,
+            "supplied_power": P,
+            "outputs": Y,
+            "stats": {"method": solver, "steps": nt - 1, "feedback": True},
+            "backend": self.backend,
+        }
         return Trajectory(raw, self)
 
     def simulate_batch(
@@ -600,7 +721,9 @@ class Model:
             x0s = x0s.reshape(-1, self.n_states)
         P = None
         if parameters is not None:
-            if isinstance(parameters, np.ndarray) or (parameters and not isinstance(parameters[0], Mapping)):
+            if isinstance(parameters, np.ndarray) or (
+                parameters and not isinstance(parameters[0], Mapping)
+            ):
                 P = np.asarray(parameters, dtype=float)
             else:
                 base = self._backend.get_params()
@@ -619,12 +742,19 @@ class Model:
         return self._backend.simulate_batch(x0s, grid, U, P, solver, interp, **options)
 
     def forecast(
-        self, x0: Array | State, t: Array, u: Array | None = None, method: str = "midpoint", **kwargs: Any
+        self,
+        x0: Array | State,
+        t: Array,
+        u: Array | None = None,
+        method: str = "midpoint",
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Run forward from ``x0`` over ``t``. Returns a dict with ``"x"`` of shape
         ``(len(t), n_states)``, the same shape as :func:`otwin.model.integrate_phs`.
         """
-        solver = "midpoint" if method in ("auto", "linear", "newton", "fsolve") else method
+        solver = (
+            "midpoint" if method in ("auto", "linear", "newton", "fsolve") else method
+        )
         tr = self.simulate(t=t, x0=x0, inputs=u, solver=solver, **kwargs)
         return {"t": tr.t, "x": tr.x, "u": tr.u, "energy": tr.energy, "trajectory": tr}
 
@@ -636,12 +766,26 @@ class Model:
 
     def states(self) -> list[dict[str, Any]]:
         return [
-            {"name": s.name, "unit": s.unit, "component": s.component, "quantity": s.quantity, "initial": s.initial}
+            {
+                "name": s.name,
+                "unit": s.unit,
+                "component": s.component,
+                "quantity": s.quantity,
+                "initial": s.initial,
+            }
             for s in self._ir.states
         ]
 
     def inputs(self) -> list[dict[str, Any]]:
-        return [{"name": i.name, "unit": i.unit, "component": i.component, "quantity": i.quantity} for i in self._ir.inputs]
+        return [
+            {
+                "name": i.name,
+                "unit": i.unit,
+                "component": i.component,
+                "quantity": i.quantity,
+            }
+            for i in self._ir.inputs
+        ]
 
     def ports(self) -> list[str]:
         return list(self.port_names)
@@ -649,12 +793,51 @@ class Model:
     def components(self) -> list[dict[str, Any]]:
         if self._ir.physical is None:
             return []
-        return [{"name": c.name, "type": c.type, "domain": c.domain} for c in self._ir.physical.components]
+        return [
+            {"name": c.name, "type": c.type, "domain": c.domain}
+            for c in self._ir.physical.components
+        ]
+
+    def manifest(
+        self,
+        name: str | None = None,
+        *,
+        estimated: Sequence[str] = (),
+        seed: int | None = None,
+        **extra: Any,
+    ) -> Any:
+        """A :class:`~otwin.interfaces.TwinManifest` for this model: structure
+        ``"compiled"``, the current parameter values, and which of them were
+        estimated from data. Add validation, calibration and identification
+        records afterwards with the manifest's own helpers."""
+        import datetime as _dt
+
+        from .. import __version__
+        from ..interfaces import Provenance, TwinManifest
+
+        return TwinManifest(
+            name=name or self.name,
+            model_class="compiled",
+            model_kind=self.representation,
+            n_states=self.n_states,
+            n_inputs=self.n_inputs,
+            parameters=self.parameters,
+            estimated=tuple(estimated),
+            provenance=Provenance(
+                created=_dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                otwin_version=__version__,
+                seed=seed,
+            ),
+            extra={"components": self.components(), "states": self.state_names, **extra},
+        )
 
     def to_json(self, **kw: Any) -> str:
         """The model definition (not the state) as human-readable JSON."""
         d = self._ir.to_dict()
-        d["params"] = [dict(p, value=v) for p, v in zip(d["params"], self._backend.get_params().tolist(), strict=True)]
+        d["params"] = [
+            dict(p, value=v)
+            for p, v in zip(d["params"], self._backend.get_params().tolist(), strict=True)
+        ]
         return json.dumps(d, **kw)
 
     def save(self, path: str | Path) -> Path:

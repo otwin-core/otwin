@@ -126,7 +126,12 @@ class HeatSource(Component):
     def branches(self) -> list[Branch]:
         return [
             SourceBranch(
-                self, self.port, None, kind="through", value=self.heat, unit="W",
+                self,
+                self.port,
+                None,
+                kind="through",
+                value=self.heat,
+                unit="W",
                 quantity="heat flow",
             )
         ]
@@ -149,7 +154,12 @@ class Ambient(Component):
     def branches(self) -> list[Branch]:
         return [
             SourceBranch(
-                self, self.port, None, kind="across", value=self.temperature, unit="K",
+                self,
+                self.port,
+                None,
+                kind="across",
+                value=self.temperature,
+                unit="K",
                 quantity="temperature",
             )
         ]

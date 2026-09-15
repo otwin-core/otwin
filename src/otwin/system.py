@@ -11,8 +11,8 @@ Nothing is computed here. Compilation happens in :func:`otwin.compile`.
     >>> from otwin.components.mechanical import Mass, Spring, Damper, Fixed
     >>> m, k, c, wall = Mass(1.0), Spring(20.0), Damper(0.3), Fixed()
     >>> s = System(m, k, c, wall, name="oscillator")
-    >>> s.connect(m.flange, k.a, c.a)
-    >>> s.connect(k.b, c.b, wall.terminal)
+    >>> _ = s.connect(m.flange, k.a, c.a)
+    >>> _ = s.connect(k.b, c.b, wall.terminal)
     >>> len(s.components), len(s.connections)
     (4, 2)
 """
@@ -142,9 +142,16 @@ def chain(*items: Any, name: str = "system") -> System:
         if isinstance(item, System):
             system.add(*item.components)
             system.connections.extend(item.connections)
+            if item.components:
+                tail = _series_pair(item.components[-1])
+                if prev_out is not None:
+                    system.connect(prev_out, _series_pair(item.components[0])[0])
+                prev_out = tail[1]
             continue
         if not isinstance(item, Component):
-            raise TypeError(f"chain expects components or systems, got {type(item).__name__}")
+            raise TypeError(
+                f"chain expects components or systems, got {type(item).__name__}"
+            )
         system.add(item)
         pair = _series_pair(item)
         if prev_out is not None:

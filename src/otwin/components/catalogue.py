@@ -9,10 +9,10 @@ starting points and as worked examples of composition.
 from __future__ import annotations
 
 from ..system import System
+from .composite import DCMotor
 from .electrical import Ground, VoltageSource
 from .hydraulic import Atmosphere, FlowSource, Orifice, Pipe, Tank
 from .mechanical import Damper, Fixed, ForceSource, Mass, Spring
-from .composite import DCMotor
 
 __all__ = [
     "mass_spring_damper",
@@ -23,7 +23,11 @@ __all__ = [
 
 
 def mass_spring_damper(
-    m: float = 1.0, k: float = 1.0, c: float = 0.1, *, position: float = 0.0,
+    m: float = 1.0,
+    k: float = 1.0,
+    c: float = 0.1,
+    *,
+    position: float = 0.0,
     velocity: float = 0.0,
 ) -> System:
     """A mass on a spring with a damper and an external force input ``force``.
@@ -104,7 +108,9 @@ def pumped_hydro(
     States ``upper.volume`` and ``lower.volume`` match ``x = [V_u, V_l]`` of
     :func:`otwin.model.pumped_hydro`.
     """
-    upper = Tank(A_u, level=V_u / A_u, base_elevation=z_u, density=rho, gravity=g, name="upper")
+    upper = Tank(
+        A_u, level=V_u / A_u, base_elevation=z_u, density=rho, gravity=g, name="upper"
+    )
     lower = Tank(A_l, level=V_l / A_l, density=rho, gravity=g, name="lower")
     penstock = Pipe(R_penstock, name="penstock")
     pump = FlowSource(None, name="pump")

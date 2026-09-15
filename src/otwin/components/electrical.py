@@ -136,7 +136,12 @@ class VoltageSource(_TwoTerminal):
     def branches(self) -> list[Branch]:
         return [
             SourceBranch(
-                self, self.p, self.n, kind="across", value=self.voltage, unit="V",
+                self,
+                self.p,
+                self.n,
+                kind="across",
+                value=self.voltage,
+                unit="V",
                 quantity="voltage",
             )
         ]
@@ -154,7 +159,12 @@ class CurrentSource(_TwoTerminal):
     def branches(self) -> list[Branch]:
         return [
             SourceBranch(
-                self, self.p, self.n, kind="through", value=self.current, unit="A",
+                self,
+                self.p,
+                self.n,
+                kind="through",
+                value=self.current,
+                unit="A",
                 quantity="current",
             )
         ]
