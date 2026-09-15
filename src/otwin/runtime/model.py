@@ -25,7 +25,7 @@ import numpy.typing as npt
 
 from .. import expr as ex
 from ..expr import Expr
-from ..ir import PHSIR, OutputVar
+from ..ir import PHSIR, OutputVar, ParamVar
 from . import backends as _bk
 
 __all__ = ["Model", "State", "Trajectory", "Inputs"]
@@ -596,6 +596,94 @@ class Model:
             representation=ir.representation,
             physical=ir.physical,
             metadata={**ir.metadata, "closed_loop": sorted(k.name for k in mapping)},
+        )
+        m = Model(new_ir, backend=self.backend)
+        m.set_parameters(self.parameters)
+        if self._measurements is not None:
+            m._measurements = list(self._measurements)
+        return m
+
+    # ------------------------------------------------------------ grey box
+    def parameter(self, name: str) -> Expr:
+        """The symbol of a parameter, existing or new, for use in a residual term."""
+        return ex.symbol("param", name)
+
+    def with_residual(
+        self,
+        terms: Mapping[str, Any] | None = None,
+        *,
+        parameters: Mapping[str, float] | None = None,
+        **kw: Any,
+    ) -> Model:
+        """A grey-box copy: the compiled physics plus symbolic residual terms.
+
+        ``terms`` maps a state name to an expression added to its derivative.
+        Expressions are built from :meth:`symbol` and :meth:`parameter`; new
+        parameters get their values from ``parameters``. The result is compiled
+        like the original, runs in the engine, and its new parameters can be
+        estimated with :func:`otwin.hybrid.fit_parameters`::
+
+            v = model.symbol("mass.velocity")
+            drag = model.parameter("drag")
+            grey = model.with_residual({"mass.momentum": -drag * v * abs(v)}, parameters={"drag": 0.5})
+        """
+        all_terms = dict(terms or {})
+        all_terms.update(kw)
+        if not all_terms:
+            return self
+        ir = self._ir
+        rhs = list(ir.rhs)
+        new_params = dict(parameters or {})
+        for state, term in all_terms.items():
+            if state not in self.state_names:
+                raise KeyError(f"{state!r} is not a state; states are {self.state_names}")
+            e = ex.as_expr(term)
+            for sym in e.symbols():
+                if (
+                    sym.kind == "param"
+                    and sym.name not in self.param_names
+                    and sym.name not in new_params
+                ):
+                    raise KeyError(
+                        f"the residual for {state!r} uses parameter {sym.name!r}; give its "
+                        "value with parameters={...}"
+                    )
+                if sym.kind == "input" and sym.name not in self.input_names:
+                    raise KeyError(f"{sym.name!r} is not an input of the model")
+            i = self.state_names.index(state)
+            rhs[i] = rhs[i] + e
+        params = list(ir.params) + [
+            ParamVar(k, float(v), "", "residual", "residual coefficient")
+            for k, v in new_params.items()
+        ]
+        states = [ex.symbol("state", n) for n in self.state_names]
+        new_ir = PHSIR(
+            name=ir.name,
+            states=list(ir.states),
+            params=params,
+            inputs=list(ir.inputs),
+            energy=ir.energy,
+            grad_H=list(ir.grad_H),
+            J=ir.J,
+            R=ir.R,
+            ports=list(ir.ports),
+            port_values=list(ir.port_values),
+            G=ir.G,
+            D=ir.D,
+            rhs=rhs,
+            port_outputs=list(ir.port_outputs),
+            outputs=dict(ir.outputs),
+            jacobian=[[e.diff(s) for s in states] for e in rhs]
+            if ir.jacobian is not None
+            else None,
+            representation=ir.representation
+            if "residual" in ir.representation
+            else ir.representation + " + residual",
+            physical=ir.physical,
+            metadata={
+                **ir.metadata,
+                "residual": {k: repr(ex.as_expr(v)) for k, v in all_terms.items()},
+            },
         )
         m = Model(new_ir, backend=self.backend)
         m.set_parameters(self.parameters)

@@ -44,9 +44,10 @@ it the same models run on a NumPy reference backend.
 
 __version__ = "1.0.0"
 
-from otwin import components, expr
+from otwin import components, expr, hybrid
 from otwin.api import compile
 from otwin.compiler import CompileError, StructureWarning
+from otwin.hybrid import HybridModel, fit_parameters
 from otwin.interfaces import (
     MANIFEST_VERSION,
     Array,
@@ -93,6 +94,9 @@ __all__ = [
     "engine_available",
     "components",
     "expr",
+    "hybrid",
+    "HybridModel",
+    "fit_parameters",
     # The interface specification. Everything else is an implementation of it.
     "TwinModel",
     "PortHamiltonianModel",
