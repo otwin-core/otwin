@@ -1,0 +1,14 @@
+# REUSE (reuse.software) licensing metadata. Every file in the repository is
+# Apache-2.0, copyright the Otwin authors, so one aggregate annotation covers
+# the tree; the license text itself lives in LICENSES/. `reuse lint` checks
+# this in CI.
+version = 1
+SPDX-PackageName = "otwin"
+SPDX-PackageSupplier = "Javier Marin"
+SPDX-PackageDownloadLocation = "https://github.com/otwin-core/otwin"
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Javier Marin"
+SPDX-License-Identifier = "Apache-2.0"

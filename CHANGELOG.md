@@ -5,8 +5,8 @@ All notable changes to this project are recorded here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Until version 1.0.0 the public API may change between minor versions. Pin an
-exact version in anything you depend on.
+From 1.0.0 the public API changes only with a major version. Pin an exact
+version in anything you depend on.
 
 ## [Unreleased]
 
@@ -64,6 +64,10 @@ does. Nothing from 0.4 is removed.
   closed forms, regression against the 0.4 hand-written models to 1e-8,
   Rust/NumPy parity on every solver, property tests on random passive
   networks. `cargo test` on the core crate.
+- **Supply chain.** Two workflows, *Python* and *Rust*, each with its own
+  badge; every engine wheel carries signed build provenance like the Python
+  distribution (SLSA level 2); the tree is REUSE-compliant (`REUSE.toml`,
+  `LICENSES/`, `reuse lint` in CI).
 
 ### Changed
 

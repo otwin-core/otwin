@@ -12,11 +12,16 @@ Otwin is a physics-based digital-twin framework with a compiled dynamics engine.
 
 <div align="center">
 
+[![License](https://img.shields.io/github/license/otwin-core/otwin?color=1a4fd6&cacheSeconds=86400)](https://github.com/otwin-core/otwin/blob/main/LICENSE)
+
 [![PyPI](https://img.shields.io/pypi/v/otwin?color=1a4fd6&cacheSeconds=3600)](https://pypi.org/project/otwin/)
-[![Python](https://img.shields.io/pypi/pyversions/otwin?cacheSeconds=3600)](https://pypi.org/project/otwin/)
-[![CI](https://github.com/otwin-core/otwin/actions/workflows/ci.yml/badge.svg)](https://github.com/otwin-core/otwin/actions/workflows/ci.yml)
+[![Rust](https://img.shields.io/github/actions/workflow/status/otwin-core/otwin/rust.yml?branch=main&label=rust&logo=github)](https://github.com/otwin-core/otwin/actions/workflows/rust.yml)
+[![Python](https://img.shields.io/github/actions/workflow/status/otwin-core/otwin/ci.yml?branch=main&label=python&logo=github)](https://github.com/otwin-core/otwin/actions/workflows/ci.yml)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14061/badge)](https://www.bestpractices.dev/projects/14061)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/otwin-core/otwin/badge)](https://scorecard.dev/viewer/?uri=github.com/otwin-core/otwin)
+
+[![REUSE status](https://api.reuse.software/badge/github.com/otwin-core/otwin)](https://api.reuse.software/info/github.com/otwin-core/otwin)
+[![SLSA 2](https://slsa.dev/images/gh-badge-level2.svg)](https://github.com/otwin-core/otwin/attestations)
 
 <img src="https://cdn.brandfetch.io/idGhRgxsDX/theme/dark/symbol.svg?c=1dxbfHSJFAPEGdCLU4o5B"  width="3%">
 
