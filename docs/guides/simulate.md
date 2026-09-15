@@ -10,15 +10,18 @@ from otwin.components.catalogue import mass_spring_damper
 
 model = otwin.compile(mass_spring_damper(m=1.0, k=20.0, c=0.3, position=1.0))
 run = model.simulate(t_span=(0, 10), dt=0.01)
-print(run)
+print(f"{len(run.t)} points, t in [{run.t[0]:g}, {run.t[-1]:g}], {run.x.shape[1]} states, solver={run.stats['method']}")
 print(f"{run.stats['steps']} steps, {run.stats['newton_iterations']} Newton iterations, "
       f"{run.stats['rhs_evals']} evaluations")
 ```
 
 ```text
-Trajectory(1001 points, t in [0, 10], 2 states, backend=rust, solver=midpoint)
+1001 points, t in [0, 10], 2 states, solver=midpoint
 1000 steps, 1000 Newton iterations, 3000 evaluations
 ```
+
+`print(run)` adds the backend that ran it, `rust` with the engine installed
+and `numpy` without.
 
 ## The grid
 
