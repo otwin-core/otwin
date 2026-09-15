@@ -1,0 +1,26 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "otwin-engine"
+version = "1.0.0"
+description = "The compiled dynamics engine behind otwin: Rust integrators for compiled physical models."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Javier Marin", email = "javier@jmarin.info" }]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Physics",
+    "License :: OSI Approved :: Apache Software License",
+]
+dependencies = ["numpy>=1.24"]
+
+[project.urls]
+Homepage = "https://github.com/otwin-core/otwin"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "otwin_engine"
