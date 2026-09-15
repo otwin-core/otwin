@@ -1,4 +1,4 @@
-name: CI
+name: Python
 
 on:
   push:
@@ -139,6 +139,19 @@ jobs:
       - run: pip install --require-hashes -r .github/requirements/lint.txt
       - run: ruff check src tests examples
       - run: ruff format --check src tests examples
+
+  # Every file carries a license and a copyright holder (REUSE.toml covers the
+  # tree; the license text is in LICENSES/). reuse.software reads the same
+  # result for the badge in the README.
+  reuse:
+    name: REUSE compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: { python-version: "3.12" }
+      - run: pip install --require-hashes -r .github/requirements/reuse.txt
+      - run: reuse lint
 
   docs:
     name: docs build
