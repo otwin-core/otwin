@@ -13,9 +13,16 @@ internal energy split. This block recovers it.
 | {class}`~otwin.estimate.EnergyConsistentObserver` | a port-Hamiltonian twin | you care that the estimate stays physical |
 | {class}`~otwin.estimate.MovingHorizonEstimator` | any, with constraints | states have hard bounds, or outliers are a problem |
 
-All four take the same core arguments — the model, process noise `Q`,
-measurement noise `R_meas`, initial covariance `P0` — and return a
+All four take the same core arguments, the model, process noise `Q`,
+measurement noise `R_meas`, initial covariance `P0`, and return a
 {class}`~otwin.estimate.FilterResult` from a full pass.
+
+A compiled {class}`otwin.Model` is the model they expect: it has `rhs` and
+`observe`. Set `model.measurements = ["motor.rotor.angular_velocity"]` (or pass
+`measurements=` to `otwin.compile`) so that `observe` returns what your sensor
+reads; without it, `observe` returns the port outputs. `model.energy` is the
+`H` the energy-consistent observer audits against. The
+[quickstart](../quickstart.md) runs an EKF on a compiled drive.
 
 ## The energy-consistent observer
 

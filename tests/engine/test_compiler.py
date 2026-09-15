@@ -83,8 +83,9 @@ def test_dangling_terminal():
 def test_dependent_storages_are_named():
     c1, c2, g = Capacitor(1.0, name="c1"), Capacitor(2.0, name="c2"), Ground()
     s = System(c1, c2, g).connect(c1.p, c2.p).connect(c1.n, c2.n, g.terminal)
-    with pytest.raises(CompileError, match="dependent storages or sources: c1, c2"):
+    with pytest.raises(CompileError, match="dependent storages or sources") as info:
         compile_system(s)
+    assert "c1" in str(info.value) and "c2" in str(info.value)
 
 
 def test_voltage_source_across_capacitor_is_dependent():

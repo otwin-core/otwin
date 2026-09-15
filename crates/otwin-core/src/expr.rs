@@ -42,7 +42,11 @@ pub struct Program {
 
 impl Program {
     pub fn constant(v: f64) -> Program {
-        Program { code: vec![Instr::Const(v)], max_stack: 1, max_ref: None }
+        Program {
+            code: vec![Instr::Const(v)],
+            max_stack: 1,
+            max_ref: None,
+        }
     }
 
     /// Parse one expression tree.
@@ -72,15 +76,23 @@ impl Program {
                 _ => (2, 1),
             };
             if depth < pop {
-                return Err(EngineError::Malformed("stack underflow in expression".into()));
+                return Err(EngineError::Malformed(
+                    "stack underflow in expression".into(),
+                ));
             }
             depth = depth - pop + push;
             max_stack = max_stack.max(depth);
         }
         if depth != 1 {
-            return Err(EngineError::Malformed("expression does not reduce to one value".into()));
+            return Err(EngineError::Malformed(
+                "expression does not reduce to one value".into(),
+            ));
         }
-        Ok(Program { code, max_stack, max_ref })
+        Ok(Program {
+            code,
+            max_stack,
+            max_ref,
+        })
     }
 
     /// Evaluate against the flat table. `stack` is scratch space, reused.
@@ -197,7 +209,10 @@ fn parse_into(v: &Value, code: &mut Vec<Instr>) -> Result<()> {
         .ok_or_else(|| EngineError::Malformed("expression node without an operator".into()))?;
     let arity = |n: usize| -> Result<()> {
         if arr.len() != n + 1 {
-            Err(EngineError::Malformed(format!("{op} expects {n} operand(s), got {}", arr.len() - 1)))
+            Err(EngineError::Malformed(format!(
+                "{op} expects {n} operand(s), got {}",
+                arr.len() - 1
+            )))
         } else {
             Ok(())
         }
@@ -267,14 +282,25 @@ mod tests {
 
     #[test]
     fn evaluates_arithmetic() {
-        let p = Program::from_json(&json!(["add", ["mul", ["const", 2.0], ["ref", 0]], ["const", 1.0]])).unwrap();
+        let p = Program::from_json(&json!([
+            "add",
+            ["mul", ["const", 2.0], ["ref", 0]],
+            ["const", 1.0]
+        ]))
+        .unwrap();
         let mut st = Vec::new();
         assert_eq!(p.eval(&[3.0], &mut st), 7.0);
     }
 
     #[test]
     fn where_selects() {
-        let p = Program::from_json(&json!(["where", ["gt", ["ref", 0], ["const", 0.0]], ["const", 1.0], ["const", -1.0]])).unwrap();
+        let p = Program::from_json(&json!([
+            "where",
+            ["gt", ["ref", 0], ["const", 0.0]],
+            ["const", 1.0],
+            ["const", -1.0]
+        ]))
+        .unwrap();
         let mut st = Vec::new();
         assert_eq!(p.eval(&[2.0], &mut st), 1.0);
         assert_eq!(p.eval(&[-2.0], &mut st), -1.0);

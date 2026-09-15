@@ -118,7 +118,7 @@ class Trajectory:
         )
 
     def keys(self) -> list[str]:
-        return [
+        names = [
             "t",
             "x",
             "u",
@@ -127,6 +127,7 @@ class Trajectory:
             *self.state_names,
             *self.output_names,
         ]
+        return list(dict.fromkeys(names))
 
     def outputs(self) -> dict[str, Array]:
         return {k: self._outputs[:, i] for i, k in enumerate(self.output_names)}

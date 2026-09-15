@@ -23,7 +23,10 @@ impl fmt::Display for EngineError {
             EngineError::Malformed(s) => write!(f, "malformed model: {s}"),
             EngineError::Shape(s) => write!(f, "{s}"),
             EngineError::Convergence { time, detail } => {
-                write!(f, "the implicit step at t = {time} did not converge: {detail}")
+                write!(
+                    f,
+                    "the implicit step at t = {time} did not converge: {detail}"
+                )
             }
             EngineError::NonFinite { time, what } => {
                 write!(f, "{what} became non-finite at t = {time}")

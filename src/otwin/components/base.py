@@ -8,15 +8,15 @@ simulation time, so nothing here ends up in the numerical loop.
 
 Every domain uses the same two variables:
 
-=========== =================== ==================
-domain      across              through
-=========== =================== ==================
-electrical  voltage      [V]    current    [A]
-mechanical  velocity     [m/s]  force      [N]
-rotational  angular vel. [rad/s] torque    [N m]
-hydraulic   pressure     [Pa]   flow       [m^3/s]
-thermal     temperature  [K]    heat flow  [W]
-=========== =================== ==================
+==========  =====================  ================
+domain      across                 through
+==========  =====================  ================
+electrical  voltage [V]            current [A]
+mechanical  velocity [m/s]         force [N]
+rotational  angular vel. [rad/s]   torque [N m]
+hydraulic   pressure [Pa]          flow [m^3/s]
+thermal     temperature [K]        heat flow [W]
+==========  =====================  ================
 
 The across variable is shared by every terminal joined into a node; the
 through variables of the branches meeting there sum to zero. That single rule

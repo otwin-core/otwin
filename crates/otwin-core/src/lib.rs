@@ -19,7 +19,9 @@ pub mod solver;
 
 pub use error::{EngineError, Result};
 pub use model::{Model, Scratch};
-pub use solver::{simulate, simulate_batch, step, Inputs, Interp, Method, Options, Stats, Trajectory};
+pub use solver::{
+    simulate, simulate_batch, step, Inputs, Interp, Method, Options, Stats, Trajectory,
+};
 
 /// Version of the engine crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

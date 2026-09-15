@@ -14,8 +14,27 @@ otwin/
 │
 ├── src/
 │   └── otwin/
-│       ├── __init__.py       re-exports the interfaces layer; defines __version__
+│       ├── __init__.py       System, compile, Model, the interfaces layer; __version__
 │       ├── py.typed          PEP 561 marker — this package ships inline types
+│       │
+│       ├── expr.py           symbolic expressions: the language of the compiler
+│       ├── ir.py             PhysicalSystemIR, PHSIR: the contract with the engine
+│       ├── system.py         System, chain: the component graph
+│       ├── compiler.py       graph -> IR (nodal analysis, symbolic elimination)
+│       ├── api.py            otwin.compile
+│       ├── hybrid.py         with_residual support, HybridModel, fit_parameters
+│       │
+│       ├── components/       the physical primitives
+│       │   ├── base.py           Component, Composite, Terminal, Branch kinds, Ground
+│       │   ├── electrical.py mechanical.py rotational.py hydraulic.py thermal.py
+│       │   ├── twoport.py        Transformer, Gyrator
+│       │   ├── composite.py      DCMotor
+│       │   └── catalogue.py      the 0.x reference systems, from components
+│       │
+│       ├── runtime/          the compiled model
+│       │   ├── model.py          Model, State, Trajectory
+│       │   ├── backends.py       RustBackend (otwin_engine), NumpyBackend (reference)
+│       │   └── custom.py         CustomDynamics
 │       │
 │       ├── interfaces/       the contract. Types and protocols only, no algorithms
 │       │   ├── protocols.py      TwinModel, PortHamiltonianModel, IrreversibleModel,
@@ -33,7 +52,7 @@ otwin/
 │       ├── signal/           DM — conditioning
 │       │   └── condition.py      resample, find_gaps, coverage, sort_samples, Gap
 │       │
-│       ├── model/            HA — the physics
+│       ├── model/            HA — the physics, hand-written (the advanced API)
 │       │   ├── phs.py            PortHamiltonianSystem
 │       │   ├── iphs.py           IrreversiblePHS, ModulatedIPHS
 │       │   ├── integrators.py    integrate, integrate_phs, integrate_with_inputs
@@ -69,9 +88,15 @@ otwin/
 │       └── advise/           AG — the validated envelope
 │           └── envelope.py       Envelope, Verdict, Breach, OutsideEnvelope
 │
-├── tests/                    pytest, 636 tests
-├── examples/                 bess_end_to_end.py — the full chain, no hardware
-├── benchmarks/               integrator and forecasting benchmarks + recorded results
+├── crates/
+│   ├── otwin-core/           the engine: expr.rs (bytecode VM), model.rs, solver.rs, error.rs
+│   └── otwin-engine/         PyO3 bindings, built with maturin into the otwin-engine wheel
+├── Cargo.toml                the Rust workspace
+│
+├── tests/                    pytest; tests/engine/ covers the compiler, the golden models,
+│                             the 0.4 regression, Rust/NumPy parity and the property tests
+├── examples/                 notebooks 01-08 and bess_end_to_end.py — the full chain, no hardware
+├── benchmarks/               bench_engine.py (0.4 integrator vs both backends), forecasting benchmarks
 ├── fuzz/                     ClusterFuzzLite targets: decode_point, manifest, sunspec
 └── assets/                   images referenced by the README
 ```
@@ -84,14 +109,15 @@ already knows where to look.
 # Dependency graph
 
 ```
-otwin                     numpy>=1.24, scipy>=1.10          <- the whole core
+otwin                     numpy>=1.24, scipy>=1.10          <- the whole framework
 │
+├── otwin[engine]         + otwin-engine (binary wheel)     <- the compiled runtime
 ├── otwin[modbus]         + pymodbus>=3.6,<4.0
 ├── otwin[sunspec]        + pysunspec2>=1.1, pymodbus>=3.6,<4.0
 ├── otwin[field]          = modbus + sunspec                 <- real equipment
 ├── otwin[nn]             + torch>=2.0                       <- learned models
 ├── otwin[gp]             + scikit-learn>=1.3                <- GP residuals
-├── otwin[all]            = modbus + sunspec + nn + gp
+├── otwin[all]            = engine + modbus + sunspec + nn + gp
 └── otwin[dev]            = modbus + sunspec + gp
                           + pytest, pytest-cov, hypothesis, ruff, mypy
 ```

@@ -99,7 +99,10 @@ pub struct Inputs<'a> {
 
 impl<'a> Inputs<'a> {
     pub fn none() -> Inputs<'a> {
-        Inputs { values: None, interp: Interp::Hold }
+        Inputs {
+            values: None,
+            interp: Interp::Hold,
+        }
     }
 
     /// Input at a time inside interval `k` (between grid points k and k+1),
@@ -197,7 +200,10 @@ impl Work {
 
 fn check_finite(x: &[f64], t: f64) -> Result<()> {
     if x.iter().any(|v| !v.is_finite()) {
-        return Err(EngineError::NonFinite { time: t, what: "the state".into() });
+        return Err(EngineError::NonFinite {
+            time: t,
+            what: "the state".into(),
+        });
     }
     Ok(())
 }
@@ -257,7 +263,15 @@ fn rk4_step(
 // Dormand-Prince 5(4) with step-size control inside one output interval.
 // ---------------------------------------------------------------------------
 const DP_C: [f64; 7] = [0.0, 1.0 / 5.0, 3.0 / 10.0, 4.0 / 5.0, 8.0 / 9.0, 1.0, 1.0];
-const DP_B: [f64; 7] = [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0, 0.0];
+const DP_B: [f64; 7] = [
+    35.0 / 384.0,
+    0.0,
+    500.0 / 1113.0,
+    125.0 / 192.0,
+    -2187.0 / 6784.0,
+    11.0 / 84.0,
+    0.0,
+];
 const DP_E: [f64; 7] = [
     35.0 / 384.0 - 5179.0 / 57600.0,
     0.0,
@@ -272,9 +286,30 @@ const DP_A: [[f64; 6]; 7] = [
     [1.0 / 5.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     [3.0 / 40.0, 9.0 / 40.0, 0.0, 0.0, 0.0, 0.0],
     [44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0, 0.0, 0.0, 0.0],
-    [19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0, 0.0, 0.0],
-    [9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0, -5103.0 / 18656.0, 0.0],
-    [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0],
+    [
+        19372.0 / 6561.0,
+        -25360.0 / 2187.0,
+        64448.0 / 6561.0,
+        -212.0 / 729.0,
+        0.0,
+        0.0,
+    ],
+    [
+        9017.0 / 3168.0,
+        -355.0 / 33.0,
+        46732.0 / 5247.0,
+        49.0 / 176.0,
+        -5103.0 / 18656.0,
+        0.0,
+    ],
+    [
+        35.0 / 384.0,
+        0.0,
+        500.0 / 1113.0,
+        125.0 / 192.0,
+        -2187.0 / 6784.0,
+        11.0 / 84.0,
+    ],
 ];
 
 /// Integrate from `t0` to `t1` adaptively, with `u_of(theta)` giving the input
@@ -293,7 +328,11 @@ fn rk45_interval(
     let n = x.len();
     let span = t1 - t0;
     let mut t = t0;
-    let mut h = if *h_guess > 0.0 { h_guess.min(span) } else { span };
+    let mut h = if *h_guess > 0.0 {
+        h_guess.min(span)
+    } else {
+        span
+    };
     let mut substeps = 0usize;
     let theta = |tt: f64| ((tt - t0) / span).clamp(0.0, 1.0);
     while t < t1 - 1e-14 * span.abs().max(1.0) {
@@ -314,7 +353,13 @@ fn rk45_interval(
             }
             u_of(theta(t + DP_C[stage] * h), &mut w.u);
             let (xt, ks, u, s) = (&w.xt, &mut w.ks, &w.u, &mut w.s);
-            m.rhs_into(xt, u, t + DP_C[stage] * h, &mut ks[stage * n..(stage + 1) * n], s);
+            m.rhs_into(
+                xt,
+                u,
+                t + DP_C[stage] * h,
+                &mut ks[stage * n..(stage + 1) * n],
+                s,
+            );
         }
         w.stats.rhs_evals += 7;
         // error estimate and candidate
@@ -332,13 +377,20 @@ fn rk45_interval(
             err = err.max((e / sc).abs());
         }
         if !err.is_finite() {
-            return Err(EngineError::NonFinite { time: t, what: "the error estimate".into() });
+            return Err(EngineError::NonFinite {
+                time: t,
+                what: "the error estimate".into(),
+            });
         }
         if err <= 1.0 {
             t += h;
             x.copy_from_slice(&w.xm);
             w.stats.steps += 1;
-            let f = if err == 0.0 { 5.0 } else { (0.9 * err.powf(-0.2)).clamp(0.2, 5.0) };
+            let f = if err == 0.0 {
+                5.0
+            } else {
+                (0.9 * err.powf(-0.2)).clamp(0.2, 5.0)
+            };
             h *= f;
         } else {
             w.stats.rejected_steps += 1;
@@ -348,13 +400,18 @@ fn rk45_interval(
         if substeps > opts.max_substeps {
             return Err(EngineError::Convergence {
                 time: t,
-                detail: format!("more than {} adaptive substeps in one output interval", opts.max_substeps),
+                detail: format!(
+                    "more than {} adaptive substeps in one output interval",
+                    opts.max_substeps
+                ),
             });
         }
         if h < 1e-14 * span.abs().max(1.0) {
             return Err(EngineError::Convergence {
                 time: t,
-                detail: "the adaptive step collapsed; the right-hand side may be discontinuous or stiff".into(),
+                detail:
+                    "the adaptive step collapsed; the right-hand side may be discontinuous or stiff"
+                        .into(),
             });
         }
     }
@@ -493,7 +550,10 @@ fn midpoint_once(
             xnorm = xnorm.max(w.xt[i].abs());
         }
         if !rnorm.is_finite() {
-            return Err(EngineError::NonFinite { time: t, what: "the Newton residual".into() });
+            return Err(EngineError::NonFinite {
+                time: t,
+                what: "the Newton residual".into(),
+            });
         }
         if rnorm <= opts.newton_tol * (1.0 + xnorm) {
             break;
@@ -539,7 +599,15 @@ fn midpoint_once(
 // ---------------------------------------------------------------------------
 
 /// One step of the chosen method from `(x, t)` over `dt` with a constant input.
-pub fn step(m: &Model, x: &[f64], u: &[f64], t: f64, dt: f64, method: Method, opts: &Options) -> Result<Vec<f64>> {
+pub fn step(
+    m: &Model,
+    x: &[f64],
+    u: &[f64],
+    t: f64,
+    dt: f64,
+    method: Method,
+    opts: &Options,
+) -> Result<Vec<f64>> {
     m.check_shapes(x, u)?;
     let mut w = Work::new(m);
     let mut xn = x.to_vec();
@@ -576,19 +644,26 @@ pub fn simulate(
         )));
     }
     if t.len() < 2 {
-        return Err(EngineError::Shape("the time grid needs at least two points".into()));
+        return Err(EngineError::Shape(
+            "the time grid needs at least two points".into(),
+        ));
     }
     for k in 1..t.len() {
-        if !(t[k] > t[k - 1]) {
+        if t[k] <= t[k - 1] || t[k].is_nan() {
             return Err(EngineError::Shape(format!(
                 "the time grid must be strictly increasing (t[{}] = {} after t[{}] = {})",
-                k, t[k], k - 1, t[k - 1]
+                k,
+                t[k],
+                k - 1,
+                t[k - 1]
             )));
         }
     }
     if let Some(v) = inputs.values {
         if mi == 0 && !v.is_empty() {
-            return Err(EngineError::Shape("the model has no inputs but inputs were given".into()));
+            return Err(EngineError::Shape(
+                "the model has no inputs but inputs were given".into(),
+            ));
         }
         if mi > 0 && v.len() != t.len() * mi {
             return Err(EngineError::Shape(format!(
@@ -602,7 +677,11 @@ pub fn simulate(
     } else if mi > 0 {
         // no inputs given: zero. Allowed.
     }
-    let n_out = if opts.record_outputs { m.outputs.len() } else { 0 };
+    let n_out = if opts.record_outputs {
+        m.outputs.len()
+    } else {
+        0
+    };
     let n_t = t.len();
     let mut traj = Trajectory {
         t: t.to_vec(),
@@ -724,7 +803,8 @@ mod tests {
         let t: Vec<f64> = (0..=100).map(|i| i as f64 * 0.01).collect();
         let exact = (-1.0f64).exp();
         for method in [Method::Euler, Method::Rk4, Method::Rk45, Method::Midpoint] {
-            let tr = simulate(&m, &[1.0], &t, &Inputs::none(), method, &Options::default()).unwrap();
+            let tr =
+                simulate(&m, &[1.0], &t, &Inputs::none(), method, &Options::default()).unwrap();
             let last = tr.x[tr.x.len() - 1];
             let tol = match method {
                 Method::Euler => 1e-2,
@@ -739,7 +819,15 @@ mod tests {
     fn energy_never_rises_with_midpoint() {
         let m = decay();
         let t: Vec<f64> = (0..=50).map(|i| i as f64 * 0.1).collect();
-        let tr = simulate(&m, &[1.0], &t, &Inputs::none(), Method::Midpoint, &Options::default()).unwrap();
+        let tr = simulate(
+            &m,
+            &[1.0],
+            &t,
+            &Inputs::none(),
+            Method::Midpoint,
+            &Options::default(),
+        )
+        .unwrap();
         for k in 1..tr.energy.len() {
             assert!(tr.energy[k] <= tr.energy[k - 1] + 1e-15);
         }
@@ -748,6 +836,14 @@ mod tests {
     #[test]
     fn rejects_bad_grid() {
         let m = decay();
-        assert!(simulate(&m, &[1.0], &[0.0, 0.0], &Inputs::none(), Method::Rk4, &Options::default()).is_err());
+        assert!(simulate(
+            &m,
+            &[1.0],
+            &[0.0, 0.0],
+            &Inputs::none(),
+            Method::Rk4,
+            &Options::default()
+        )
+        .is_err());
     }
 }

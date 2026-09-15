@@ -1,9 +1,23 @@
-# Model — `otwin.model`
+# The advanced API: `otwin.model`
 
-The asset, written as an energy balance. The theory is in
-[Port-Hamiltonian systems](../concepts/port-hamiltonian.md) and
-[Irreversible systems](../concepts/irreversible.md); this page is how to get one
-built and running.
+Everything the compiler produces you can also write by hand. This is the layer
+for physics the component library does not cover yet: an entropy-carrying
+reactor, a model you have from a paper as four matrices, a right-hand side you
+want to hand to the runtime as it is. It is supported and it is not going
+anywhere; it is also not where a new user should start. Start with
+[Modelling](modelling.md) and come here when no component fits.
+
+Two bridges connect the layers. A hand-written system satisfies
+`TwinModel`, so the estimators and forecast protocols take it directly.
+`otwin.CustomDynamics.from_phs(system)` gives it the compiled model's
+`simulate`, `step` and `Trajectory` surface. And every catalogue function below
+has a component twin in `otwin.components.catalogue` that reproduces it to
+1e-8, which is the fastest way to see how a hand-written model maps onto
+components.
+
+The theory is in [Port-Hamiltonian systems](../concepts/port-hamiltonian.md)
+and [Irreversible systems](../concepts/irreversible.md); this page is how to
+get one built and running.
 
 ## Start from the catalogue
 

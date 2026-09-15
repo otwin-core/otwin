@@ -77,18 +77,24 @@ impl Model {
             .map(|x| x.as_f64().unwrap_or(f64::NAN))
             .collect();
         if params.len() != n_params {
-            return Err(EngineError::Malformed("param_values length differs from n_params".into()));
+            return Err(EngineError::Malformed(
+                "param_values length differs from n_params".into(),
+            ));
         }
         let rhs = programs(v.get("rhs"), "rhs")?;
         if rhs.len() != n_states {
-            return Err(EngineError::Malformed("rhs length differs from n_states".into()));
+            return Err(EngineError::Malformed(
+                "rhs length differs from n_states".into(),
+            ));
         }
         let jacobian = match v.get("jacobian") {
             Some(Value::Null) | None => None,
             Some(j) => {
                 let progs = programs(Some(j), "jacobian")?;
                 if progs.len() != n_states * n_states {
-                    return Err(EngineError::Malformed("jacobian is not n_states^2 long".into()));
+                    return Err(EngineError::Malformed(
+                        "jacobian is not n_states^2 long".into(),
+                    ));
                 }
                 Some(progs)
             }
@@ -110,7 +116,9 @@ impl Model {
             Some(p) => programs(Some(p), "port_values")?,
         };
         if port_values.len() != port_outputs.len() {
-            return Err(EngineError::Malformed("port_values and port_outputs differ in length".into()));
+            return Err(EngineError::Malformed(
+                "port_values and port_outputs differ in length".into(),
+            ));
         }
         let outputs = match v.get("outputs") {
             Some(Value::Null) | None => Vec::new(),
@@ -119,10 +127,16 @@ impl Model {
         let output_names: Vec<String> = v
             .get("output_names")
             .and_then(Value::as_array)
-            .map(|a| a.iter().map(|s| s.as_str().unwrap_or("").to_string()).collect())
+            .map(|a| {
+                a.iter()
+                    .map(|s| s.as_str().unwrap_or("").to_string())
+                    .collect()
+            })
             .unwrap_or_default();
         if output_names.len() != outputs.len() {
-            return Err(EngineError::Malformed("output_names and outputs differ in length".into()));
+            return Err(EngineError::Malformed(
+                "output_names and outputs differ in length".into(),
+            ));
         }
         let model = Model {
             n_states,
@@ -256,7 +270,10 @@ impl Model {
         let mut s = Scratch::for_model(self);
         let zeros = vec![0.0; self.n_inputs];
         self.fill_env(x, &zeros, 0.0, &mut s.env);
-        self.grad_h.iter().map(|p| p.eval(&s.env, &mut s.stack)).collect()
+        self.grad_h
+            .iter()
+            .map(|p| p.eval(&s.env, &mut s.stack))
+            .collect()
     }
 
     pub fn outputs_into(&self, x: &[f64], u: &[f64], t: f64, out: &mut [f64], s: &mut Scratch) {
@@ -278,7 +295,10 @@ impl Model {
     pub fn port_outputs(&self, x: &[f64], u: &[f64], t: f64) -> Vec<f64> {
         let mut s = Scratch::for_model(self);
         self.fill_env(x, u, t, &mut s.env);
-        self.port_outputs.iter().map(|p| p.eval(&s.env, &mut s.stack)).collect()
+        self.port_outputs
+            .iter()
+            .map(|p| p.eval(&s.env, &mut s.stack))
+            .collect()
     }
 
     /// Power entering through all ports, `sum_k y_k u_k`.
