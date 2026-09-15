@@ -421,7 +421,7 @@ def _pin_potentials(ctx: _Ctx) -> list[tuple[Expr, list[_Node]]]:
                 used.add(id(p))
                 other = p.node_b if p.node_a is n else p.node_a
                 if other in visited:
-                    raise CompileError(_dependent_message(p, adj))
+                    raise CompileError(_dependent_message(p, n, other, ctx))
                 sign = 1.0 if p.node_a is n else -1.0
                 # potential(a) - potential(b) = across
                 ctx.potentials[other] = (
@@ -446,17 +446,32 @@ def _pin_potentials(ctx: _Ctx) -> list[tuple[Expr, list[_Node]]]:
     return unknowns
 
 
-def _dependent_message(p: _Pin, adj: dict[_Node, list[_Pin]]) -> str:
-    involved = sorted(
-        {q.branch.component.name for node in (p.node_a, p.node_b) for q in adj[node]}
-    )
-    what = ", ".join(involved)
+def _dependent_message(p: _Pin, n: _Node, other: _Node, ctx: _Ctx) -> str:
+    """Name the storages and sources on the loop closed by pin ``p``."""
+
+    def chain(node: _Node) -> list[str]:
+        out: list[str] = []
+        seen: set[int] = set()
+        while node in ctx.pin_parent and id(node) not in seen:
+            seen.add(id(node))
+            pin = ctx.pin_parent[node]
+            out.append(pin.branch.component.name)
+            node = pin.node_b if pin.node_a is node else pin.node_a
+        return out
+
+    a, b = chain(n), chain(other)
+    # drop the common tail (the part of both chains above the loop)
+    while a and b and a[-1] == b[-1]:
+        a.pop()
+        b.pop()
+    involved = [p.branch.component.name, *a, *b]
+    what = ", ".join(dict.fromkeys(involved))
     return (
-        f"dependent storages or sources: {what} form a loop that fixes the same potential twice. "
-        "Two capacitors in parallel, two masses rigidly joined, a voltage source "
-        "across a capacitor or a tank connected straight to a pressure source all "
-        "do this. Merge the two stores into one, or put a resistor, pipe or damper "
-        "between them."
+        f"dependent storages or sources: {what} form a loop that fixes the same "
+        "potential twice. Two capacitors in parallel, two inertias on one shaft, two "
+        "masses rigidly joined, a voltage source across a capacitor or a tank connected "
+        "straight to a pressure source all do this. Merge the two stores into one, or "
+        "put a resistor, pipe, damper or a stiff spring between them."
     )
 
 

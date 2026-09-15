@@ -1,5 +1,14 @@
 # Port-Hamiltonian systems
 
+:::{note}
+Since otwin 1.0 the port-Hamiltonian form is **one of the internal
+representations used by the engine**. The compiler writes $H$, $J$, $R$ and
+$G$ from the components you connect; you read them through `model.ir()` and
+`model.structure()` and you write them yourself only in the
+[advanced API](../guides/model.md). This page explains the form itself and why
+it is the one the compiler targets.
+:::
+
 A port-Hamiltonian system (PHS) writes a physical asset as an energy balance
 rather than as a curve through data. The payoff is a guarantee that holds
 *outside* the range you fitted on, which is precisely where a fitted curve

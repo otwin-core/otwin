@@ -1,176 +1,156 @@
 # Quickstart
 
-Three things, in the order you would actually do them: model an asset, forecast
-its degradation with an honest interval, and let the twin decide whether it is
-entitled to answer.
+Four things, in the order you would actually do them: describe an asset and
+compile it, run it, estimate its state from a noisy sensor, and let the twin
+decide whether it is entitled to answer.
 
-Every block below runs as written. There is no data file — the fade series is
-synthetic so that this page is self-contained.
+Every block below runs as written. There is no data file; the measurements are
+synthesised so that this page is self-contained.
 
-## 1. A model that obeys physics
+## 1. Describe the asset and compile it
 
-{func}`~otwin.model.pumped_hydro` returns a two-reservoir store as a
-port-Hamiltonian system: water is moved between reservoirs through a reversible
-pump-turbine, and the stored energy is gravitational potential energy.
+An electric drive: a voltage supply, a DC motor, and a fan on the shaft whose
+torque grows with the square of the speed. You say what exists and what touches
+what. You do not write an equation.
 
 ```python
 import numpy as np
 import otwin
-from otwin.model import integrate_phs, pumped_hydro
+from otwin.components.electrical import VoltageSource, Ground
+from otwin.components.composite import DCMotor
+from otwin.components.rotational import RotationalDamper, Housing
 
-plant = pumped_hydro()
+supply = VoltageSource(None, name="supply")          # None: an input we will choose later
+motor = DCMotor(resistance=1.0, inductance=0.5, torque_constant=0.5,
+                inertia=0.01, friction=0.1, name="motor")
+fan = RotationalDamper(law=lambda w: 0.002 * w * abs(w), name="fan")   # a nonlinear load
+gnd, housing = Ground(), Housing()
 
-x0 = np.array([2.0e6, 8.0e6])          # upper, lower reservoir volumes (m³)
-t = np.linspace(0.0, 3600.0, 361)      # one hour, 10 s steps
-u = np.full((t.size, 1), 50.0)         # pump 50 m³/s upward for the whole hour
+drive = otwin.System(supply, motor, fan, gnd, housing, name="drive")
+drive.connect(supply.p, motor.p)
+drive.connect(supply.n, motor.n, gnd.terminal)
+drive.connect(motor.shaft, fan.a)
+drive.connect(fan.b, housing.terminal)
 
-result = integrate_phs(plant, x0, t, u=u)
-
-H = np.array([plant.energy(x) for x in result["x"]])
-print(f"stored energy rose by {(H[-1] - H[0]) / H[0]:.1%}")
+model = otwin.compile(drive)
+print(model.state_names)
+print(model.input_names)
 ```
 
 ```text
-stored energy rose by 9.5%
+['motor.armature.flux', 'motor.rotor.angular_momentum']
+['supply']
 ```
 
-The integrator is implicit midpoint with an analytic Jacobian, chosen because it
-preserves the discrete power balance rather than merely approximating the
-trajectory. Turn the pump off and the energy cannot rise — not because the
-solver is accurate, but because the structure forbids it. That guarantee is what
-survives outside the data you fitted on.
+The compiler found two energy stores, the armature inductance and the rotor,
+and made them the states. The source left at `None` became the model's one
+input. `model.summary()` prints all of it with units; `model.structure()` gives
+the matrices of the port-Hamiltonian form the compiler derived, if you want to
+see them. See [Components](concepts/components.md) and
+[Compilation](concepts/compilation.md) for what happened in between.
 
-`result` also carries `t`, the realised port trajectory `u`, and the solver's
-own diagnostics (`success`, `n_newton_iter`, `n_feval`, `message`).
-
-:::{tip}
-`u` is either an `(n_points, n_inputs)` trajectory or a **port law**
-`u(t, x) -> u` for a state-dependent port — a converter holding constant power,
-a thermostat, a droop control. A bare `(n_inputs,)` array is not a constant
-input; it is read as a one-step schedule.
-:::
-
-## 2. A forecast with an interval you can defend
-
-The trap here is worth stating before the code. It is tempting to take the
-fitted model's own in-sample residuals and quantile them. That is not a smaller
-version of the right thing, it is a different quantity: a model that
-interpolates its training data has in-sample residuals an order of magnitude
-smaller than its h-step-ahead errors. Measured on a lithium-ion capacity twin,
-that shortcut delivered **1.5 % coverage at a 90 % target**.
-
-{func}`~otwin.forecast.rolling_origin_residuals` exists to make the honest thing
-the easy thing. It refits the whole pipeline at earlier origins *inside* the
-training window and collects genuine h-step-ahead errors.
+## 2. Run it
 
 ```python
-from otwin.forecast import horizon_conformal, rolling_origin_residuals
-
-rng = np.random.default_rng(0)
-k = np.arange(600)
-capacity = 1.0 - 0.00025 * k - 0.00000012 * k**2 + rng.normal(0, 0.0015, k.size)
-
-def refit_forecast(history, horizon):
-    """Refit the fade law on `history` alone and project `horizon` steps."""
-    idx = np.arange(history.size)
-    coeffs = np.polyfit(idx[-200:], history[-200:], 2)
-    return np.polyval(coeffs, np.arange(history.size, history.size + horizon))
-
-residuals, horizons = rolling_origin_residuals(
-    refit_forecast, capacity, step=10, max_horizon=60
-)
-print(f"{residuals.size} residuals over horizons {horizons.min()}–{horizons.max()}")
-
-band = horizon_conformal(residuals, horizons, level=0.9, max_horizon=90)
-print(f"half-width at h=1:  {band.half_width[0]:.5f}")
-print(f"half-width at h=60: {band.half_width[59]:.5f}")
-print(f"extrapolated beyond h={int(np.argmax(band.extrapolated)) + 1}")
+t = np.linspace(0.0, 3.0, 3001)
+run = model.simulate(t=t, inputs={"supply": 24.0})
+print(f"speed after 3 s: {run['motor.rotor.angular_velocity'][-1]:.2f} rad/s")
+print(f"largest energy-balance violation over {run.stats['steps']} steps: "
+      f"{run.energy_balance()['max_violation']:.1e} J")
 ```
 
 ```text
-2250 residuals over horizons 1–60
-half-width at h=1:  0.00230
-half-width at h=60: 0.00272
-extrapolated beyond h=61
+speed after 3 s: 29.36 rad/s
+largest energy-balance violation over 3000 steps: 0.0e+00 J
 ```
 
-The band widens with the horizon because forecast error does, and
-{attr}`~otwin.forecast.ConformalBand.extrapolated` marks the steps no
-calibration residual ever reached. Those steps are a fitted growth law, not a
-conformal guarantee, and the object says so rather than letting you assume
-otherwise.
+Three thousand implicit steps of a nonlinear two-domain model, in the engine,
+in a few milliseconds. The trajectory is indexed by name: every state, every
+input, and every derived quantity the compiler produced (`fan.torque`,
+`supply.power`, `motor.bearing.power`, ...) is in `run.keys()`.
 
-Use {func}`~otwin.forecast.split_conformal` instead when one half-width for
-every horizon is genuinely right — a stationary error process, not a
-degradation forecast.
+The second line is the property the structure buys. The default solver is the
+implicit midpoint rule, which preserves the discrete power balance: stored
+energy changes only by what the supply delivers and what the resistances and
+dampers remove. Not approximately, and not because the tolerance is tight.
 
-## 3. A twin that knows what it does not know
+:::{tip}
+`inputs` takes a number, an array over the grid, a function of time, or a
+feedback law. For a law that reads the state, write it as an expression over
+`model.symbol(...)` and the compiler folds it into the model so the solver
+evaluates it at every stage. See [Simulation](guides/simulate.md).
+:::
 
-Everything above is a claim. {class}`~otwin.advise.Envelope` is what turns those
-claims into a decision, by reading the record the twin carries with it.
+## 3. Estimate the state from a noisy sensor
+
+A compiled model is a `TwinModel`: it has `rhs` and `observe`. Tell it which
+output the sensor reads and hand it to an estimator.
+
+```python
+from otwin.estimate import ExtendedKalmanFilter
+
+model.measurements = ["motor.rotor.angular_velocity"]      # a tachometer
+
+rng = np.random.default_rng(0)
+every = slice(None, None, 10)                              # a 100 Hz sensor
+ts, truth = t[every], run.x[every]
+ys = truth[:, 1:2] / 0.01 + rng.normal(0, 2.0, (ts.size, 1))   # speed = momentum / inertia, plus noise
+us = np.full((ts.size, 1), 24.0)
+
+ekf = ExtendedKalmanFilter(model, Q=np.diag([1e-4, 1e-4]), R_meas=np.array([[4.0]]),
+                           P0=np.eye(2), x0=np.zeros(2))
+res = ekf.filter(ys, us, ts)
+
+err_meas = np.sqrt(np.mean((ys[:, 0] - truth[:, 1] / 0.01) ** 2))
+err_ekf = np.sqrt(np.mean((res.x[:, 1] / 0.01 - truth[:, 1] / 0.01) ** 2))
+print(f"speed error: sensor {err_meas:.2f} rad/s, filtered {err_ekf:.2f} rad/s")
+```
+
+```text
+speed error: sensor 2.04 rad/s, filtered 0.80 rad/s
+```
+
+The filter also recovers the armature current, which nobody measured. See
+[Estimate](guides/estimate.md) for the bounded and the energy-consistent
+estimators.
+
+## 4. Let the twin decide what it may answer
+
+A {class}`~otwin.interfaces.TwinManifest` records what the model is and how it
+was validated. An {class}`~otwin.advise.Envelope` turns that record into an
+answer or a refusal. `model.manifest()` starts the record for a compiled model.
 
 ```python
 from otwin.advise import Envelope
-from otwin.interfaces import Provenance, TwinManifest
+from otwin.interfaces import TwinManifest
 
-manifest = TwinManifest(
-    name="cell-A12 capacity twin",
-    model_class="empirical_law",
-    model_kind="grey_box",
-    n_states=1,
-    n_inputs=0,
-    provenance=Provenance(
-        created="2026-08-22T10:00:00Z",
-        otwin_version=otwin.__version__,
-        script="docs/quickstart.md",
-        seed=0,
-        data_source="synthetic capacity fade",
-    ),
-    validation=TwinManifest.validated_by(protocol="rolling_origin", horizon=60),
-    calibration=TwinManifest.calibrated_by(
-        method="horizon_conformal", level=0.9, empirical_coverage=0.91
-    ),
-)
+manifest = model.manifest("drive-01")
+manifest = TwinManifest.from_dict({
+    **manifest.to_dict(),
+    "validation": TwinManifest.validated_by("rolling_origin", rmse=0.05, skill_score=0.6),
+})
+envelope = Envelope(state_bounds=[(0.0, 20.0), (0.0, 1.0)], max_horizon=600)
 
-envelope = Envelope(
-    state_bounds=[(0.70, 1.02)],   # the capacity range it was identified over
-    max_horizon=60,               # the horizon it was validated to
-    max_extrapolation=0.0,
-)
-
-for state, horizon in [(0.92, 30), (0.92, 90), (0.55, 30)]:
-    verdict = envelope.check(
-        state=np.array([state]), horizon=horizon,
-        manifest=manifest, wants_interval=True,
-    )
-    print(f"state {state}, horizon {horizon:>2} -> {bool(verdict)}")
-    for breach in verdict.breaches:
-        print(f"    {breach}")
+print(envelope.check(state=[5.0, 0.3], horizon=300, manifest=manifest).explain())
+print(envelope.check(state=[5.0, 0.3], horizon=3000, manifest=manifest).explain())
 ```
 
 ```text
-state 0.92, horizon 30 -> True
-state 0.92, horizon 90 -> False
-    horizon: beyond the validated forecast horizon (asked for 90, validated to 60)
-state 0.55, horizon 30 -> False
-    state: state 0 below the identified range (asked for 0.55, validated to 0.7)
+inside the validated envelope (horizon 300 <= 600; operating point inside the identified range; validated, leakage-free)
+outside the validated envelope:
+  - horizon: beyond the validated forecast horizon (asked for 3000, validated to 600)
+
+This is a refusal, not a failure. The twin has not been shown to answer this question, and returning a number anyway would hide that.
 ```
 
-A {class}`~otwin.advise.Verdict` is truthy when the question can be answered and
-carries a {class}`~otwin.advise.Breach` per reason when it cannot. Note what
-`max_extrapolation=0.0` bought: the 90-step request was refused even though the
-band object would happily have returned a half-width for it, because those steps
-were extrapolated rather than calibrated.
+The `validated_by` record here is stated, not computed, so that the page stays
+self-contained. In practice it comes from {func}`~otwin.forecast.evaluate`, and
+the band from a conformal calibration; see [Forecast](guides/forecast.md) and
+[Advise](guides/advise.md).
 
-An absent record is a refusal, not a pass. A twin with no `state_bounds` does not
-get a clean verdict for a state of charge of 1e12.
+## Where next
 
-## Where to go next
-
-- [Port-Hamiltonian systems](concepts/port-hamiltonian.md) — the structure, and
-  why passivity is the point
-- [Leakage-free evaluation](concepts/leakage.md) — what
-  {func}`~otwin.forecast.evaluate` refuses to do for you
-- [Calibrated intervals](concepts/conformal.md) — the three constructions and
-  when each is right
-- [Guides](guides/index.md) — one page per ISO 13374 block
+- [Modelling](guides/modelling.md): every domain, with the component to use for each physical element.
+- [Grey-box models](guides/greybox.md): add what the physics leaves out, and fit its coefficients from data.
+- [Compilation](concepts/compilation.md): what the compiler does, and how to read a model that surprised you.
+- [The advanced API](guides/model.md): writing `H`, `J`, `R`, `g` yourself when no component fits.
