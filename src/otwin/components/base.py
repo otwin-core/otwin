@@ -31,6 +31,7 @@ branches from :meth:`Component.branches`. See ``docs/developer/components.md``.
 from __future__ import annotations
 
 import itertools
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
@@ -104,7 +105,7 @@ class Parameter:
 
     def validate(self, owner: str) -> None:
         v = self.value
-        if v != v:
+        if math.isnan(v):
             raise ValueError(f"{owner}.{self.name} is NaN")
         if self.positive and not v > 0:
             raise ValueError(

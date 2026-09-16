@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import math
 import struct
 import time
 from collections.abc import Iterable, Sequence
@@ -205,7 +206,7 @@ def decode_point(words: Sequence[int], ptype: str) -> float | None:
         return None
     value = struct.unpack(fmt, _to_bytes(words))[0]
     if ptype == "float32":
-        return None if value != value else float(value)  # NaN means not implemented
+        return None if math.isnan(value) else float(value)  # NaN means not implemented
     if sentinel is not None and value == sentinel:
         return None
     return float(value)

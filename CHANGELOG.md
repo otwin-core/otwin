@@ -10,7 +10,15 @@ version in anything you depend on.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- CodeQL quality findings: NaN checks use `math.isnan`; `Expr` defines
+  `<=`/`>=` alongside `<`/`>`; the chord-Newton retry is an explicit
+  `retried` flag instead of an unused loop variable;
+  `ExtendedKalmanFilter.__init__` calls its own `reset`, not a subclass's;
+  torch-backed names leave `otwin.model.__all__` (still reachable as
+  attributes and in `dir()`, so `import *` never needs torch); two tests
+  lose an `if False` toggle.
 
 ## [1.0.0] — 2026-09-15
 

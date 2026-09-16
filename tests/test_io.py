@@ -569,7 +569,8 @@ def test_sources_and_simulators_satisfy_the_source_protocol(
     sunspec = SunSpecSource(transport=SunSpecSimulator(soc=0.5))
     assert isinstance(src, Source)
     assert isinstance(sunspec, Source)
-    assert not issubclass(type(src), Source.__mro__[1]) if False else True
+    assert Source not in type(src).__mro__
+    assert Source not in type(sunspec).__mro__
 
     for source in (src, sunspec):
         sample = source.read()
