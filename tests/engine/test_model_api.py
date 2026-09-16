@@ -25,11 +25,7 @@ def test_parameters_change_without_recompiling(backend):
     m.set_parameters({"spring.stiffness": 40.0})
     tr2 = m.simulate(t_span=(0, 1), dt=0.01)
     assert not np.allclose(tr1.x, tr2.x)
-    m2 = (
-        m.with_parameters(stiffness=20.0)
-        if False
-        else m.with_parameters({"spring.stiffness": 20.0})
-    )
+    m2 = m.with_parameters({"spring.stiffness": 20.0})
     assert np.allclose(m2.simulate(t_span=(0, 1), dt=0.01).x, tr1.x)
     with pytest.raises(KeyError, match="spring.stiffness"):
         m.set_parameters(stiffness=1.0)

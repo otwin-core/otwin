@@ -161,6 +161,13 @@ class Expr:
     def __lt__(self, other: Any) -> Expr:
         return _binary("gt", as_expr(other), self)
 
+    # Comparisons evaluate to 1.0 or 0.0, so "a >= b" is "not (b > a)".
+    def __ge__(self, other: Any) -> Expr:
+        return _binary("sub", as_expr(1.0), _binary("gt", as_expr(other), self))
+
+    def __le__(self, other: Any) -> Expr:
+        return _binary("sub", as_expr(1.0), _binary("gt", self, as_expr(other)))
+
     # ------------------------------------------------------------- analysis
     def symbols(self) -> set[Expr]:
         """Every symbol that appears in the tree."""

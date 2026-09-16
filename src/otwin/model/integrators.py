@@ -464,8 +464,8 @@ def _cached_newton(
         ``(result, cache_for_the_next_step, extra_residual_evaluations)``.
     """
     n_feval = 0
-    res: NewtonResult | None = None
-    for _attempt in (0, 1):
+    retried = False
+    while True:
         if cache is None:
             try:
                 cache, extra = build(x_guess)
@@ -492,10 +492,11 @@ def _cached_newton(
             # matrix has drifted; rebuild it before the next one.
             drifted = res.iterations > _JAC_REFRESH_ITERS
             return res, (None if drifted else cache), n_feval
-        cache = None  # stale iteration matrix suspected: rebuild and retry once
-
-    assert res is not None
-    return res, None, n_feval
+        if retried:
+            return res, None, n_feval
+        # Stale iteration matrix suspected: rebuild it and retry exactly once.
+        retried = True
+        cache = None
 
 
 def _fd_solve_builder(

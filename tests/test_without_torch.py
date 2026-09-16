@@ -28,11 +28,10 @@ def test_import_is_cheap_and_does_not_pull_torch() -> None:
 
 
 def test_public_names_are_declared() -> None:
-    assert set(otwin_learn.__all__) >= {
-        "PortHamiltonianNN",
-        "derivative_loss",
-        "passivity_penalty",
-    }
+    lazy = {"PortHamiltonianNN", "derivative_loss", "passivity_penalty"}
+    # Kept out of __all__ so `import *` never needs torch; visible to dir().
+    assert not lazy & set(otwin_learn.__all__)
+    assert lazy <= set(dir(otwin_learn))
 
 
 def test_unknown_attribute_raises_attribute_error_not_import_error() -> None:

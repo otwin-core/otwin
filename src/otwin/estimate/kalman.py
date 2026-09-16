@@ -311,7 +311,9 @@ class ExtendedKalmanFilter:
         )
         self.jac_f = jac_f
         self.jac_h = jac_h
-        self.reset()
+        # The base implementation on purpose: a subclass's reset() may touch
+        # attributes that its own __init__ has not set yet at this point.
+        ExtendedKalmanFilter.reset(self)
 
     # Exposed as a static method so subclasses and sibling estimators can reuse
     # the exact same differencing scheme rather than inventing a second one.

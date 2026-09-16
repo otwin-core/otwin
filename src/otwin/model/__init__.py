@@ -58,11 +58,11 @@ __all__ = [
     "check_skew_symmetric",
     "check_psd",
     "numerical_gradient",
-    # Torch-backed, imported lazily by __getattr__ below.
-    "PortHamiltonianNN",
-    "derivative_loss",
-    "passivity_penalty",
 ]
+
+# Torch-backed objects. They are attributes of this module, imported on first
+# access by __getattr__ below, but they are kept out of __all__ on purpose:
+# `from otwin.model import *` must not require PyTorch.
 
 from otwin import __version__ as __version__  # noqa: E402  (deliberate re-export)
 
@@ -97,4 +97,4 @@ def __getattr__(name):
 
 
 def __dir__():
-    return sorted(__all__)
+    return sorted([*__all__, *_LAZY])
