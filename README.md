@@ -22,6 +22,10 @@ Build physically consistent models from components and connections, compile them
 [![REUSE status](https://api.reuse.software/badge/github.com/otwin-core/otwin)](https://api.reuse.software/info/github.com/otwin-core/otwin)
 [![SLSA 2](https://slsa.dev/images/gh-badge-level2.svg)](https://github.com/otwin-core/otwin/attestations)
 
+[![REUSE status](https://api.reuse.software/badge/github.com/otwin-core/otwin)](https://api.reuse.software/info/github.com/otwin-core/otwin)
+[![SLSA 2](https://slsa.dev/images/gh-badge-level2.svg)](https://github.com/otwin-core/otwin/attestations)
+
+<img src="https://cdn.brandfetch.io/idGhRgxsDX/theme/dark/symbol.svg?c=1dxbfHSJFAPEGdCLU4o5B"  width="3%">
 
 
 </div>
