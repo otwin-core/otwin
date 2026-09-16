@@ -54,10 +54,17 @@ Build physically consistent models from components and connections, compile them
 **Otwin is an open-source physics engine and Digital Twin framework for real engineering systems.** You describe a physical system as components and connections — the same way you would draw the system. Otwin compiles that description into a physically consistent dynamical model, runs it in a high-performance Rust engine, and provides the tools needed to keep that model synchronized with a real asset.
 
 ```mermaid
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
 flowchart LR
-    A["Physical asset"] -->|"measurements"| B["Otwin"]
-    
-    subgraph B["Otwin"]
+ subgraph B["Otwin"]
         C["Physics model"]
         D["State estimation"]
         E["Calibration"]
@@ -65,16 +72,16 @@ flowchart LR
         G["Forecasting"]
         H["Uncertainty"]
         I["Validation"]
-        
-        C --> D --> E --> F --> G --> H --> I
-    end
-    
+  end
+    A["Physical asset"] -- measurements --> B
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    H --> I
     B --> J["Digital Twin"]
-    J --> K["Simulate"]
-    J --> L["Predict"]
-    J --> M["Validate"]
-    J --> N["Decide"]
-    J --> O["Refuse when outside the evidence"]
+    J --> K["Simulate"] & L["Predict"] & M["Validate"] & N["Decide"] & O["Refuse when outside the evidence"]
 ```
 
 A Digital Twin is a model of **one particular physical asset** — a machine, pump, battery bank, heat exchanger, or complete process — kept up to date from that asset's own measurements and run forward to support decisions about it.
@@ -104,19 +111,27 @@ Engineering systems are neither purely physical nor purely data-driven. You usua
 Otwin connects:
 
 ```mermaid
-flowchart TB
-    A["Physical system"] --> B["Physics model"] --> C["Compiled dynamics"] --> D["Real measurements"]
-    E["State & parameter estimation"] --> F["Hybrid physics/data model"] --> G["Forecast"] --> H["Uncertainty"] --> I["Validation"] --> J["Validated Digital Twin"]
-
-    D --> E
-
-    A ~~~ E
-    B ~~~ F
-    C ~~~ G
-    D ~~~ H
+---
+config:
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+    fontSize: 13px
+  flowchart:
+    nodeSpacing: 22
+    rankSpacing: 18
+    padding: 10
+    curve: linear
+  layout: fixed
+---
+flowchart LR
+    A["Physical system"] --> B["Physics model<br/>compiled dynamics"]
+    B --> C["Real measurements<br/>state & parameter estimation"]
+    C --> D["Physics + data<br/>hybrid model"]
+    D --> E["Validated Digital Twin<br/>forecast · uncertainty · validation"]
 ```
 
-<br>
 
 ## Install
 
@@ -200,23 +215,29 @@ Final position: q = 0.477 m
 Largest energy violation: 0.0e+00 J
 ```
 
-Three things to read off those lines.
-
 - The mass settles at $q^* = mg/k$, below the natural length. Nobody wrote Newton's law; the compiler derived it from the components and connections.
 
 - The compiled model is an energy-based system: stored energy can change only by what the ports supply and what the dampers remove. The energy balance is therefore part of the physical model.
 
 - `model.summary()` tells you what the compiler built: states with their units, parameters, constant sources and representation. `model.structure()` gives the matrices. `model.ir()` exposes the internal representation.
 
-You can look.
-
-You do not have to.
-
 <br>
 
 ## How it works
+Otwin compiles the physical graph into executable differential equations. Every connection is a node where the across variable is shared (voltage, velocity, pressure, temperature). The through variables balance at the node (current, force, flow, heat flow).
+Storage elements define how energy is stored, dissipative elements define losses, sources provide inputs, and two-ports couple different physical domains.
 
 ```mermaid
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
 flowchart TD
     A["Physical system<br/>components · terminals · connections · parameters"]
     B["otwin.System<br/>domain-checked component graph"]
@@ -229,22 +250,21 @@ flowchart TD
     A --> B --> C --> D --> E --> F --> G
 ```
 
-Otwin compiles the physical graph into executable differential equations. Every connection is a node where the across variable is shared (voltage, velocity, pressure, temperature). The through variables balance at the node (current, force, flow, heat flow).
-Storage elements define how energy is stored, dissipative elements define losses, sources provide inputs, and two-ports couple different physical domains. The resulting dynamics are expressed in port-Hamiltonian form:
+The resulting dynamics are expressed in port-Hamiltonian form:
 
 $$ \dot{x} = \big(J(x)-R(x)\big)\nabla H(x) + G(x)u $$
 
-where: \(H(x)\) is the stored energy, \(J(x)\) describes energy exchange between components, \(R(x)\) represents dissipation, and \(u\) represents external inputs The port output is:
+where $H(x)$ is the stored energy, $J(x)$ describes energy exchange between components, $R(x)$ represents dissipation, and $u$ represents external inputs The port output is:
 
 $$ y = G(x)^\top\nabla H(x) + D(x)u $$
 
-Otwin builds \(J\) as skew-symmetric, so it represents energy exchange rather than energy creation or destruction. Dissipative effects are represented explicitly through \(R\). This makes the energy structure a property of the model itself, rather than something the numerical solver has to preserve by chance.
+Otwin builds $J$ as skew-symmetric, so it represents energy exchange rather than energy creation or destruction. Dissipative effects are represented explicitly through $R$. This makes the energy structure a property of the model itself, rather than something the numerical solver has to preserve by chance.
 
-The port-Hamiltonian representation is an internal representation of the compiled model. You can inspect it with model.ir(), but you never have to write it yourself.
+The port-Hamiltonian representation is an internal representation of the compiled model. You can inspect it with `model.ir()`, but you don't have to write it yourself.
 
 ### Errors are expressed in the language of components
 
-Errors come out before anything is simulated:
+Errors come out before the simulaion:
 
 ```text
 CompileError: dependent storages or sources: load, motor.rotor form a loop that fixes the
@@ -254,17 +274,24 @@ pressure source all do this. Merge the two stores into one, or put a resistor, p
 damper or a stiff spring between them.
 ```
 
-This is important for an engineering modelling tool: **the compiler should catch physically invalid topologies before the numerical solver ever sees them.**
-
+#### The compiler detects physically invalid topologies before the numerical solver ever sees them.
 <br>
 
 ## The physics engine
 
-Otwin is built around a **model compiler and dynamics engine**, not simply a collection of forecasting utilities.
-
-The core workflow is:
+Otwin is built around a **model compiler and dynamics engine**. The core workflow is:
 
 ```mermaid
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
 flowchart LR
     A["Components"] --> E["Otwin compiler"]
     B["Connections"] --> E
@@ -282,15 +309,13 @@ flowchart LR
     I --> M["Validation"]
 ```
 
-The Python layer is where you describe and operate the model.
-
-The Rust layer is where the compiled dynamics run.
+#### Compiled dynamics run in the Rust layer, and the Python layer is where you describe and operate the model.
 
 <br>
 
 ## Components
 
-Otwin provides physical component primitives across multiple domains.
+Otwin provides physical component primitives across diverse domains (see [COMPONENTS.md](https://github.com/otwin-core/otwin/blob/7f66a244b07547adb9cfca68b26241acc1989692/COMPONENTS.md)))
 
 | Domain | Across | Through | Components |
 |---|---|---|---|
@@ -311,36 +336,31 @@ RotationalDamper(
     law=lambda w: (c1 + c2*w**2) * w
 )
 ```
-
-Sources with `None` become inputs of the model.
-
-Sources with a value become constant parameters.
-
-Every parameter stays symbolic through compilation, so:
+Sources with `None` become inputs of the model. Sources with a value become constant parameters. Every parameter stays symbolic through compilation, so:
 
 ```python
 model.set_parameters(...)
 ```
 
-changes it without recompiling and allows estimators to fit it.
+changes it without recompiling and allows estimators to fit it. Adding a component means defining **terminals**, **parameters** and a **constitutive law**.
 
-Adding a component means defining:
+<br>
 
-- terminals;
-- parameters;
-- a constitutive law.
+## Multi-domain physics
 
-See [the developer guide](docs/developer/components.md) for a complete example.
-
----
-
-# Multi-domain physics
-
-Real engineering systems rarely belong to one physical domain.
-
-A DC motor, for example, is an electrical circuit coupled to a rotating mechanical shaft.
+Real engineering systems rarely belong to one physical domain. A DC motor, for example, is an electrical circuit coupled to a rotating mechanical shaft.
 
 ```mermaid
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
 flowchart LR
     A["Electrical domain<br/>voltage · current"]
     B["DC Motor<br/>electromechanical coupling"]
@@ -350,15 +370,7 @@ flowchart LR
     A --> B --> C --> D
 ```
 
-`DCMotor` is itself a composite of primitives:
-
-- `Resistor`;
-- `Inductor`;
-- `Transformer`;
-- `Inertia`;
-- `RotationalDamper`.
-
-The compiler sees the physical components and their connections, not a special-case motor equation.
+`DCMotor` is itself a composite of primitives (`Resistor`, `Inductor`, `Transformer`, `Inertia`, `RotationalDamper`). The compiler sees the physical components and their connections, not a special-case motor equation.
 
 ```python
 import otwin
@@ -438,19 +450,16 @@ speed after 3 s: 29.36 rad/s   current: 9.320 A
 electrical power in 223.68 W = copper + bearing + fan 223.68 W at steady state
 ```
 
-The power accounting is exact because quantities such as:
+The power accounting is exact because quantities are outputs derived by the compiler alongside the states.
 
 ```python
 motor.bearing.power
 supply.power
 fan.torque
 ```
+<br>
 
-are outputs derived by the compiler alongside the states.
-
----
-
-# Control laws
+## Control laws
 
 A converter holding constant power, a level valve, a thermostat: sometimes an input depends on the state.
 
@@ -499,15 +508,11 @@ The tank settles below its 1.5 m setpoint because proportional-only control leav
 
 A Python function `f(t, x)` is accepted too. It runs sample-and-hold at the grid rate, which is the right model of a digital controller and the wrong one of a continuous valve.
 
----
+<br>
 
-# Physics + data
+## Physics + data
 
-Not every physical phenomenon is known.
-
-That does not mean the entire model has to become a black box.
-
-Otwin supports three modelling approaches:
+It's very common that equations that model an asset are not known. That does not mean the entire model has to become a black box. Otwin supports three modelling approaches:
 
 <div align="center">
 
@@ -524,6 +529,16 @@ The compiled model is the white box.
 Otwin gives you ways to add what it leaves out without rewriting the physics.
 
 ```mermaid
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
 flowchart LR
     A["Known physics"] --> D["Physics model"]
     B["Unknown parameters"] --> E["Parameter estimation"]
@@ -536,13 +551,11 @@ flowchart LR
     G --> H["Prediction + uncertainty"]
 ```
 
----
+<br>
 
 ## Estimate the missing physics
 
-Suppose the oscillator has quadratic drag that the original model does not know about.
-
-Add one symbolic term with a new parameter and fit it from measurements.
+Suppose the oscillator has quadratic drag that the original model does not know about. We can add one symbolic term with a new parameter and fit it from measurements.
 
 ```python
 import numpy as np
@@ -620,9 +633,9 @@ FitResult(
 
 ---
 
-# Hybrid models
+## Hybrid models
 
-When you cannot name the missing phenomenon, learn the residual instead of replacing the physics.
+When you cannot say what the physics leaves out, do not throw the physics away. Fit a model to the gap between physics and measurements, the residual, and add it on top.
 
 ```python
 otwin.HybridModel(
@@ -631,19 +644,19 @@ otwin.HybridModel(
 )
 ```
 
-The residual can be:
-
-- a Gaussian process;
-- a neural network;
-- another callable model.
-
-The physical model remains the prior structure.
-
-The learned model represents what the physics leaves unexplained.
-
-This creates a practical path from physics to data:
+The residual can be learnt with a Gaussian process (GP), a neural network (NN) or  another callable model. The physical model remains the prior structure. The learned model represents what the physics leaves unexplained. This creates a practical path from physics to data:
 
 ```mermaid
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
 flowchart LR
     A["Known physics"] --> C["Physical model"]
     B["Observed data"] --> D["Residual model"]
@@ -655,9 +668,9 @@ flowchart LR
 
 `otwin.hybrid.residual_data` gives you the training target: what the physics leaves unexplained.
 
----
+<br>
 
-# Custom dynamics
+## Custom dynamics
 
 When a system is outside the component library, you can still use the rest of the Otwin stack.
 
@@ -669,7 +682,7 @@ otwin.CustomDynamics(
 )
 ```
 
-The resulting model exposes the same core interface:
+The resulting model has the same core interface so it can be used with the estimation and forecasting tools.
 
 ```text
 simulate()
@@ -677,18 +690,23 @@ step()
 rhs()
 observe()
 ```
+<br>
 
-so it can be used with the estimation and forecasting tools.
+## From model to Digital Twin
 
----
-
-# From model to Digital Twin
-
-A simulation model becomes a Digital Twin when it is connected to a **specific physical asset**.
-
-The lifecycle is:
+A simulation model becomes a Digital Twin when it is connected to a **specific physical asset**. The lifecycle is:
 
 ```mermaid
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
 flowchart TD
     A["Physical asset"]
     B["Measurements"]
@@ -716,19 +734,13 @@ flowchart TD
     J --> L
 ```
 
-This is the difference between running a simulation and operating a Digital Twin.
+#### This is the difference between running a simulation and operating a Digital Twin. A simulation tells you what the model does. A Digital Twin tells you what the asset is doing — and what the model has earned the right to predict.
 
-**Simulation tells you what the model does.**
+<br>
 
-**A Digital Twin tells you what the asset is doing — and what the model has earned the right to predict.**
+## State estimation
 
----
-
-# State estimation
-
-A compiled model is a `TwinModel`: it has `rhs` and `observe`, and measurements can be mapped directly onto model quantities.
-
-The estimators take it as it is.
+A compiled model is a `TwinModel`: it has `rhs` and `observe`, and measurements can be mapped directly onto model quantities. The estimators take it as it is.
 
 | Estimator | Use it when |
 |---|---|
@@ -736,21 +748,13 @@ The estimators take it as it is.
 | `MovingHorizonEstimator` | The state has physical bounds |
 | `EnergyConsistentObserver` | The correction itself must respect the energy balance |
 
-The moving-horizon estimator accepts **box constraints on the state**.
+The moving-horizon estimator accepts **box constraints on the state**. For example, a state of charge is not allowed to become `1.05` simply because a noisy sensor suggested it. The energy-consistent observer limits corrections so they cannot increase stored energy beyond what the ports supplied.
 
-For example, a state of charge is not allowed to become `1.05` simply because a noisy sensor suggested it.
+<br>
 
-The energy-consistent observer limits corrections so they cannot increase stored energy beyond what the ports supplied.
+## Uncertainty
 
----
-
-# Uncertainty
-
-An interval has meaning if its **coverage has been measured**.
-
-A stated 90% interval should contain the truth about 90% of the time.
-
-Otwin calibrates uncertainty using genuine out-of-sample forecast errors.
+An interval has meaning if its **coverage has been measured**. A stated 90% interval should contain the truth about 90% of the time. Otwin calibrates uncertainty using real out-of-sample forecast errors.
 
 ```python
 import numpy as np
@@ -860,17 +864,13 @@ half-width 0.0023 at h=1, 0.0030 at h=60
 measured coverage: 90% (target 90%)
 ```
 
-The calibration uses rolling-origin errors rather than in-sample residuals.
+The calibration uses rolling-origin errors rather than in-sample residuals. When the calibration set is too small to support the requested confidence level, the library returns an infinite half-width rather than a comfortable-looking interval that has not earned its confidence.
 
-When the calibration set is too small to support the requested confidence level, the library returns an infinite half-width rather than a comfortable-looking interval that has not earned its confidence.
+<br>
 
----
+## Validation
 
-# Validation
-
-A model is not validated simply because it fits historical data.
-
-Its forecasts need to be evaluated out of sample against meaningful reference forecasts.
+A model is not validated because it fits historical data. Its forecasts need to be evaluated out of sample against meaningful reference forecasts.
 
 ```python
 from otwin.forecast import evaluate
@@ -910,32 +910,23 @@ The evaluation protocol is designed to avoid common mistakes:
 - evaluating without a reference forecast;
 - giving the model access to future test observations.
 
-The evaluation leads with the skill score against the hardest of:
+The evaluation leads with the skill score against the hardest of persistence, drift, mean, and seasonal naive.
 
-- persistence;
-- drift;
-- mean;
-- seasonal naive.
+<br>
 
----
+## Identifiability
 
-# Identifiability
-
-A fitted coefficient is not necessarily a determined coefficient.
-
-`otwin.estimate.identifiability` tests each coefficient for:
+A fitted coefficient is not necessarily a determined coefficient. `otwin.estimate.identifiability` tests each coefficient for:
 
 - **collinearity** — can its sensitivity be reproduced by the others?
 - **span** — is the record long enough relative to the fitted time constant?
 - **stability** — does bootstrap resampling produce the same value?
 
-`fit_parameters` runs this analysis on sensitivities at the optimum.
+`fit_parameters` runs this analysis on sensitivities at the optimum. The resulting manifest records the verdicts, and the validation envelope can refuse a prediction when an important parameter is not identifiable.
 
-The resulting manifest records the verdicts, and the validation envelope can refuse a prediction when an important parameter is not identifiable.
+<br>
 
----
-
-# Validity envelopes
+## Validity envelopes
 
 A Digital Twin should know the boundary of its evidence.
 
@@ -945,13 +936,7 @@ A Digital Twin should know the boundary of its evidence.
 model.manifest()
 ```
 
-It records:
-
-- model structure;
-- parameter values;
-- which parameters were estimated;
-- how the model was validated;
-- how uncertainty was calibrated.
+It records the model structure, parameter values, which parameters were estimated, how the model was validated and how uncertainty was calibrated.
 
 `otwin.advise.Envelope` turns that record into an answer or a refusal.
 
@@ -959,27 +944,19 @@ For example:
 
 ```text
 outside the validated envelope:
-
   - horizon: beyond the validated forecast horizon
     asked for 180, validated to 60
-
 This is a refusal, not a failure.
-
 The twin has not been shown to answer this question,
 and returning a number anyway would hide that.
 ```
 
-This follows the same discipline as a calibrated instrument:
+#### This follows the same discipline as a calibrated instrument becasue outside the calibrated range, report the limitation instead of inventing precision.
 
-**outside the calibrated range, report the limitation instead of inventing precision.**
 
----
+## The Digital Twin that knows when to say "no"
 
-# The Digital Twin that knows when to say "no"
-
-This is one of the central design principles of Otwin.
-
-A model validated for:
+This is one of the central design principles of Otwin. A model validated for:
 
 ```text
 forecast horizon = 60 cycles
@@ -994,6 +971,16 @@ forecast horizon = 180 cycles
 Likewise, a model calibrated for one operating region does not automatically become trustworthy everywhere.
 
 ```mermaid
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
 flowchart LR
     A["Question"] --> B{"Inside validated envelope?"}
     B -->|"Yes"| C["Answer"]
@@ -1003,64 +990,15 @@ flowchart LR
     D --> F["Explain which boundary was exceeded"]
 ```
 
-A refusal is not a failure.
+A refusal is not a failure, it is evidence that the model is enforcing the limits that its validation actually established.
 
-It is evidence that the model is enforcing the limits that its validation actually established.
+<br>
 
----
-
-# The advanced API
-
-Everything the compiler produces can also be written by hand.
-
-`otwin.model.PortHamiltonianSystem` takes:
-
-```text
-H
-J
-R
-g
-```
-
-as functions of the state.
-
-`IrreversiblePHS` adds an entropy state for processes that produce entropy, such as:
-
-- chemical reactors;
-- heat exchangers.
-
-It also checks the second law on every call.
-
-The catalogue contains worked systems such as:
-
-```python
-otwin.model.water_tank
-otwin.model.mass_spring_damper
-otwin.model.dc_motor
-otwin.model.pumped_hydro
-otwin.model.heat_exchanger
-```
-
-This layer is the escape hatch for physics the component library does not cover yet.
-
-New users should normally start with the component API.
-
----
-
-# Examples
+## Examples
 
 The examples are designed around engineering questions rather than API demonstrations.
 
-Each notebook opens with:
-
-1. the question it answers;
-2. what Otwin does;
-3. what you write yourself;
-4. something you can deliberately break.
-
-Run them in order the first time.
-
-All open in Colab.
+Each notebook opens with the question it answers, what Otwin does, what you write yourself and something you can deliberately break. Run them in order the first time. All open in Colab.
 
 | # | Notebook | The question | Data |
 |---|---|---|---|
@@ -1081,37 +1019,9 @@ examples/bess_end_to_end.py
 
 It runs the whole chain on a battery bank built from three components, from a simulated SunSpec device to a refusal, without requiring hardware.
 
----
+<br>
 
-# What Otwin is — and is not
-
-## Otwin is
-
-- an engineering **physics engine**;
-- a **model compiler** for connected physical systems;
-- a **multi-domain dynamics framework**;
-- a foundation for **Digital Twins**;
-- a **physics + data** modelling framework;
-- a platform for **state estimation**;
-- a framework for **parameter identification**;
-- a toolkit for **forecasting and uncertainty**;
-- a framework for **validation and model governance**.
-
-## Otwin is not
-
-- a generic CAD system;
-- a finite-element solver;
-- a rigid-body robotics simulator;
-- a dashboard or monitoring UI;
-- a black-box machine-learning platform.
-
-Otwin's focus is different:
-
-> **Take a real engineering system, represent its physics, connect that representation to data, and turn it into a Digital Twin that can be interrogated with evidence.**
-
----
-
-# The Otwin project
+## The Otwin-core project
 
 Otwin is part of an open-source ecosystem.
 
@@ -1123,17 +1033,26 @@ Otwin is part of an open-source ecosystem.
 | [**otwin-systems**](https://github.com/otwin-core/otwin-systems) | A growing catalogue of physical models, each shipped with a closed-form result it must reproduce. |
 
 The engine lives in this repository under `crates/`:
-
 - `otwin-core` is a plain Rust crate with no Python in it;
 - `otwin-engine` provides the PyO3 bindings and is published as the `otwin-engine` wheel.
 
 See [`docs/developer`](docs/developer) for the architecture and development documentation.
 
----
+<br>
 
-# Architecture at a glance
+## Architecture at a glance
 
 ```mermaid
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
 flowchart TD
     P["Python API"]
 
@@ -1163,47 +1082,23 @@ flowchart TD
     VAL --> DT
 ```
 
-The separation is deliberate:
+The separation is deliberate: Python describes and operates the model and Rust executes the compiled dynamics.
 
-**Python describes and operates the model.**
+## Design principles
 
-**Rust executes the compiled dynamics.**
+| Principle | Description |
+|---|---|
+| Physics first |If a physical relationship is known, encode it explicitly.|
+| Structure matters | Energy, dissipation, interconnection and conservation laws should be properties of the model whenever possible.|
+| Data fills the gaps | Use measurements to identify parameters and residual physics instead of discarding known structure.|
+| Fast enough for iteration |The compiled Rust engine makes repeated simulation practical for calibration, estimation, forecasting and validation.|
+| Validation is part of the model | A prediction should carry evidence about how it was evaluated.|
+| Uncertainty must be measured | A confidence level without measured coverage is not enough.|
+| Know when not to answer | A Digital Twin should expose the limits of its validation envelope rather than hide them.|
 
----
+<br>
 
-# Design principles
-
-## Physics first
-
-If a physical relationship is known, encode it explicitly.
-
-## Structure matters
-
-Energy, dissipation, interconnection and conservation laws should be properties of the model whenever possible.
-
-## Data fills the gaps
-
-Use measurements to identify parameters and residual physics instead of discarding known structure.
-
-## Fast enough for iteration
-
-The compiled Rust engine makes repeated simulation practical for calibration, estimation, forecasting and validation.
-
-## Validation is part of the model
-
-A prediction should carry evidence about how it was evaluated.
-
-## Uncertainty must be measured
-
-A confidence level without measured coverage is not enough.
-
-## Know when not to answer
-
-A Digital Twin should expose the limits of its validation envelope rather than hide them.
-
----
-
-# Contributing
+## Contributing
 
 Contributions are welcome.
 
@@ -1218,31 +1113,13 @@ A new physical component is one of the easiest places to start:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
----
-
-# Issues
+## Issues
 
 Found a bug, have a modelling problem, or want to propose a component?
 
 [Open an issue](https://github.com/otwin-core/otwin/issues).
 
----
 
-# Citing
+## Citing
 
 Each repository in the Otwin project includes a `CITATION.cff`.
-
----
-
-# References
-
-- van der Schaft, A. & Jeltsema, D. (2014). *Port-Hamiltonian Systems Theory: An Introductory Overview.* Foundations and Trends in Systems and Control.
-- Willems, J. C. (1972). *Dissipative dynamical systems.* Arch. Rational Mech. Anal. 45(5).
-- Karnopp, D., Margolis, D. & Rosenberg, R. *System Dynamics: Modeling, Simulation, and Control of Mechatronic Systems.* Wiley.
-- Ramírez, H., Maschke, B. & Sbarbaro, D. (2013). *Irreversible port-Hamiltonian systems.* Chemical Engineering Science 89.
-- Greydanus, S., Dzamba, M. & Yosinski, J. (2019). *Hamiltonian Neural Networks.* NeurIPS 32.
-- Rasmussen, C. E. & Williams, C. K. I. (2006). *Gaussian Processes for Machine Learning.* MIT Press.
-- Vovk, V., Gammerman, A. & Shafer, G. (2005). *Algorithmic Learning in a Random World.* Springer.
-- Gneiting, T. & Raftery, A. E. (2007). *Strictly proper scoring rules, prediction, and estimation.* JASA 102(477).
-- ISO 13374, *Condition monitoring and diagnostics of machines.*
-- ISO 13381-1:2015, *Condition monitoring and diagnostics of machines: prognostics.*
