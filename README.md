@@ -53,11 +53,7 @@ Build physically consistent models from components and connections, compile them
 
 ## What is Otwin?
 
-**Otwin is an open-source physics engine and Digital Twin framework for real engineering systems.**
-
-You describe a physical system as components and connections — the same way you would draw the system.
-
-Otwin compiles that description into a physically consistent dynamical model, runs it in a high-performance Rust engine, and provides the tools needed to keep that model synchronized with a real asset.
+**Otwin is an open-source physics engine and Digital Twin framework for real engineering systems.** You describe a physical system as components and connections — the same way you would draw the system. Otwin compiles that description into a physically consistent dynamical model, runs it in a high-performance Rust engine, and provides the tools needed to keep that model synchronized with a real asset.
 
 ```mermaid
 flowchart LR
@@ -85,16 +81,11 @@ flowchart LR
 
 A Digital Twin is a model of **one particular physical asset** — a machine, pump, battery bank, heat exchanger, or complete process — kept up to date from that asset's own measurements and run forward to support decisions about it.
 
-These are some of the engineering questions we want to answe:
+These are some of the engineering questions we want to answer:
 
-> **Electrical grid**  
-> This distribution transformer keeps running above nameplate on hot afternoons. How much longer can it do that before the winding reaches its thermal limit?
-
-> **Renewable generation and storage**  
-> This battery bank is three years into its life. How much can I commit to the market next week and still be certain of delivering it?
-
-> **Water treatment**  
-> The transfer pumps need more power every month for the same flow. How many weeks of margin are left before the duty pump can no longer hold its setpoint?
+|Electrical grid|Renewable generation and storage|Water treatment|
+|---|---|---|
+| This distribution transformer keeps running above nameplate on hot afternoons. How much longer can it do that before the winding reaches its thermal limit?| This battery bank is three years into its life. How much can I commit to the market next week and still be certain of delivering it? |The transfer pumps need more power every month for the same flow. How many weeks of margin are left before the duty pump can no longer hold its setpoint?|
 
 To answer these you need a model of the asset that is:
 
@@ -104,42 +95,15 @@ To answer these you need a model of the asset that is:
 - calibrated and validated against observations;
 - explicit about the limits of what it has actually demonstrated.
 
-**Otwin is built for that.**
-
 <br>
 
 ## Why Otwin?
 
-Engineering systems are neither purely physical nor purely data-driven.
+Engineering systems are neither purely physical nor purely data-driven. You usually know some equations like conservation laws, energy storage, fluid behaviour, thermal behaviour, or component relationships. There are alos mechanism that we don't know exactly the necessary equations like friction, losses, unknown loads, unmodelled phenomena, or sensor noise.
 
-You usually know some things:
+**Physical models provides the structure. Data identifies what you do not know. The Digital Twin keeps the model synchronized with the asset. Validation tells you whether the model has earned the right to answer.**
 
-- conservation laws;
-- energy storage;
-- mechanical structure;
-- electrical topology;
-- fluid behaviour;
-- thermal behaviour;
-- component relationships.
-
-And you usually do **not** know everything:
-
-- friction;
-- losses;
-- degradation;
-- ageing;
-- environmental effects;
-- unknown loads;
-- unmodelled phenomena;
-- sensor noise.
-
-Otwin is designed around that reality.
-
-**Physics provides the structure. Data identifies what you do not know. The Digital Twin keeps the model synchronized with the asset. Validation tells you whether the model has earned the right to answer.**
-
-This is why Otwin is not just a simulator, a forecasting library, or a machine-learning wrapper.
-
-It connects:
+Otwin connects:
 
 ```mermaid
 flowchart TB
@@ -168,13 +132,7 @@ pip install "otwin[engine]"
 
 ## Quick start
 
-### Describe the system. Otwin derives the equations.
-
-A mass hanging from a spring with a damper, under gravity.
-
-You say what exists and what touches what.
-
-Otwin writes the equations.
+A mass hanging from a spring with a damper, under gravity. Otwin writes the equations.
 
 <div align="center">
 
