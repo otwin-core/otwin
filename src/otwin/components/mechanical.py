@@ -41,7 +41,7 @@ class Mass(Component):
     ) -> None:
         super().__init__(name)
         self.add_port("flange")
-        self.m = self.add_parameter("mass", mass, "kg")
+        self.m = self.add_parameter("mass", mass, "kg", "p = m v")
         self.initial_velocity = float(velocity)
 
     def branches(self) -> list[Branch]:
@@ -80,7 +80,7 @@ class Spring(Component):
         super().__init__(name)
         self.add_port("a")
         self.add_port("b")
-        self.k = self.add_parameter("stiffness", stiffness, "N/m")
+        self.k = self.add_parameter("stiffness", stiffness, "N/m", "F = k x")
         self.initial_extension = float(extension)
 
     def branches(self) -> list[Branch]:
@@ -122,7 +122,7 @@ class Damper(Component):
         self._law = law
         if law is None:
             self.c = self.add_parameter(
-                "damping", damping, "N s/m", nonneg=True, positive=False
+                "damping", damping, "N s/m", "F = c v", nonneg=True, positive=False
             )
 
     def branches(self) -> list[Branch]:

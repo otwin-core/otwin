@@ -54,7 +54,7 @@ class Resistor(_TwoTerminal):
         super().__init__(name)
         self._law = law
         if law is None:
-            self.R = self.add_parameter("resistance", resistance, "ohm")
+            self.R = self.add_parameter("resistance", resistance, "ohm", "v = R i")
 
     def branches(self) -> list[Branch]:
         law = self._law if self._law is not None else (lambda v: v / self.R)
@@ -74,7 +74,7 @@ class Capacitor(_TwoTerminal):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.C = self.add_parameter("capacitance", capacitance, "F")
+        self.C = self.add_parameter("capacitance", capacitance, "F", "q = C v")
         self.initial_voltage = float(voltage)
 
     def branches(self) -> list[Branch]:
@@ -106,7 +106,7 @@ class Inductor(_TwoTerminal):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.L = self.add_parameter("inductance", inductance, "H")
+        self.L = self.add_parameter("inductance", inductance, "H", "flux = L i")
         self.initial_current = float(current)
 
     def branches(self) -> list[Branch]:

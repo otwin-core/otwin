@@ -137,7 +137,9 @@ class Storage(_TwoPort):
         super().__init__(domain, name)
         self.kind = kind
         units = _UNITS[domain]
-        self.coef = self.add_parameter("coefficient", coefficient, units[kind])
+        self.coef = self.add_parameter(
+            "coefficient", coefficient, units[kind], "state = coefficient * effort"
+        )
         self.initial = float(initial)
         self._energy = energy
         self.state_unit = units["state_a" if kind == "across" else "state_t"]
@@ -184,7 +186,10 @@ class Dissipator(_TwoPort):
         self._law = law
         if law is None:
             self.R = self.add_parameter(
-                "resistance", resistance, _UNITS[domain]["resistance"]
+                "resistance",
+                resistance,
+                _UNITS[domain]["resistance"],
+                "across = resistance * through",
             )
 
     def branches(self) -> list[Branch]:

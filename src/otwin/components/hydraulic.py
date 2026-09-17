@@ -72,10 +72,18 @@ class Tank(Component):
     ) -> None:
         super().__init__(name)
         self.add_port("port")
-        self.A = self.add_parameter("area", area, "m^2")
-        self.z = self.add_parameter("base_elevation", base_elevation, "m", positive=False)
-        self.rho = self.add_parameter("density", density, "kg/m^3")
-        self.g = self.add_parameter("gravity", gravity, "m/s^2")
+        self.A = self.add_parameter("area", area, "m^2", "free surface area")
+        self.z = self.add_parameter(
+            "base_elevation",
+            base_elevation,
+            "m",
+            "height of the tank floor",
+            positive=False,
+        )
+        self.rho = self.add_parameter("density", density, "kg/m^3", "of the liquid")
+        self.g = self.add_parameter(
+            "gravity", gravity, "m/s^2", "gravitational acceleration"
+        )
         if level < 0:
             raise ValueError(f"{self.name}: level must not be negative")
         self.initial_level = float(level)
@@ -127,9 +135,14 @@ class Orifice(Component):
         super().__init__(name)
         self.add_port("a")
         self.add_port("b")
-        self.a_ = self.add_parameter("area", area, "m^2")
-        self.cd = self.add_parameter("discharge_coefficient", discharge_coefficient, "")
-        self.rho = self.add_parameter("density", density, "kg/m^3")
+        self.a_ = self.add_parameter("area", area, "m^2", "opening area")
+        self.cd = self.add_parameter(
+            "discharge_coefficient",
+            discharge_coefficient,
+            "",
+            "Q = Cd A sqrt(2 dp / rho)",
+        )
+        self.rho = self.add_parameter("density", density, "kg/m^3", "of the liquid")
 
     def branches(self) -> list[Branch]:
         def law(dp: Expr) -> Expr:
@@ -170,9 +183,13 @@ class Pipe(Component):
         self._law = law
         self.R = self.K = None
         if resistance is not None:
-            self.R = self.add_parameter("resistance", resistance, "Pa s/m^3")
+            self.R = self.add_parameter(
+                "resistance", resistance, "Pa s/m^3", "laminar: dp = R Q"
+            )
         if friction is not None:
-            self.K = self.add_parameter("friction", friction, "Pa s^2/m^6")
+            self.K = self.add_parameter(
+                "friction", friction, "Pa s^2/m^6", "turbulent: dp = K Q |Q|"
+            )
 
     def branches(self) -> list[Branch]:
         inverse = None
@@ -202,7 +219,9 @@ class FluidInertance(Component):
         super().__init__(name)
         self.add_port("a")
         self.add_port("b")
-        self.I = self.add_parameter("inertance", inertance, "kg/m^4")  # noqa: E741
+        self.I = self.add_parameter(  # noqa: E741
+            "inertance", inertance, "kg/m^4", "rho L / A of the liquid column"
+        )
         self.initial_flow = float(flow)
 
     def branches(self) -> list[Branch]:
@@ -302,7 +321,7 @@ class Filter(Component):
         super().__init__(name)
         self.add_port("a")
         self.add_port("b")
-        self.R = self.add_parameter("resistance", resistance, "Pa s/m^3")
+        self.R = self.add_parameter("resistance", resistance, "Pa s/m^3", "when clean")
         self.phi = self.add_parameter(
             "fouling", fouling, "", "extra resistance as a fraction of clean", False, True
         )

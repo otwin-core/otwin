@@ -114,6 +114,7 @@ install
 quickstart
 concepts/index
 guides/index
+reference/components
 developer/index
 api/index
 changelog

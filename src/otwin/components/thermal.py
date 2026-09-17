@@ -56,7 +56,7 @@ class ThermalMass(Component):
     ) -> None:
         super().__init__(name)
         self.add_port("port")
-        self.C = self.add_parameter("capacity", capacity, "J/K")
+        self.C = self.add_parameter("capacity", capacity, "J/K", "heat = C T")
         if temperature < 0:
             raise ValueError(f"{self.name}: temperature is absolute, in kelvin")
         self.initial_temperature = float(temperature)
@@ -98,7 +98,7 @@ class ThermalResistance(Component):
         self.add_port("b")
         self._law = law
         if law is None:
-            self.R = self.add_parameter("resistance", resistance, "K/W")
+            self.R = self.add_parameter("resistance", resistance, "K/W", "dT = R q")
 
     def branches(self) -> list[Branch]:
         law = self._law if self._law is not None else (lambda dT: dT / self.R)
@@ -115,7 +115,7 @@ class Convection(Component):
         super().__init__(name)
         self.add_port("a")
         self.add_port("b")
-        self.hA = self.add_parameter("conductance", conductance, "W/K")
+        self.hA = self.add_parameter("conductance", conductance, "W/K", "h A: q = hA dT")
 
     def branches(self) -> list[Branch]:
         return [ResistorBranch(self, self.a, self.b, law=lambda dT: self.hA * dT)]

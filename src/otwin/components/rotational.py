@@ -43,7 +43,7 @@ class Inertia(Component):
     ) -> None:
         super().__init__(name)
         self.add_port("shaft")
-        self.I = self.add_parameter("inertia", inertia, "kg m^2")  # noqa: E741
+        self.I = self.add_parameter("inertia", inertia, "kg m^2", "L = I w")  # noqa: E741
         self.initial_speed = float(speed)
 
     def branches(self) -> list[Branch]:
@@ -74,7 +74,7 @@ class TorsionSpring(Component):
         super().__init__(name)
         self.add_port("a")
         self.add_port("b")
-        self.k = self.add_parameter("stiffness", stiffness, "N m/rad")
+        self.k = self.add_parameter("stiffness", stiffness, "N m/rad", "T = k theta")
         self.initial_twist = float(twist)
 
     def branches(self) -> list[Branch]:
@@ -115,7 +115,7 @@ class RotationalDamper(Component):
         self._law = law
         if law is None:
             self.b_ = self.add_parameter(
-                "damping", damping, "N m s/rad", nonneg=True, positive=False
+                "damping", damping, "N m s/rad", "T = b w", nonneg=True, positive=False
             )
 
     def branches(self) -> list[Branch]:
