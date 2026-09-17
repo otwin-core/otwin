@@ -130,6 +130,7 @@ _METHOD_ALIASES = {"implicit_midpoint": "auto"}
 
 
 def _resolve_method(method: str) -> str:
+    """Map a legacy alias to its current name and reject anything not in ``_VALID_METHODS``."""
     method = _METHOD_ALIASES.get(method, method)
     if method not in _VALID_METHODS:
         raise ValueError(f"method must be one of {_VALID_METHODS}, got {method!r}")
@@ -194,6 +195,7 @@ class LinearMidpointSystem:
 
 
 def _inf_norm(v: Vector) -> float:
+    """``‖v‖_∞`` as a float; ``0.0`` for an empty vector."""
     # ndarray.max() rather than np.max(): the free function goes through
     # numpy's dispatch machinery and costs about twice as much, which is
     # measurable when it runs five times per integration step.
@@ -522,6 +524,14 @@ def _fd_solve_builder(
 def _prepare_inputs(
     x0: Vector, t_eval: Vector, u: Vector | PortLaw
 ) -> tuple[Vector, Vector, Vector | PortLaw]:
+    """Coerce ``x0`` to a flat float array, ``t_eval`` to 1-D and a schedule ``u`` to 2-D.
+
+    A callable ``u`` (port law) is passed through untouched.
+
+    Raises:
+        ValueError: If ``t_eval`` is not 1-D with at least two strictly
+            increasing points.
+    """
     t_eval = np.asarray(t_eval, dtype=float)
     x0 = np.asarray(x0, dtype=float).ravel()
     if not callable(u):
@@ -536,6 +546,7 @@ def _prepare_inputs(
 
 
 def _fail(message: str, raise_on_failure: bool) -> str:
+    """Raise :class:`IntegratorConvergenceError` if asked to, else return ``message``."""
     if raise_on_failure:
         raise IntegratorConvergenceError(message)
     return message

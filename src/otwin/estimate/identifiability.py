@@ -128,6 +128,7 @@ class IdentifiabilityReport:
         return {p.name: p.identified for p in self.parameters}
 
     def to_dict(self) -> dict[str, Any]:
+        """JSON-serialisable form: summary fields plus one dict per parameter verdict."""
         return {
             "identified": self.identified,
             "condition_number": float(self.condition_number),
@@ -157,6 +158,7 @@ class IdentifiabilityReport:
 
 
 def _solve(X: Array, y: Array, nonneg: bool) -> Array:
+    """Least-squares coefficients of ``X @ coef ≈ y``, shape ``(k,)``, by NNLS if ``nonneg``."""
     if nonneg:
         from scipy.optimize import nnls
 

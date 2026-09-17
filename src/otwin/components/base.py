@@ -74,6 +74,13 @@ __all__ = [
 
 @dataclass(frozen=True)
 class Domain:
+    """A physical domain: the names and units of its across and through variables.
+
+    ``power_conjugate`` is False when their product is not a power (thermal:
+    temperature times heat flow), which makes a model with such storage
+    pseudo-port-Hamiltonian.
+    """
+
     name: str
     across: str
     across_unit: str
@@ -186,6 +193,13 @@ class Connection:
 
 @dataclass
 class Parameter:
+    """A named constant of a component with its unit and admissible range.
+
+    ``positive`` requires ``value > 0`` (the default); ``nonneg`` requires
+    ``value >= 0``. Turn ``positive`` off for quantities that may be zero or
+    negative, such as a base elevation or a transformer ratio.
+    """
+
     name: str
     value: float
     unit: str
@@ -194,6 +208,8 @@ class Parameter:
     nonneg: bool = False
 
     def validate(self, owner: str) -> None:
+        """Raise ``ValueError`` if the value is NaN or outside the declared range;
+        ``owner`` is the component name used in the message."""
         v = self.value
         if math.isnan(v):
             raise ValueError(f"{owner}.{self.name} is NaN")
@@ -221,10 +237,12 @@ class Branch:
 
     @property
     def domain(self) -> str:
+        """The domain of port ``a``."""
         return self.a.domain
 
     @property
     def name(self) -> str:
+        """The ``label`` if one was given, else the component's name."""
         return self.label or self.component.name
 
 
@@ -388,9 +406,11 @@ class Component:
 
     @property
     def uid(self) -> str:
+        """An identity-based id, ``#<id(self)>``, that survives renaming."""
         return f"#{id(self)}"
 
     def value(self, name: str) -> float:
+        """The current numeric value of parameter ``name``."""
         return self.parameters[name].value
 
     def __getattr__(self, name: str) -> float:
@@ -407,6 +427,7 @@ class Component:
 
     # ---------------------------------------------------------------- output
     def branches(self) -> list[Branch]:
+        """The constitutive relations of this component; subclasses must override."""
         raise NotImplementedError
 
     def extra_outputs(self, q: ComponentQuantities) -> dict[str, tuple[str, Expr]]:
@@ -469,14 +490,21 @@ class Composite(Component):
 
     @property
     def links(self) -> list[Connection]:
+        """Alias of :attr:`connections`, the internal connections between parts."""
         return self.connections
 
     def expose(self, name: str, inner: Port) -> Port:
+        """Make ``inner`` (a port of a part) visible outside as ``self.<name>``.
+
+        The new port takes the domain of ``inner``; the compiler resolves the
+        alias when it flattens the composite.
+        """
         t = self.add_port(name, inner.domain)
         self.aliases[t] = inner
         return t
 
     def branches(self) -> list[Branch]:
+        """None of its own: the physics lives in the parts."""
         return []
 
 
@@ -495,4 +523,5 @@ class Ground(Component):
         self.add_port("port", "any")
 
     def branches(self) -> list[Branch]:
+        """None: the reference has no relation, the compiler pins its node to zero."""
         return []

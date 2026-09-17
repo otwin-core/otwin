@@ -99,4 +99,4 @@ the model trustworthy off-distribution.
 
 ## Next
 
-[Forecast](forecast.md) — running the model forward, and being honest about it.
+[Forecast](forecast.md) — running the model forward, with the evidence attached.

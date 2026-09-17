@@ -24,7 +24,7 @@ residuals an order of magnitude smaller than its $h$-step-ahead errors, so the
 band comes out roughly ten times too narrow. Measured on a lithium-ion capacity
 twin: **1.5 % delivered coverage at a 90 % target.**
 
-{func}`~otwin.forecast.rolling_origin_residuals` makes the honest thing the easy
+{func}`~otwin.forecast.rolling_origin_residuals` makes the right thing the easy
 thing. It refits the whole pipeline at earlier origins *inside* the training
 window and collects genuine $h$-step-ahead errors. It costs one refit per
 origin, and that cost is the entire difference between a band that means
@@ -43,7 +43,7 @@ The $n+1$ is not a rounding detail — it is what makes the guarantee hold in
 finite samples rather than asymptotically. It also means a calibration set can
 be **exactly large enough to be too small**: at $\alpha = 0.9$ and $n = 9$,
 $k = 9$ and the band is the sample maximum; at $n = 8$, $k = 9 > n$ and the
-honest answer is infinite.
+only correct answer is infinite.
 
 `otwin` returns infinity, with a warning, rather than clipping the rank to $n$
 and returning the sample maximum:
@@ -119,7 +119,7 @@ h=60 half-width 0.00272
 h=90 half-width 0.00276  extrapolated=True
 ```
 
-{attr}`~otwin.forecast.ConformalBand.extrapolated` is the honest part. Beyond
+{attr}`~otwin.forecast.ConformalBand.extrapolated` is the part that says so. Beyond
 the calibrated range the width is a fitted growth law, not a conformal
 guarantee, and the object says which is which instead of letting you assume.
 

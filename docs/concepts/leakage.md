@@ -38,7 +38,7 @@ twin cannot beat {func}`~otwin.forecast.persistence`, that is the finding.
 {func}`~otwin.forecast.mean_forecast`, {func}`~otwin.forecast.drift` (linear
 extrapolation from the last two points), and
 {func}`~otwin.forecast.seasonal_naive`. {func}`~otwin.forecast.get_best_baseline`
-picks the strongest by RMSE, which is the honest comparator — beating the
+picks the strongest by RMSE, which is the comparator that means something — beating the
 *weakest* baseline is not evidence of anything.
 
 Persistence is a much harder opponent than it looks on a slowly-degrading asset.

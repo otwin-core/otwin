@@ -25,6 +25,7 @@ import numpy.typing as npt
 
 
 def _require_torch() -> Any:
+    """Import and return ``torch``, or raise ``ImportError`` naming the extra."""
     try:
         import torch
 
@@ -104,18 +105,21 @@ class PortHamiltonianNN:
 
     # -- structure pieces -------------------------------------------------
     def _energy_tensor(self, x: Any) -> Any:
+        """Energy ``H_θ(x)`` for a batch ``(b, n_states)``, as a tensor ``(b,)``."""
         h = self._H_net(x).squeeze(-1)
         if self.quadratic_floor:
             h = h + 0.5 * (x**2).sum(dim=-1)
         return h
 
     def energy(self, x: npt.NDArray[np.floating]) -> float:
+        """Learned energy ``H_θ(x)`` at a single state ``x`` of shape ``(n_states,)``."""
         torch = self._torch
         xt = torch.as_tensor(np.atleast_2d(x), dtype=torch.float64)
         with torch.no_grad():
             return float(self._energy_tensor(xt)[0])
 
     def _grad_H(self, x: Any) -> Any:
+        """Gradient ``∇H_θ(x)`` by autograd, shape ``(b, n_states)``, with graph kept."""
         torch = self._torch
         x = x.clone().requires_grad_(True)
         h = self._energy_tensor(x).sum()
@@ -123,21 +127,29 @@ class PortHamiltonianNN:
         return grad
 
     def _J(self, x: Any) -> Any:
+        """Skew-symmetric ``J_θ(x) = A − Aᵀ``, shape ``(b, n_states, n_states)``."""
         n = self.n_states
         A = self._A_net(x).reshape(-1, n, n)
         return A - A.transpose(-1, -2)
 
     def _R(self, x: Any) -> Any:
+        """PSD dissipation ``R_θ(x) = L Lᵀ``, shape ``(b, n_states, n_states)``."""
         n = self.n_states
         L = self._L_net(x).reshape(-1, n, n)
         return L @ L.transpose(-1, -2)
 
     def _g(self, x: Any) -> Any:
+        """Input map ``g_θ(x)``, shape ``(b, n_states, n_inputs)``; ``None`` without inputs."""
         if self._g_net is None:
             return None
         return self._g_net(x).reshape(-1, self.n_states, self.n_inputs)
 
     def dynamics_tensor(self, x: Any, u: Any = None) -> Any:
+        """Vector field ``(J − R)∇H + g u`` on tensors, shape ``(b, n_states)``.
+
+        Differentiable, so it can be used directly in a training loss; the input
+        term is skipped when ``u`` is ``None`` or the model has no inputs.
+        """
         torch = self._torch
         grad_H = self._grad_H(x)
         J = self._J(x)
@@ -166,6 +178,7 @@ class PortHamiltonianNN:
         return np.asarray(dx.detach().numpy().reshape(np.shape(x)), dtype=float)
 
     def parameters(self) -> list[Any]:
+        """All trainable tensors of the internal MLPs, for an optimiser."""
         params: list[Any] = []
         for m in self._modules_list:
             params.extend(list(m.parameters()))

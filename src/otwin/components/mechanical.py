@@ -41,10 +41,12 @@ class Mass(Component):
     ) -> None:
         super().__init__(name)
         self.add_port("flange")
-        self.m = self.add_parameter("mass", mass, "kg")
+        self.m = self.add_parameter("mass", mass, "kg", "p = m v")
         self.initial_velocity = float(velocity)
 
     def branches(self) -> list[Branch]:
+        """One across storage against the frame, state ``momentum`` (kg m/s):
+        ``v = p / m``, energy ``p^2 / 2m``."""
         return [
             StorageBranch(
                 self,
@@ -80,10 +82,12 @@ class Spring(Component):
         super().__init__(name)
         self.add_port("a")
         self.add_port("b")
-        self.k = self.add_parameter("stiffness", stiffness, "N/m")
+        self.k = self.add_parameter("stiffness", stiffness, "N/m", "F = k x")
         self.initial_extension = float(extension)
 
     def branches(self) -> list[Branch]:
+        """One through storage ``a`` to ``b``, state ``extension`` (m):
+        ``F = k x``, energy ``k x^2 / 2``."""
         return [
             StorageBranch(
                 self,
@@ -122,10 +126,12 @@ class Damper(Component):
         self._law = law
         if law is None:
             self.c = self.add_parameter(
-                "damping", damping, "N s/m", nonneg=True, positive=False
+                "damping", damping, "N s/m", "F = c v", nonneg=True, positive=False
             )
 
     def branches(self) -> list[Branch]:
+        """One resistor branch ``a`` to ``b``: ``F = c v`` of the relative
+        velocity, or ``law(v)`` when a law was given."""
         law = self._law if self._law is not None else (lambda v: self.c * v)
         return [ResistorBranch(self, self.a, self.b, law=law)]
 
@@ -146,6 +152,7 @@ class ForceSource(Component):
         self.force = None if force is None else float(force)
 
     def branches(self) -> list[Branch]:
+        """One through source into ``flange``: the force (N), an input when ``None``."""
         return [
             SourceBranch(
                 self,
@@ -171,6 +178,8 @@ class VelocitySource(Component):
         self.velocity = None if velocity is None else float(velocity)
 
     def branches(self) -> list[Branch]:
+        """One across source: the velocity (m/s) of ``flange`` against the
+        frame, an input when ``None``."""
         return [
             SourceBranch(
                 self,

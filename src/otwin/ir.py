@@ -90,6 +90,8 @@ class OutputVar:
 
 @dataclass(frozen=True)
 class ComponentRecord:
+    """A component of the resolved system: its type, domain, parameter names and port names."""
+
     name: str
     type: str
     domain: str
@@ -99,6 +101,8 @@ class ComponentRecord:
 
 @dataclass(frozen=True)
 class NodeRecord:
+    """A node where ports meet; ``reference`` marks the ground node of its domain."""
+
     name: str
     domain: str
     ports: tuple[str, ...]  # "component.port"
@@ -107,6 +111,8 @@ class NodeRecord:
 
 @dataclass(frozen=True)
 class BranchRecord:
+    """A two-terminal element of ``kind`` belonging to ``component`` between two nodes."""
+
     component: str
     kind: str
     node_a: str
@@ -127,6 +133,7 @@ class PhysicalSystemIR:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        """JSON-ready dict of the resolved description, tagged ``level: "physical"``."""
         return {
             "ir_version": IR_VERSION,
             "level": "physical",
@@ -141,6 +148,7 @@ class PhysicalSystemIR:
         }
 
     def to_json(self, **kw: Any) -> str:
+        """JSON text of :meth:`to_dict`; ``kw`` goes to :func:`json.dumps`."""
         return json.dumps(self.to_dict(), **kw)
 
 
@@ -171,33 +179,42 @@ class PHSIR:
     # ---------------------------------------------------------------- shape
     @property
     def n_states(self) -> int:
+        """Number of states."""
         return len(self.states)
 
     @property
     def n_inputs(self) -> int:
+        """Number of external inputs."""
         return len(self.inputs)
 
     @property
     def n_params(self) -> int:
+        """Number of parameters."""
         return len(self.params)
 
     @property
     def n_ports(self) -> int:
+        """Number of ports (one per source, inputs first)."""
         return len(self.ports)
 
     def state_names(self) -> list[str]:
+        """Names of the states, in state-vector order."""
         return [s.name for s in self.states]
 
     def input_names(self) -> list[str]:
+        """Names of the inputs, in input-vector order."""
         return [i.name for i in self.inputs]
 
     def param_names(self) -> list[str]:
+        """Names of the parameters, in parameter-vector order."""
         return [p.name for p in self.params]
 
     def param_values(self) -> list[float]:
+        """The compiled parameter values, in the order of :meth:`param_names`."""
         return [p.value for p in self.params]
 
     def initial_state(self) -> list[float]:
+        """The initial value of each state, in the order of :meth:`state_names`."""
         return [s.initial for s in self.states]
 
     # ------------------------------------------------------------- symbols
@@ -231,6 +248,11 @@ class PHSIR:
 
     # --------------------------------------------------------- serialisation
     def to_dict(self) -> dict[str, Any]:
+        """JSON-ready dict with every expression serialised, tagged ``level: "phs"``.
+
+        The physical description is included under ``physical`` when present.
+        """
+
         def mat(m: list[list[Expr]]) -> list[list[Any]]:
             return [[e.to_json() for e in row] for row in m]
 
@@ -264,10 +286,13 @@ class PHSIR:
         return d
 
     def to_json(self, **kw: Any) -> str:
+        """JSON text of :meth:`to_dict`; ``kw`` goes to :func:`json.dumps`."""
         return json.dumps(self.to_dict(), **kw)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> PHSIR:
+        """Rebuild a :class:`PHSIR` from the dict produced by :meth:`to_dict`."""
+
         def mat(m: list[list[Any]]) -> list[list[Expr]]:
             return [[ex.from_json(e) for e in row] for row in m]
 
@@ -311,6 +336,7 @@ class PHSIR:
 
     @classmethod
     def from_json(cls, s: str) -> PHSIR:
+        """Rebuild a :class:`PHSIR` from the text produced by :meth:`to_json`."""
         return cls.from_dict(json.loads(s))
 
     def lower(self) -> dict[str, Any]:

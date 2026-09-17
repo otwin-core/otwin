@@ -66,6 +66,7 @@ class State:
         return float(self.values[self.names.index(key)])
 
     def as_dict(self) -> dict[str, float]:
+        """The state as ``{name: value}``."""
         return {n: float(v) for n, v in zip(self.names, self.values, strict=True)}
 
     def __array__(self, dtype: Any = None, copy: Any = None) -> Array:
@@ -130,6 +131,7 @@ class Trajectory:
         )
 
     def keys(self) -> list[str]:
+        """Every key ``__getitem__`` accepts: the arrays, then state and output names."""
         names = [
             "t",
             "x",
@@ -142,9 +144,11 @@ class Trajectory:
         return list(dict.fromkeys(names))
 
     def outputs(self) -> dict[str, Array]:
+        """The recorded named outputs as ``{name: array over t}``."""
         return {k: self._outputs[:, i] for i, k in enumerate(self.output_names)}
 
     def final(self) -> State:
+        """The state at the last grid point."""
         return State(self.x[-1], self.t[-1], self.state_names)
 
     def energy_balance(self) -> dict[str, float]:
@@ -204,14 +208,18 @@ class Model:
     # ------------------------------------------------------------ identity
     @property
     def name(self) -> str:
+        """Name of the system the model was compiled from."""
         return self._ir.name
 
     @property
     def backend(self) -> str:
+        """Name of the execution backend in use: ``"rust"`` or ``"numpy"``."""
         return self._backend.name
 
     @property
     def representation(self) -> str:
+        """The mathematical form, e.g. ``"port-hamiltonian"`` or
+        ``"port-hamiltonian + residual"``."""
         return self._ir.representation
 
     def ir(self) -> PHSIR:
@@ -227,6 +235,10 @@ class Model:
     # ---------------------------------------------------------- parameters
     @property
     def parameters(self) -> dict[str, float]:
+        """Current parameter values as ``{name: value}``.
+
+        Change them with :meth:`set_parameters`.
+        """
         vals = self._backend.get_params()
         return {n: float(v) for n, v in zip(self.param_names, vals, strict=True)}
 
@@ -262,6 +274,7 @@ class Model:
         return State(self._x0, 0.0, self.state_names)
 
     def reset(self) -> State:
+        """The initial state again; an alias of :meth:`initial_state`."""
         return self.initial_state()
 
     def state(
@@ -285,6 +298,8 @@ class Model:
 
     # ----------------------------------------------------------- evaluation
     def _u(self, u: Any) -> Array:
+        """Input vector of length ``n_inputs`` from ``None`` (zeros), a dict by name,
+        or an array."""
         if u is None:
             return np.zeros(self.n_inputs)
         if isinstance(u, Mapping):
@@ -311,6 +326,7 @@ class Model:
         u: Array | Mapping[str, float] | None = None,
         t: float = 0.0,
     ) -> Array:
+        """Jacobian ``df/dx`` of :meth:`rhs`, shape ``(n_states, n_states)``."""
         return self._backend.jacobian(np.asarray(x, dtype=float), self._u(u), t)
 
     def energy(self, x: Array | State) -> float:
@@ -320,6 +336,7 @@ class Model:
     H = energy
 
     def grad_H(self, x: Array | State) -> Array:
+        """Gradient of the stored energy, ``dH/dx``."""
         return self._backend.grad_h(np.asarray(x, dtype=float))
 
     def outputs(
@@ -349,6 +366,7 @@ class Model:
         u: Array | Mapping[str, float] | None = None,
         t: float = 0.0,
     ) -> float:
+        """One named output at a state; ``outputs(x, u, t)[name]``."""
         return self.outputs(x, u, t)[name]
 
     def port_outputs(
@@ -367,6 +385,7 @@ class Model:
 
     @measurements.setter
     def measurements(self, names: Sequence[str]) -> None:
+        """Select the outputs :meth:`observe` returns; each name must be in ``output_names``."""
         bad = [n for n in names if n not in self.output_names]
         if bad:
             raise KeyError(f"not outputs of this model: {bad}. See model.output_names.")
@@ -472,6 +491,10 @@ class Model:
     def _time_grid(
         self, t_span: tuple[float, float] | None, dt: float | None, t: Array | None
     ) -> Array:
+        """The grid for ``simulate``: ``t`` as given, or uniform from ``t_span`` and ``dt``.
+
+        The uniform grid has ``round((t1 - t0) / dt) + 1`` points.
+        """
         if t is not None:
             return np.asarray(t, dtype=float).ravel()
         if t_span is None:
@@ -902,11 +925,14 @@ class Model:
 
     # ---------------------------------------------------------- inspection
     def summary(self) -> str:
+        """Human-readable description of the system, its structure and the last solver used."""
         from ..compiler import summary_text
 
         return summary_text(self._ir, solver=self._last_solver, backend=self.backend)
 
     def states(self) -> list[dict[str, Any]]:
+        """One dict per state with ``name``, ``unit``, ``component``, ``quantity``
+        and ``initial``."""
         return [
             {
                 "name": s.name,
@@ -919,6 +945,7 @@ class Model:
         ]
 
     def inputs(self) -> list[dict[str, Any]]:
+        """One dict per input with ``name``, ``unit``, ``component`` and ``quantity``."""
         return [
             {
                 "name": i.name,
@@ -930,9 +957,12 @@ class Model:
         ]
 
     def ports(self) -> list[str]:
+        """Names of the ports, one per source, inputs first."""
         return list(self.port_names)
 
     def components(self) -> list[dict[str, Any]]:
+        """One dict per component with ``name``, ``type`` and ``domain``; empty when
+        the model has no physical description."""
         if self._ir.physical is None:
             return []
         return [
@@ -983,21 +1013,28 @@ class Model:
         return json.dumps(d, **kw)
 
     def save(self, path: str | Path) -> Path:
+        """Write :meth:`to_json` to ``path`` and return it as a :class:`~pathlib.Path`."""
         p = Path(path)
         p.write_text(self.to_json(indent=1))
         return p
 
     @classmethod
     def load(cls, path: str | Path, backend: str = "auto") -> Model:
+        """Rebuild a model from a file written by :meth:`save`."""
         ir = PHSIR.from_json(Path(path).read_text())
         return cls(ir, backend=backend)
 
     @classmethod
     def from_json(cls, text: str, backend: str = "auto") -> Model:
+        """Rebuild a model from the JSON text of :meth:`to_json`."""
         return cls(PHSIR.from_json(text), backend=backend)
 
 
 def _n_positional(fn: Callable[..., Any]) -> int:
+    """Number of positional parameters ``fn`` takes, to tell ``f(t)`` from ``f(t, x)``.
+
+    Returns 2 when the signature cannot be read or takes ``*args``.
+    """
     import inspect
 
     try:

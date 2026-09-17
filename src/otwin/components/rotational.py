@@ -43,10 +43,12 @@ class Inertia(Component):
     ) -> None:
         super().__init__(name)
         self.add_port("shaft")
-        self.I = self.add_parameter("inertia", inertia, "kg m^2")  # noqa: E741
+        self.I = self.add_parameter("inertia", inertia, "kg m^2", "L = I w")  # noqa: E741
         self.initial_speed = float(speed)
 
     def branches(self) -> list[Branch]:
+        """One across storage against the housing, state ``angular_momentum``
+        (kg m^2/s): ``omega = p / I``, energy ``p^2 / 2I``."""
         return [
             StorageBranch(
                 self,
@@ -74,10 +76,12 @@ class TorsionSpring(Component):
         super().__init__(name)
         self.add_port("a")
         self.add_port("b")
-        self.k = self.add_parameter("stiffness", stiffness, "N m/rad")
+        self.k = self.add_parameter("stiffness", stiffness, "N m/rad", "T = k theta")
         self.initial_twist = float(twist)
 
     def branches(self) -> list[Branch]:
+        """One through storage ``a`` to ``b``, state ``twist`` (rad):
+        ``tau = k theta``, energy ``k theta^2 / 2``."""
         return [
             StorageBranch(
                 self,
@@ -115,10 +119,12 @@ class RotationalDamper(Component):
         self._law = law
         if law is None:
             self.b_ = self.add_parameter(
-                "damping", damping, "N m s/rad", nonneg=True, positive=False
+                "damping", damping, "N m s/rad", "T = b w", nonneg=True, positive=False
             )
 
     def branches(self) -> list[Branch]:
+        """One resistor branch ``a`` to ``b``: ``tau = b omega`` of the relative
+        speed, or ``law(omega)`` when a law was given."""
         law = self._law if self._law is not None else (lambda w: self.b_ * w)
         return [ResistorBranch(self, self.a, self.b, law=law)]
 
@@ -135,6 +141,7 @@ class TorqueSource(Component):
         self.torque = None if torque is None else float(torque)
 
     def branches(self) -> list[Branch]:
+        """One through source into ``shaft``: the torque (N m), an input when ``None``."""
         return [
             SourceBranch(
                 self,
@@ -160,6 +167,8 @@ class SpeedSource(Component):
         self.speed = None if speed is None else float(speed)
 
     def branches(self) -> list[Branch]:
+        """One across source: the angular velocity (rad/s) of ``shaft`` against
+        the housing, an input when ``None``."""
         return [
             SourceBranch(
                 self,

@@ -108,6 +108,9 @@ class Battery(Composite):
             self.expose("thermal", cell.port)
 
     def extra_outputs(self, q: ComponentQuantities) -> dict[str, tuple[str, Expr]]:
+        """``soc`` (charge over full charge), terminal ``voltage`` (V, the OCV
+        plus the drop across every series resistor), ``current`` (A, positive
+        discharging) and, with ``thermal``, ``temperature`` (K) and ``heat_flow`` (W)."""
         n = self.name
         charge = q.state[f"{n}.ocv.charge"]
         current = -q.through[f"{n}.ocv"]
@@ -154,6 +157,8 @@ class _OpenCircuit(Component):
         self.initial = float(initial)
 
     def branches(self) -> list[Branch]:
+        """One across storage ``p`` to ``n``, state ``charge`` (C): energy is
+        the integral of the interpolated OCV table, so ``v = ocv(q)``."""
         knots, volts = self.charge_knots, self.volts
         return [
             StorageBranch(
@@ -171,6 +176,9 @@ class _OpenCircuit(Component):
 
 
 def _sample(ocv: Curve, points: int, name: str) -> tuple[list[float], list[float]]:
+    """Turn an OCV curve into sorted ``(socs, volts)`` lists: a function is
+    sampled at ``points`` evenly spaced socs, a table is sorted and checked for
+    distinct socs. Every voltage must be positive."""
     if callable(ocv):
         if points < 2:
             raise ValueError(f"{name}: ocv_points must be at least 2")

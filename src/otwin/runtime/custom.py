@@ -86,16 +86,22 @@ class CustomDynamics:
 
     # --- TwinModel surface
     def _u(self, u: Any) -> Array:
+        """Input vector of length ``n_inputs``; ``None`` means zeros."""
         return (
             np.zeros(self.n_inputs) if u is None else np.asarray(u, dtype=float).ravel()
         )
 
     def rhs(self, x: Array, u: Array | None = None, t: float = 0.0) -> Array:
+        """``dx/dt`` from the user's ``f(x, u, t)``.
+
+        The contract name in :class:`otwin.interfaces.TwinModel`.
+        """
         return np.asarray(self._f(np.asarray(x, dtype=float), self._u(u), t), dtype=float)
 
     dynamics = rhs
 
     def jacobian(self, x: Array, u: Array | None = None, t: float = 0.0) -> Array:
+        """``df/dx``: the user's Jacobian if one was given, finite differences otherwise."""
         x = np.asarray(x, dtype=float)
         uu = self._u(u)
         if self._jac is not None:
@@ -111,19 +117,23 @@ class CustomDynamics:
         return J
 
     def energy(self, x: Array) -> float:
+        """Stored energy ``H(x)``. Raises ``AttributeError`` when no energy function was given."""
         if self._H is None:
             raise AttributeError("this CustomDynamics has no energy function")
         return float(self._H(np.asarray(x, dtype=float)))
 
     def observe(self, x: Array, u: Array | None = None, t: float = 0.0) -> Array:
+        """What the sensors read: the user's ``h(x, u, t)``, or the state itself."""
         if self._h is None:
             return np.asarray(x, dtype=float)
         return np.asarray(self._h(np.asarray(x, dtype=float), self._u(u), t), dtype=float)
 
     def initial_state(self) -> State:
+        """The state given as ``x0`` at construction (zeros by default) at ``t = 0``."""
         return State(self._x0, 0.0, self.state_names)
 
     def state(self, values: Any = None, time: float = 0.0) -> State:
+        """Build a :class:`State` from a dict by name, a sequence, or the initial state."""
         if values is None:
             return State(self._x0, time, self.state_names)
         if isinstance(values, State):
@@ -144,6 +154,10 @@ class CustomDynamics:
         solver: str = "midpoint",
         **options: Any,
     ) -> State:
+        """Advance one step of ``dt`` with the input held and return the new :class:`State`.
+
+        ``solver`` is one of ``euler``, ``rk4``, ``rk45`` or ``midpoint``.
+        """
         s = self.state(state)
         u = self._u(inputs)
         xn = _bk._step(
@@ -163,6 +177,12 @@ class CustomDynamics:
         interp: str = "hold",
         **options: Any,
     ) -> Trajectory:
+        """Run forward and return a :class:`Trajectory`.
+
+        Give ``t`` or ``t_span`` with ``dt``. ``inputs`` is a number, an array of
+        shape ``(len(t), n_inputs)``, or a feedback law ``f(t, x)``. No named
+        outputs or supplied power are recorded; energy is, when a function was given.
+        """
         if t is None:
             if t_span is None or dt is None:
                 raise TypeError("simulate needs t=... or t_span=(t0, t1) with dt=...")
@@ -205,6 +225,8 @@ class CustomDynamics:
         solver: str,
         options: dict[str, Any],
     ) -> Trajectory:
+        """Simulate with a control law ``law(t, x)`` sampled at each grid point and held
+        over the step."""
         nt = t.shape[0]
         X = np.zeros((nt, self.n_states))
         U = np.zeros((nt, self.n_inputs))
@@ -246,6 +268,11 @@ class CustomDynamics:
         method: str = "midpoint",
         **kw: Any,
     ) -> dict[str, Any]:
+        """Run forward from ``x0`` over ``t``: the :class:`otwin.interfaces.TwinModel` contract.
+
+        Returns a dict with ``t``, ``x`` of shape ``(len(t), n_states)``, ``u``,
+        ``energy``, ``method`` and the full ``trajectory``.
+        """
         solver = (
             "midpoint" if method in ("auto", "linear", "newton", "fsolve") else method
         )
@@ -260,6 +287,7 @@ class CustomDynamics:
         }
 
     def summary(self) -> str:
+        """Short description: name, states, inputs and backend."""
         return (
             f"CustomDynamics: {self.name}\n  {self.n_states} states {self.state_names}\n"
             f"  {self.n_inputs} inputs {self.input_names}\n  representation: user-supplied f(x, u, t)\n"

@@ -71,6 +71,7 @@ class Verdict:
         return self.answerable
 
     def explain(self) -> str:
+        """Human-readable verdict: the checks that passed, or every breach, one per line."""
         if self.answerable:
             passed = "; ".join(self.checked) or "no checks configured"
             return f"inside the validated envelope ({passed})"
@@ -84,6 +85,7 @@ class Verdict:
         return "\n".join(lines)
 
     def to_dict(self) -> dict[str, Any]:
+        """JSON-serialisable form with ``answerable``, ``breaches`` and ``checked``."""
         return {
             "answerable": self.answerable,
             "breaches": [

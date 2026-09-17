@@ -26,6 +26,7 @@ __all__ = [
     "NumpyBackend",
     "RustBackend",
     "select_backend",
+    "engine_available",
     "EngineNotAvailable",
 ]
 
@@ -54,36 +55,53 @@ class Backend:
 
     # parameters
     def get_params(self) -> Array:
+        """Current parameter values, in the order of ``ir.params``, as a fresh array."""
         raise NotImplementedError
 
     def set_params(self, values: Array) -> None:
+        """Replace every parameter value; ``values`` has length ``n_params``."""
         raise NotImplementedError
 
     # evaluation
     def rhs(self, x: Array, u: Array, t: float) -> Array:
+        """Right-hand side ``dx/dt = f(x, u, t)``, shape ``(n_states,)``."""
         raise NotImplementedError
 
     def jacobian(self, x: Array, u: Array, t: float) -> Array:
+        """Jacobian ``df/dx`` of the right-hand side, shape ``(n_states, n_states)``."""
         raise NotImplementedError
 
     def energy(self, x: Array) -> float:
+        """Stored energy ``H(x)`` in joules."""
         raise NotImplementedError
 
     def grad_h(self, x: Array) -> Array:
+        """Gradient of the stored energy, ``dH/dx``, shape ``(n_states,)``."""
         raise NotImplementedError
 
     def outputs(self, x: Array, u: Array, t: float) -> Array:
+        """The named outputs at one state, in the order of ``output_names``."""
         raise NotImplementedError
 
     def port_outputs(self, x: Array, u: Array, t: float) -> Array:
+        """Conjugate output of every port, ``y = G^T grad_H + D u``, shape ``(n_ports,)``."""
         raise NotImplementedError
 
     def supplied_power(self, x: Array, u: Array, t: float) -> float:
+        """Power entering the system through its ports, ``sum(y * u_port)`` in watts.
+
+        Positive when the sources feed energy into the system.
+        """
         raise NotImplementedError
 
     def step(
         self, x: Array, u: Array, t: float, dt: float, method: str, **opts: Any
     ) -> Array:
+        """Advance ``x`` by one step of length ``dt`` with the input held at ``u``.
+
+        ``method`` is one of ``SOLVERS``; ``opts`` are solver options such as
+        ``rtol``/``atol`` (rk45) or ``newton_tol``/``max_newton`` (midpoint).
+        """
         raise NotImplementedError
 
     def simulate(
@@ -95,6 +113,12 @@ class Backend:
         interp: str,
         **opts: Any,
     ) -> dict[str, Any]:
+        """Integrate from ``x0`` over the grid ``t`` and record the result at each point.
+
+        ``u`` is ``(len(t), n_inputs)`` or ``None`` for zero inputs; ``interp`` is
+        ``"hold"`` or ``"linear"``. Returns a dict with ``t``, ``x``, ``u``,
+        ``energy``, ``supplied_power``, ``outputs``, ``stats`` and ``backend``.
+        """
         raise NotImplementedError
 
     def simulate_batch(
@@ -107,6 +131,12 @@ class Backend:
         interp: str,
         **opts: Any,
     ) -> dict[str, Any]:
+        """Integrate ``N`` runs at once from ``x0s`` of shape ``(N, n_states)``.
+
+        ``params``, if given, is ``(N, n_params)`` and sets the parameters of each
+        run. Returns a dict with ``t``, ``x`` of shape ``(N, len(t), n_states)``,
+        ``energy`` of shape ``(N, len(t))`` and ``backend``.
+        """
         raise NotImplementedError
 
 
@@ -114,6 +144,12 @@ class Backend:
 # Rust
 # ----------------------------------------------------------------------------
 class RustBackend(Backend):
+    """Backend that runs the model in the compiled Rust engine (:mod:`otwin_engine`).
+
+    The lowered IR is serialised to JSON and loaded into an engine model once at
+    construction; every call then stays in Rust.
+    """
+
     name = "rust"
 
     def __init__(self, ir: PHSIR) -> None:
@@ -125,35 +161,48 @@ class RustBackend(Backend):
         self._m = otwin_engine.Model(json.dumps(ir.lower()))
 
     def get_params(self) -> Array:
+        """Parameter values held by the engine; see :meth:`Backend.get_params`."""
         return np.asarray(self._m.params, dtype=float)
 
     def set_params(self, values: Array) -> None:
+        """Set the engine's parameter values; see :meth:`Backend.set_params`."""
         self._m.params = np.ascontiguousarray(values, dtype=float)
 
     def rhs(self, x: Array, u: Array, t: float) -> Array:
+        """Right-hand side ``f(x, u, t)`` on the Rust engine; see :meth:`Backend.rhs`."""
         return self._m.rhs(_c(x), _c(u), float(t))
 
     def jacobian(self, x: Array, u: Array, t: float) -> Array:
+        """Jacobian ``df/dx`` on the Rust engine; see :meth:`Backend.jacobian`."""
         return self._m.jacobian(_c(x), _c(u), float(t))
 
     def energy(self, x: Array) -> float:
+        """Stored energy ``H(x)`` on the Rust engine; see :meth:`Backend.energy`."""
         return float(self._m.energy(_c(x)))
 
     def grad_h(self, x: Array) -> Array:
+        """Gradient ``dH/dx`` on the Rust engine; see :meth:`Backend.grad_h`."""
         return self._m.grad_h(_c(x))
 
     def outputs(self, x: Array, u: Array, t: float) -> Array:
+        """Named outputs on the Rust engine; see :meth:`Backend.outputs`."""
         return self._m.outputs(_c(x), _c(u), float(t))
 
     def port_outputs(self, x: Array, u: Array, t: float) -> Array:
+        """Port outputs on the Rust engine; see :meth:`Backend.port_outputs`."""
         return self._m.port_outputs(_c(x), _c(u), float(t))
 
     def supplied_power(self, x: Array, u: Array, t: float) -> float:
+        """Power supplied through the ports, on the Rust engine.
+
+        See :meth:`Backend.supplied_power`.
+        """
         return float(self._m.supplied_power(_c(x), _c(u), float(t)))
 
     def step(
         self, x: Array, u: Array, t: float, dt: float, method: str, **opts: Any
     ) -> Array:
+        """One integration step on the Rust engine; see :meth:`Backend.step`."""
         return self._m.step(
             _c(x), _c(u), float(t), float(dt), method=method, **_engine_opts(opts)
         )
@@ -161,6 +210,7 @@ class RustBackend(Backend):
     def simulate(
         self, x0: Array, t: Array, u: Array | None, method: str, interp: str, **opts: Any
     ) -> dict[str, Any]:
+        """Full simulation on the Rust engine; see :meth:`Backend.simulate`."""
         uu = None if u is None else np.ascontiguousarray(u, dtype=float)
         out = self._m.simulate(
             _c(x0),
@@ -183,6 +233,7 @@ class RustBackend(Backend):
         interp: str,
         **opts: Any,
     ) -> dict[str, Any]:
+        """Batched simulation on the Rust engine; see :meth:`Backend.simulate_batch`."""
         uu = None if u is None else np.ascontiguousarray(u, dtype=float)
         pp = None if params is None else np.ascontiguousarray(params, dtype=float)
         out = self._m.simulate_batch(
@@ -199,10 +250,16 @@ class RustBackend(Backend):
 
 
 def _c(a: Any) -> Array:
+    """Flat, contiguous ``float64`` copy of ``a``, as the engine bindings expect."""
     return np.ascontiguousarray(np.asarray(a, dtype=float).ravel())
 
 
 def _engine_opts(opts: dict[str, Any], sim: bool = False) -> dict[str, Any]:
+    """Validate solver options and keep those the engine accepts.
+
+    ``max_substeps`` is tolerated and dropped; any other unknown key raises
+    ``TypeError``. With ``sim=True`` the recording flags are also allowed.
+    """
     keys = {"rtol", "atol", "newton_tol", "max_newton"}
     if sim:
         keys |= {"record_outputs", "record_energy"}
@@ -216,18 +273,22 @@ def _engine_opts(opts: dict[str, Any], sim: bool = False) -> dict[str, Any]:
 # NumPy reference
 # ----------------------------------------------------------------------------
 def _sign(a: float) -> float:
+    """Sign of ``a`` with ``sign(0) = 0``, matching the engine."""
     return 0.0 if a == 0 else math.copysign(1.0, a)
 
 
 def _sqrt(a: float) -> float:
+    """Square root that returns ``nan`` for negative arguments instead of raising."""
     return math.sqrt(a) if a >= 0 else math.nan
 
 
 def _log(a: float) -> float:
+    """Natural log with ``log(0) = -inf`` and ``nan`` for negative arguments."""
     return math.log(a) if a > 0 else (-math.inf if a == 0 else math.nan)
 
 
 def _exp(a: float) -> float:
+    """Exponential that saturates to ``inf`` on overflow instead of raising."""
     try:
         return math.exp(a)
     except OverflowError:
@@ -235,6 +296,7 @@ def _exp(a: float) -> float:
 
 
 def _pow(a: float, b: float) -> float:
+    """Power ``a ** b``, ``nan`` on a domain error or overflow; ``b == 2`` is a square."""
     if b == 2.0:
         return a * a
     try:
@@ -244,6 +306,7 @@ def _pow(a: float, b: float) -> float:
 
 
 def _div(a: float, b: float) -> float:
+    """Division with IEEE semantics: ``a / 0`` is a signed ``inf``, ``0 / 0`` is ``nan``."""
     if b == 0.0:
         return math.copysign(math.inf, a) if a != 0 else math.nan
     return a / b
@@ -302,6 +365,11 @@ def _codegen(e: Expr, order: dict[str, int]) -> str:
 def _compile_vector(
     exprs: list[Expr], order: dict[str, int]
 ) -> Callable[[list[float]], list[float]]:
+    """Compile a list of expressions into one Python function over the flat table.
+
+    The returned function maps the symbol table ``v`` (see
+    :meth:`PHSIR.symbol_order`) to a list with one float per expression.
+    """
     if not exprs:
         return lambda v: []
     body = ", ".join(_codegen(e, order) for e in exprs)
@@ -312,6 +380,13 @@ def _compile_vector(
 
 
 class NumpyBackend(Backend):
+    """Reference backend in pure Python and NumPy.
+
+    Each expression of the IR is compiled to Python source at construction and
+    evaluated over a flat symbol table. It is slower than the Rust engine but
+    needs no extension, and the test suite uses it as the oracle.
+    """
+
     name = "numpy"
 
     def __init__(self, ir: PHSIR) -> None:
@@ -334,6 +409,11 @@ class NumpyBackend(Backend):
 
     # table
     def _table(self, x: Array, u: Array | None, t: float) -> list[float]:
+        """Flat symbol table ``[x..., u..., params..., t]`` for the compiled expressions.
+
+        A missing ``u`` leaves the input slots at zero. Raises ``ValueError`` when
+        ``x`` or ``u`` has the wrong length.
+        """
         n, m = self.n_states, self.n_inputs
         v = [0.0] * (n + m + self.n_params + 1)
         xs = np.asarray(x, dtype=float).ravel()
@@ -355,9 +435,11 @@ class NumpyBackend(Backend):
         return v
 
     def get_params(self) -> Array:
+        """Copy of the current parameter values; see :meth:`Backend.get_params`."""
         return self._params.copy()
 
     def set_params(self, values: Array) -> None:
+        """Replace the parameter values; see :meth:`Backend.set_params`."""
         vals = np.asarray(values, dtype=float).ravel()
         if vals.shape[0] != self.n_params:
             raise ValueError(
@@ -366,9 +448,15 @@ class NumpyBackend(Backend):
         self._params = vals.copy()
 
     def rhs(self, x: Array, u: Array, t: float) -> Array:
+        """Right-hand side ``f(x, u, t)`` in NumPy; see :meth:`Backend.rhs`."""
         return np.array(self._rhs(self._table(x, u, t)), dtype=float)
 
     def jacobian(self, x: Array, u: Array, t: float) -> Array:
+        """Jacobian ``df/dx``; see :meth:`Backend.jacobian`.
+
+        Uses the symbolic Jacobian when the IR carries one and it evaluates to
+        finite values, and forward finite differences otherwise.
+        """
         n = self.n_states
         if self._jac is not None:
             J = np.array(self._jac(self._table(x, u, t)), dtype=float).reshape(n, n)
@@ -385,18 +473,26 @@ class NumpyBackend(Backend):
         return J
 
     def energy(self, x: Array) -> float:
+        """Stored energy ``H(x)``; see :meth:`Backend.energy`."""
         return float(self._energy(self._table(x, None, 0.0))[0])
 
     def grad_h(self, x: Array) -> Array:
+        """Gradient ``dH/dx``; see :meth:`Backend.grad_h`."""
         return np.array(self._grad(self._table(x, None, 0.0)), dtype=float)
 
     def outputs(self, x: Array, u: Array, t: float) -> Array:
+        """Named outputs; see :meth:`Backend.outputs`."""
         return np.array(self._out(self._table(x, u, t)), dtype=float)
 
     def port_outputs(self, x: Array, u: Array, t: float) -> Array:
+        """Port outputs; see :meth:`Backend.port_outputs`."""
         return np.array(self._ports(self._table(x, u, t)), dtype=float)
 
     def supplied_power(self, x: Array, u: Array, t: float) -> float:
+        """Power supplied through the ports, ``sum(y * u_port)``.
+
+        See :meth:`Backend.supplied_power`.
+        """
         v = self._table(x, u, t)
         y = self._ports(v)
         uu = self._port_vals(v)
@@ -406,6 +502,7 @@ class NumpyBackend(Backend):
     def step(
         self, x: Array, u: Array, t: float, dt: float, method: str, **opts: Any
     ) -> Array:
+        """One integration step with the generic integrators; see :meth:`Backend.step`."""
         _engine_opts(opts)
         f = self.rhs
         x = np.asarray(x, dtype=float)
@@ -415,6 +512,7 @@ class NumpyBackend(Backend):
     def simulate(
         self, x0: Array, t: Array, u: Array | None, method: str, interp: str, **opts: Any
     ) -> dict[str, Any]:
+        """Full simulation with the generic integrators; see :meth:`Backend.simulate`."""
         _engine_opts(opts, sim=True)
         return _simulate_generic(
             self.rhs,
@@ -443,6 +541,12 @@ class NumpyBackend(Backend):
         interp: str,
         **opts: Any,
     ) -> dict[str, Any]:
+        """Batched simulation as a Python loop over :meth:`simulate`.
+
+        See :meth:`Backend.simulate_batch`.
+
+        The parameters are restored to their previous values afterwards.
+        """
         x0s = np.asarray(x0s, dtype=float)
         saved = self._params.copy()
         xs, es = [], []
@@ -498,6 +602,12 @@ def _step(
     stats: dict[str, int] | None = None,
     h_guess: list[float] | None = None,
 ) -> Array:
+    """One step of length ``h`` from ``(x, t)`` with the chosen ``method``.
+
+    ``u_of(th)`` gives the input at fraction ``th`` in ``[0, 1]`` of the step.
+    ``stats`` accumulates evaluation counts; ``h_guess`` carries the adaptive
+    step of ``rk45`` from one call to the next.
+    """
     st = stats if stats is not None else {}
     if method == "euler":
         st["rhs_evals"] = st.get("rhs_evals", 0) + 1
@@ -529,6 +639,12 @@ def _rk45(
     st: dict[str, int],
     h_guess: list[float],
 ) -> Array:
+    """Dormand-Prince 5(4) with adaptive sub-steps from ``t0`` to ``t1``.
+
+    ``rtol`` and ``atol`` come from ``opts`` (defaults ``1e-8`` and ``1e-10``).
+    Raises ``RuntimeError`` when the error estimate is not finite or the step
+    collapses.
+    """
     rtol = float(opts.get("rtol", 1e-8))
     atol = float(opts.get("atol", 1e-10))
     span = t1 - t0
@@ -576,6 +692,10 @@ def _midpoint_halving(
     st: dict[str, int],
     depth: int,
 ) -> Array:
+    """Implicit midpoint step that halves ``h`` and retries when Newton fails.
+
+    Up to six levels of halving are tried before the error propagates.
+    """
     try:
         return _midpoint(f, jac, x, um, t, h, opts, st)
     except RuntimeError:
@@ -597,6 +717,12 @@ def _midpoint(
     opts: dict[str, Any],
     st: dict[str, int],
 ) -> Array:
+    """One implicit midpoint step solved by Newton's method.
+
+    The iteration matrix ``I - h/2 J`` is refreshed every four iterations.
+    ``newton_tol`` and ``max_newton`` come from ``opts``. Raises ``RuntimeError``
+    when the iteration does not converge or the matrix is singular.
+    """
     tol = float(opts.get("newton_tol", 1e-10))
     max_it = int(opts.get("max_newton", 50))
     tm = t + 0.5 * h
@@ -649,6 +775,14 @@ def _simulate_generic(
     opts: dict[str, Any],
     backend: str,
 ) -> dict[str, Any]:
+    """Time-stepping loop shared by :class:`NumpyBackend` and ``CustomDynamics``.
+
+    Validates the grid and inputs, integrates from ``x0`` with :func:`_step`,
+    and records state, energy, supplied power and outputs at every grid point.
+    ``energy``, ``supplied`` and ``outputs`` may be ``None``, in which case the
+    corresponding arrays are empty. Returns the dict described in
+    :meth:`Backend.simulate`.
+    """
     if method not in SOLVERS:
         raise ValueError(f"unknown solver {method!r}; choose one of {SOLVERS}")
     if interp not in ("hold", "linear"):
@@ -732,6 +866,7 @@ def _simulate_generic(
 # Selection
 # ----------------------------------------------------------------------------
 def engine_available() -> bool:
+    """Whether the Rust extension :mod:`otwin_engine` can be imported."""
     try:
         import otwin_engine  # noqa: F401
     except ImportError:
@@ -740,6 +875,12 @@ def engine_available() -> bool:
 
 
 def select_backend(ir: PHSIR, backend: str = "auto") -> Backend:
+    """Build the backend named by ``backend`` for ``ir``.
+
+    ``"rust"`` and ``"numpy"`` pick one explicitly; ``"auto"`` takes the Rust
+    engine when it is installed and otherwise falls back to NumPy, warning once
+    with :class:`EngineNotAvailable`.
+    """
     global _warned
     if backend == "rust":
         return RustBackend(ir)

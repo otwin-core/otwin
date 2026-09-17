@@ -215,6 +215,9 @@ def chain(*items: Any, name: str = "system") -> PhysicalSystem:
 
 
 def _series_pair(c: Component) -> tuple[Port, Port]:
+    """The (entry, exit) ports a chain passes through: ``series_ports`` if
+    set, else ``(p, n)``, ``(a, b)`` or ``(inlet, outlet)``; a one-port gives
+    its only port twice. Anything else is not a series element."""
     if c.series_ports is not None:
         a, b = c.series_ports
         return c.ports[a], c.ports[b]
@@ -231,6 +234,7 @@ def _series_pair(c: Component) -> tuple[Port, Port]:
 
 
 def _component_rshift(self: Component, other: Any) -> PhysicalSystem:
+    """``component >> other``: start a :func:`chain`."""
     return chain(self, other)
 
 
@@ -240,5 +244,6 @@ Component.__rshift__ = _component_rshift  # type: ignore[method-assign]
 
 
 def _iter_ports(conns: Iterable[Connection]) -> Iterable[Port]:
+    """Every port of every connection, in order."""
     for c in conns:
         yield from c

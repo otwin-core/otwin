@@ -178,6 +178,15 @@ jobs:
       # -W turns warnings into errors, which is the only setting under which a
       # broken cross-reference is anything other than plain text nobody notices.
       # Read the Docs enforces the same thing through fail_on_warning.
+      # The component reference is generated from the components themselves
+      # and committed; a stale page means a component changed without it.
+      - name: Component reference is up to date
+        run: python docs/generate_components.py --check
+
+      # Every public name has a docstring (settings in [tool.interrogate]).
+      - name: Public API is documented
+        run: interrogate src/otwin
+
       - name: Build
         run: python -m sphinx -b html -W --keep-going docs docs/_build/html
 

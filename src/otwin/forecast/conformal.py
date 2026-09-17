@@ -24,7 +24,7 @@ has in-sample residuals an order of magnitude smaller than its h-step-ahead
 errors, so the band comes out roughly ten times too narrow. Measured on a
 lithium-ion capacity twin: 1.5 % delivered coverage at a 90 % target.
 
-:func:`rolling_origin_residuals` exists to make the honest thing the easy thing.
+:func:`rolling_origin_residuals` exists to make the right thing the easy thing.
 It refits the whole pipeline at earlier origins *inside* the training window and
 collects genuine h-step-ahead errors. It costs one refit per origin, and that
 cost is the entire difference between a band that means something and one that
@@ -39,7 +39,7 @@ Three constructions
 
 :func:`horizon_conformal`
     A half-width that grows with the horizon, fitted as a power law over the
-    calibrated range and extrapolated beyond it. Honest about which part is
+    calibrated range and extrapolated beyond it. It says which part is
     which: :attr:`ConformalBand.extrapolated` marks the steps no calibration
     residual reached.
 
@@ -116,7 +116,7 @@ def conformal_quantile(scores: Array | Sequence[float], level: float) -> float:
     with probability at least ``level`` for *any* n, however small.
 
     When ``⌈level·(n+1)⌉ > n`` there are not enough calibration points to make
-    the guarantee at that level, and the honest answer is an infinite band. This
+    the guarantee at that level, and the only correct answer is an infinite band. This
     function returns ``inf`` and says so, rather than clipping the quantile to 1
     and returning the sample maximum — which looks like an answer, is narrower
     than the guarantee requires, and is the silent failure mode of every
@@ -153,7 +153,7 @@ def conformal_quantile(scores: Array | Sequence[float], level: float) -> float:
         warnings.warn(
             f"{n} calibration residuals cannot support a {level:.0%} conformal band: "
             f"the finite-sample rank is {rank} of {n}. Returning an infinite "
-            f"half-width, which is the honest answer. You need at least "
+            f"half-width, which is the only correct answer. You need at least "
             f"{_min_calibration_size(level)} residuals for this level.",
             UserWarning,
             stacklevel=2,
@@ -495,7 +495,7 @@ def rolling_origin_residuals(
     min_train: int | None = None,
     max_horizon: int | None = None,
 ) -> tuple[Array, Array]:
-    """Generate honest h-step-ahead calibration residuals.
+    """Generate leakage-free h-step-ahead calibration residuals.
 
     This is the expensive, correct alternative to quantiling a fitted model's own
     residuals. At each origin the *whole pipeline* is refitted on the history up

@@ -32,7 +32,7 @@ happens, and the observer is exactly the EKF.
 Reading the diagnostics
 -----------------------
 
-``alpha`` per step is the honest signal. Occasional dips below 1 are the
+``alpha`` per step is the signal to watch. Occasional dips below 1 are the
 filter being caught doing something unphysical, which is the point. A clamp
 that fires on most steps is *not* a success: it means the tuning is wrong,
 almost always ``R_meas`` too small (the filter trusts a noisy sensor and takes
@@ -160,7 +160,7 @@ class EnergyConsistentObserver(ExtendedKalmanFilter):
         energy is not below the plant's — an over-energetic prior is corrected
         freely, since every downward correction is inside budget. Model the
         disturbance you are actually seeing as an input and give it a port,
-        which is the honest fix and restores a real budget. Or set ``tol`` to a
+        which is the right fix and restores a real budget. Or set ``tol`` to a
         small fraction of the system's energy scale, accepting a bounded leak of
         at most ``tol`` per step in exchange for a filter that can climb —
         quantify it as ``tol × n_steps`` and check that against the energy you
