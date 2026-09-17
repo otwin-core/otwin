@@ -19,3 +19,7 @@ docs/api/generated/
 # Rust
 target/
 crates/otwin-engine/*.so
+
+# git patches and bundles exchanged during development
+*.patch
+*.bundle
