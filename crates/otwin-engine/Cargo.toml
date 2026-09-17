@@ -4,7 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Python bindings for the OTwin dynamics engine."
+description = "Python bindings for the Otwin physics engine."
+# Shipped to PyPI as a wheel (otwin-engine), not to crates.io: it is a Python
+# extension module, and nothing on the Rust side would depend on it.
+publish = false
 
 [lib]
 name = "otwin_engine"

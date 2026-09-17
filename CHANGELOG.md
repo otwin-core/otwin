@@ -12,6 +12,11 @@ version in anything you depend on.
 
 ### Added
 
+- `otwin-core` is published on crates.io, so a Rust program can run a
+  compiled Otwin model without Python. The release workflow publishes it
+  with the wheels (crates.io Trusted Publishing, environment `crates-io`);
+  the crate has a README and the metadata docs.rs needs.
+
 - `docs/reference/components.md`: every component with its constructor,
   ports, parameters (unit, value, validity rule, meaning), states, inputs and
   outputs, generated from the components by `docs/generate_components.py`

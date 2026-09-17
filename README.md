@@ -186,6 +186,8 @@ pip install "otwin[engine]"
 
 - `otwin[engine]` adds the compiled Rust runtime, with binary wheels for Linux, macOS and Windows. Without the engine package, models can still run through the NumPy reference backend.
 
+- The engine on its own is the Rust crate [`otwin-core`](https://crates.io/crates/otwin-core) (`cargo add otwin-core`), for running a compiled Otwin model where Python is not available.
+
 <br>
 
 # Quick start
