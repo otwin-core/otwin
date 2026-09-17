@@ -53,8 +53,8 @@ dependencies = ["numpy>=1.24", "scipy>=1.10"]
 # Field connectors. Both permissively licensed; both optional so that
 # `pip install otwin` stays a two-package install for someone who only wants
 # the modelling and validation layers.
-modbus = ["pymodbus>=3.6,<4.0"]
-sunspec = ["pysunspec2>=1.1", "pymodbus>=3.6,<4.0"]
+modbus = ["pymodbus>=3.15.0,<4.0"]
+sunspec = ["pysunspec2>=1.1", "pymodbus>=3.15.0,<4.0"]
 # The compiled dynamics engine (Rust, built in this repository under
 # crates/otwin-engine and published as its own wheel). Optional: without it
 # every compiled model runs on the NumPy reference backend, more slowly.
@@ -74,7 +74,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "hypothesis>=6.100",
     "ruff>=0.6",
-    "mypy>=1.11",
+    "mypy>=2.3.1",
     "otwin[modbus,sunspec,gp]",
 ]
 
