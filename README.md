@@ -43,6 +43,7 @@
 [Uncertainty](#uncertainty) ·
 [Validation](#validation) ·
 [Examples](#examples) ·
+[Roadmap](#roadmap) ·
 [The Otwin ecosystem](#the-otwin-ecosystem)
 
 </div>
@@ -1471,11 +1472,17 @@ For specification work, see [otwin-spec](https://github.com/otwin-core/otwin-spe
 
 <br>
 
-# Issues
+# Roadmap
 
-Found a bug, have a modeling problem, want to propose a component, or want to discuss the specification?
+Where this is going, phase by phase, and what is done: [ROADMAP.md](ROADMAP.md).
 
-[Open an issue](https://github.com/otwin-core/otwin/issues).
+<br>
+
+# Discussions and issues
+
+Questions, ideas about how systems should be written, components that should exist, and things you have built go to [Discussions](https://github.com/otwin-core/otwin/discussions). Start with [Welcome to Otwin](https://github.com/otwin-core/otwin/discussions).
+
+Bugs and agreed, concrete work go to [Issues](https://github.com/otwin-core/otwin/issues).
 
 <br>
 
