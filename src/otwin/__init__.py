@@ -42,7 +42,7 @@ The Rust engine (``pip install otwin[engine]``) runs the numerical loop; without
 it the same models run on a NumPy reference backend.
 """
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 from otwin import components, expr, hybrid
 from otwin.api import compile

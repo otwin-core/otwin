@@ -8,7 +8,7 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 From 2.0.0 the public API changes only with a major version. Pin an exact
 version in anything you depend on.
 
-## [Unreleased]
+## [2.0.1] — 2026-09-17
 
 ### Changed
 
@@ -365,7 +365,7 @@ this repository.
 - Connectors are read-only. Closed-loop actuation is deliberately out of scope.
 - No production deployment on an operating asset is known to the maintainer.
 
-[Unreleased]: https://github.com/otwin-core/otwin/compare/v2.0.0...HEAD
+[2.0.1]: https://github.com/otwin-core/otwin/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/otwin-core/otwin/compare/v0.4.0...v2.0.0
 [0.4.0]: https://github.com/otwin-core/otwin/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/otwin-core/otwin/compare/v0.3.0...v0.3.1
