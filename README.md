@@ -358,6 +358,12 @@ These interfaces let you inspect what Otwin actually built.
 
 Real work starts from devices, not from springs. A battery module, as its data sheet describes it: capacity, the open-circuit voltage curve, the internal resistance, two polarisation branches, the heat capacity. Then the cooling. Nothing else.
 
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Battery.png" height="260">
+
+</div>
+
 ```python
 import otwin
 from otwin.components.battery import Battery
@@ -400,6 +406,12 @@ soc 0.40  voltage 3.152 V  cell 33.8 °C  heat 5.75 W
 The model has four states: the charge, two polarisation charges and the heat in the cell. Every voltage, current, power and temperature inside the module is a named output. `with_parameters` ages the cells or clogs the cooling without rebuilding anything; [`examples/battery_that_runs_hot.py`](examples/battery_that_runs_hot.py) uses that to tell the two apart.
 
 A pump line reads the same way. The `>>` operator joins components in series, one-port components (a tank, the outfall) included:
+
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Pump_line.png" height="200">
+
+</div>
 
 ```python
 from otwin.components.hydraulic import Atmosphere, Filter, Pipe, Pump, Tank
@@ -610,7 +622,13 @@ flowchart LR
     A --> B --> C --> D
 ```
 
-For example:
+For example, a supply, a DC motor and a fan on its shaft:
+
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Motor_drive.png" height="180">
+
+</div>
 
 ```python
 import otwin
