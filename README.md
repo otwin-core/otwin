@@ -1,12 +1,8 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_wm.png" width="35%">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_header.png" width="100%">
 
 # The open-source physics engine for engineering systems
-
-### You describe the system and Otwin compiles the physics.
-
-Build physical systems from components and connections. Compile them into executable dynamics. Connect them to measurements. Calibrate what you do not know. Validate what you predict.
 
 </div>
 
