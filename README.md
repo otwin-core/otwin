@@ -302,7 +302,7 @@ run = model.simulate(
 
 q = run["spring.extension"]
 
-print(f"Static equilibrium q* = m g / k = {m*g0/k:.3f} m")
+print(f"Static equilibrium q* = m g / k = {weight.force / spring.stiffness:.3f} m")
 print(f"Lowest point reached: q = {q.max():.3f} m")
 print(f"Final position: q = {q[-1]:.3f} m")
 

@@ -137,13 +137,13 @@ class Storage(_TwoPort):
         super().__init__(domain, name)
         self.kind = kind
         units = _UNITS[domain]
-        self.coefficient = self.add_parameter("coefficient", coefficient, units[kind])
+        self.coef = self.add_parameter("coefficient", coefficient, units[kind])
         self.initial = float(initial)
         self._energy = energy
         self.state_unit = units["state_a" if kind == "across" else "state_t"]
 
     def branches(self) -> list[Branch]:
-        c = self.coefficient
+        c = self.coef
         energy = self._energy if self._energy is not None else (lambda x: x * x / (2 * c))
         return [
             StorageBranch(
