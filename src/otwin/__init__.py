@@ -13,7 +13,7 @@ Ten seconds:
     >>> system = otwin.System(mass, spring, damper, wall)
     >>> system.connect(mass.flange, spring.a, damper.a)      # doctest: +ELLIPSIS
     System(...)
-    >>> system.connect(spring.b, damper.b, wall.terminal)    # doctest: +ELLIPSIS
+    >>> system.connect(spring.b, damper.b, wall.port)    # doctest: +ELLIPSIS
     System(...)
     >>> model = otwin.compile(system)
     >>> trajectory = model.simulate(t_span=(0.0, 20.0), dt=0.05)
@@ -77,11 +77,12 @@ from otwin.runtime import (
     Trajectory,
     engine_available,
 )
-from otwin.system import System, chain
+from otwin.system import PhysicalSystem, System, chain
 
 __all__ = [
     "__version__",
     "System",
+    "PhysicalSystem",
     "chain",
     "compile",
     "Model",

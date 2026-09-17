@@ -1,9 +1,9 @@
-"""The component graph: what exists and how it is connected.
+"""The physical system: which components exist and how they are connected.
 
-A :class:`System` holds components and connections. A connection joins two or
-more terminals into one node, where they share an across variable (voltage,
-velocity, pressure, temperature) and their through variables sum to zero.
-Nothing is computed here. Compilation happens in :func:`otwin.compile`.
+A :class:`PhysicalSystem` (``otwin.System`` for short) is a graph. Its nodes
+are components, its edges are connections between their ports. It holds no
+equations and computes nothing: it is the description an engineer writes, and
+it is what :func:`otwin.compile` reads.
 
 ::
 
@@ -12,9 +12,13 @@ Nothing is computed here. Compilation happens in :func:`otwin.compile`.
     >>> m, k, c, wall = Mass(1.0), Spring(20.0), Damper(0.3), Fixed()
     >>> s = System(m, k, c, wall, name="oscillator")
     >>> _ = s.connect(m.flange, k.a, c.a)
-    >>> _ = s.connect(k.b, c.b, wall.terminal)
-    >>> len(s.components), len(s.connections)
-    (4, 2)
+    >>> _ = s.connect(k.b, c.b, wall.port)
+    >>> len(s.components), len(s.connections), sorted(s.domains)
+    (4, 2, ['mechanical'])
+
+Everything the system knows can be inspected before compiling:
+:attr:`components`, :attr:`connections`, :attr:`ports`, :attr:`parameters`,
+:attr:`domains`, and :meth:`summary` for a readable listing.
 """
 
 from __future__ import annotations
@@ -22,28 +26,33 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from .components.base import Component, Composite, Ground, Terminal
+from .components.base import Component, Composite, Connection, Ground, Parameter, Port
 
-__all__ = ["System", "chain", "ConnectionError_"]
+__all__ = ["PhysicalSystem", "System", "chain", "ConnectionError_"]
 
 
 class ConnectionError_(ValueError):
-    """A connection that cannot be made: a domain mismatch, a terminal joined
+    """A connection that cannot be made: a domain mismatch, a port joined
     twice, a component the system does not know."""
 
 
-class System:
-    """A set of components and the connections between their terminals."""
+class PhysicalSystem:
+    """Components plus the connections between their ports.
+
+    Build it with :meth:`add` and :meth:`connect`, or with ``>>`` for a
+    series chain. Then ``otwin.compile(system)``.
+    """
 
     def __init__(self, *components: Component, name: str = "system") -> None:
         self.name = name
         self.components: list[Component] = []
-        self.connections: list[tuple[Terminal, ...]] = []
+        self.connections: list[Connection] = []
         self._names: set[str] = set()
         self.add(*components)
 
     # ---------------------------------------------------------------- build
-    def add(self, *components: Component) -> System:
+    def add(self, *components: Component) -> PhysicalSystem:
+        """Add components. Names must be unique within the system."""
         for c in components:
             if not isinstance(c, Component):
                 raise TypeError(f"System.add expects components, got {type(c).__name__}")
@@ -57,39 +66,59 @@ class System:
             self.components.append(c)
         return self
 
-    def connect(self, *terminals: Terminal) -> System:
-        """Join terminals into one node. Components are added if not yet present."""
-        if len(terminals) < 2:
-            raise ConnectionError_("connect needs at least two terminals")
-        for t in terminals:
-            if not isinstance(t, Terminal):
-                raise TypeError(
-                    f"connect expects terminals such as resistor.p, got {t!r}"
-                )
+    def connect(self, *ports: Port) -> PhysicalSystem:
+        """Join ports into one node. Components are added if not yet present.
+
+        Ports must share a domain; a reference (``Ground``, ``Fixed``,
+        ``Atmosphere``) fits any domain. To couple two domains use a
+        ``Transformer`` or a ``Gyrator``, not a connection.
+        """
+        for t in ports:
+            if not isinstance(t, Port):
+                raise TypeError(f"connect expects ports such as resistor.p, got {t!r}")
+        try:
+            connection = Connection(*ports)
+        except ValueError as exc:
+            raise ConnectionError_(str(exc)) from None
+        for t in ports:
             if t.component not in self.components:
                 self.add(t.component)
-        domains = {t.domain for t in terminals if t.domain != "any"}
-        if len(domains) > 1:
-            names = ", ".join(f"{t.qualified} [{t.domain}]" for t in terminals)
-            raise ConnectionError_(
-                f"incompatible connection: {names}. Terminals of different domains "
-                "cannot share a node; couple domains with a Transformer or a Gyrator."
-            )
-        self.connections.append(tuple(terminals))
+        self.connections.append(connection)
         return self
 
-    def ground(self, *terminals: Terminal) -> System:
-        """Connect terminals to a new reference (ground, fixed frame, atmosphere)."""
+    def ground(self, *ports: Port) -> PhysicalSystem:
+        """Connect ports to a new reference (ground, fixed frame, atmosphere)."""
         g = Ground()
         self.add(g)
-        return self.connect(g.terminal, *terminals)
+        return self.connect(g.port, *ports)
 
     # -------------------------------------------------------------- inspect
-    def flattened(self) -> tuple[list[Component], list[tuple[Terminal, ...]]]:
+    @property
+    def ports(self) -> list[Port]:
+        """Every port of every component, connected or not."""
+        return [p for c in self.components for p in c.ports.values()]
+
+    @property
+    def parameters(self) -> dict[str, Parameter]:
+        """``{"<component>.<parameter>": Parameter}`` over the flattened system."""
+        comps, _ = self.flattened()
+        return {f"{c.name}.{n}": p for c in comps for n, p in c.parameters.items()}
+
+    @property
+    def domains(self) -> set[str]:
+        """The physical domains present (references excluded)."""
+        return {p.domain for p in self.ports if p.domain != "any"}
+
+    def unconnected(self) -> list[Port]:
+        """Ports that appear in no connection. Two-port elements need all theirs."""
+        used = {p for conn in self.connections for p in conn}
+        return [p for p in self.ports if p not in used]
+
+    def flattened(self) -> tuple[list[Component], list[Connection]]:
         """Expand composites into their parts. Returns (components, connections)."""
         comps: list[Component] = []
-        links: list[tuple[Terminal, ...]] = list(self.connections)
-        alias: dict[Terminal, Terminal] = {}
+        links: list[Connection] = list(self.connections)
+        alias: dict[Port, Port] = {}
 
         def visit(c: Component) -> None:
             if isinstance(c, Composite):
@@ -97,28 +126,46 @@ class System:
                     alias[t] = inner
                 for part in c.parts:
                     visit(part)
-                links.extend(c.links)
+                links.extend(c.connections)
             else:
                 comps.append(c)
 
         for c in self.components:
             visit(c)
 
-        def resolve(t: Terminal) -> Terminal:
+        def resolve(t: Port) -> Port:
             seen = 0
             while t in alias:
                 t = alias[t]
                 seen += 1
                 if seen > 100:
-                    raise ConnectionError_("circular terminal alias")
+                    raise ConnectionError_("circular port alias")
             return t
 
-        resolved = [tuple(resolve(t) for t in link) for link in links]
+        resolved = [Connection(*(resolve(t) for t in link)) for link in links]
         return comps, resolved
 
-    def terminals(self) -> Iterable[Terminal]:
+    def summary(self) -> str:
+        """A readable listing: components with parameters, then connections."""
+        lines = [
+            f"{self.name}: {len(self.components)} components, "
+            f"{len(self.connections)} connections, domains {sorted(self.domains)}"
+        ]
         for c in self.components:
-            yield from c.terminals.values()
+            params = ", ".join(
+                f"{n}={p.value:g} {p.unit}".rstrip() for n, p in c.parameters.items()
+            )
+            ports = ", ".join(c.ports)
+            lines.append(
+                f"  {c.name} ({type(c).__name__}) ports: {ports}"
+                + (f"; {params}" if params else "")
+            )
+        for conn in self.connections:
+            lines.append("  " + " = ".join(p.qualified for p in conn))
+        loose = self.unconnected()
+        if loose:
+            lines.append("  unconnected: " + ", ".join(p.qualified for p in loose))
+        return "\n".join(lines)
 
     def __repr__(self) -> str:
         return (
@@ -130,16 +177,19 @@ class System:
         return chain(self, other)
 
 
-def chain(*items: Any, name: str = "system") -> System:
-    """Connect two-terminal components in series: ``a >> b >> c``.
+System = PhysicalSystem
 
-    Each component must expose a pair of terminals ``(p, n)`` or ``(a, b)``.
+
+def chain(*items: Any, name: str = "system") -> PhysicalSystem:
+    """Connect two-port components in series: ``a >> b >> c``.
+
+    Each component must expose a pair of ports ``(p, n)`` or ``(a, b)``.
     The chain is left open; close it with ``system.connect``.
     """
-    system = System(name=name)
-    prev_out: Terminal | None = None
+    system = PhysicalSystem(name=name)
+    prev_out: Port | None = None
     for item in items:
-        if isinstance(item, System):
+        if isinstance(item, PhysicalSystem):
             system.add(*item.components)
             system.connections.extend(item.connections)
             if item.components:
@@ -160,10 +210,15 @@ def chain(*items: Any, name: str = "system") -> System:
     return system
 
 
-def _series_pair(c: Component) -> tuple[Terminal, Terminal]:
+def _series_pair(c: Component) -> tuple[Port, Port]:
     for a, b in (("p", "n"), ("a", "b")):
-        if a in c.terminals and b in c.terminals:
-            return c.terminals[a], c.terminals[b]
+        if a in c.ports and b in c.ports:
+            return c.ports[a], c.ports[b]
     raise ConnectionError_(
-        f"{c.name} is not a two-terminal component; connect it with System.connect"
+        f"{c.name} is not a two-port component; connect it with System.connect"
     )
+
+
+def _iter_ports(conns: Iterable[Connection]) -> Iterable[Port]:
+    for c in conns:
+        yield from c

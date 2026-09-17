@@ -26,7 +26,7 @@ def test_mass_spring_damper_underdamped(backend):
         Fixed(),
     )
     s = System(mass, spring, damper, wall).connect(mass.flange, spring.a, damper.a)
-    s.connect(spring.b, damper.b, wall.terminal)
+    s.connect(spring.b, damper.b, wall.port)
     model = otwin.compile(s, backend=backend)
     t = np.linspace(0, 10, 2001)
     tr = model.simulate(t=t, solver="rk45", rtol=1e-10, atol=1e-12)
@@ -50,7 +50,7 @@ def test_forced_mass_reaches_static_equilibrium(backend):
     weight = ForceSource(9.81, name="g")
     s = System(mass, spring, damper, wall, weight)
     s.connect(mass.flange, spring.a, damper.a, weight.flange).connect(
-        spring.b, damper.b, wall.terminal
+        spring.b, damper.b, wall.port
     )
     model = otwin.compile(s, backend=backend)
     tr = model.simulate(t_span=(0, 200), dt=0.05)
@@ -66,12 +66,7 @@ def test_rc_circuit(backend):
         Capacitor(1e-3, name="C"),
         Ground(),
     )
-    s = (
-        System(V, R, C, g)
-        .connect(V.p, R.p)
-        .connect(R.n, C.p)
-        .connect(C.n, V.n, g.terminal)
-    )
+    s = System(V, R, C, g).connect(V.p, R.p).connect(R.n, C.p).connect(C.n, V.n, g.port)
     model = otwin.compile(s, backend=backend)
     t = np.linspace(0, 0.5, 501)
     tr = model.simulate(t=t, solver="rk45")
@@ -88,12 +83,7 @@ def test_rl_circuit(backend):
         Inductor(0.5, name="L"),
         Ground(),
     )
-    s = (
-        System(V, R, L, g)
-        .connect(V.p, R.p)
-        .connect(R.n, L.p)
-        .connect(L.n, V.n, g.terminal)
-    )
+    s = System(V, R, L, g).connect(V.p, R.p).connect(R.n, L.p).connect(L.n, V.n, g.port)
     model = otwin.compile(s, backend=backend)
     t = np.linspace(0, 2, 401)
     tr = model.simulate(t=t, solver="rk45")
@@ -102,7 +92,7 @@ def test_rl_circuit(backend):
 
 def test_lc_tank_conserves_energy(backend):
     L, C, g = Inductor(0.5, current=1.0, name="L"), Capacitor(2e-3, name="C"), Ground()
-    s = System(L, C, g).connect(L.p, C.p).connect(L.n, C.n, g.terminal)
+    s = System(L, C, g).connect(L.p, C.p).connect(L.n, C.n, g.port)
     model = otwin.compile(s, backend=backend)
     t = np.linspace(0, 1, 2001)
     tr = model.simulate(t=t, solver="midpoint")
@@ -140,11 +130,7 @@ def test_draining_tank_follows_torricelli(backend):
         Orifice(a, discharge_coefficient=cd, name="drain"),
         Atmosphere(),
     )
-    s = (
-        System(tank, drain, atm)
-        .connect(tank.port, drain.a)
-        .connect(drain.b, atm.terminal)
-    )
+    s = System(tank, drain, atm).connect(tank.port, drain.a).connect(drain.b, atm.port)
     model = otwin.compile(s, backend=backend)
     t = np.linspace(0, 100, 1001)
     tr = model.simulate(t=t, solver="rk45")

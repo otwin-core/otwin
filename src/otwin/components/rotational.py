@@ -1,6 +1,6 @@
 """Rotational mechanics: across is angular velocity [rad/s], through is torque [N m].
 
-``Inertia`` has one terminal, ``shaft``. ``TorsionSpring`` and
+``Inertia`` has one port, ``shaft``. ``TorsionSpring`` and
 ``RotationalDamper`` act between ``a`` and ``b``. ``TorqueSource`` drives a shaft.
 """
 
@@ -42,8 +42,8 @@ class Inertia(Component):
         self, inertia: float = 1.0, *, speed: float = 0.0, name: str | None = None
     ) -> None:
         super().__init__(name)
-        self.terminal("shaft")
-        self.I = self.param("inertia", inertia, "kg m^2")  # noqa: E741
+        self.add_port("shaft")
+        self.I = self.add_parameter("inertia", inertia, "kg m^2")  # noqa: E741
         self.initial_speed = float(speed)
 
     def branches(self) -> list[Branch]:
@@ -72,9 +72,9 @@ class TorsionSpring(Component):
         self, stiffness: float = 1.0, *, twist: float = 0.0, name: str | None = None
     ) -> None:
         super().__init__(name)
-        self.terminal("a")
-        self.terminal("b")
-        self.k = self.param("stiffness", stiffness, "N m/rad")
+        self.add_port("a")
+        self.add_port("b")
+        self.k = self.add_parameter("stiffness", stiffness, "N m/rad")
         self.initial_twist = float(twist)
 
     def branches(self) -> list[Branch]:
@@ -110,11 +110,11 @@ class RotationalDamper(Component):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.terminal("a")
-        self.terminal("b")
+        self.add_port("a")
+        self.add_port("b")
         self._law = law
         if law is None:
-            self.b_ = self.param(
+            self.b_ = self.add_parameter(
                 "damping", damping, "N m s/rad", nonneg=True, positive=False
             )
 
@@ -131,7 +131,7 @@ class TorqueSource(Component):
 
     def __init__(self, torque: float | None = None, *, name: str | None = None) -> None:
         super().__init__(name)
-        self.terminal("shaft")
+        self.add_port("shaft")
         self.torque = None if torque is None else float(torque)
 
     def branches(self) -> list[Branch]:
@@ -156,7 +156,7 @@ class SpeedSource(Component):
 
     def __init__(self, speed: float | None = None, *, name: str | None = None) -> None:
         super().__init__(name)
-        self.terminal("shaft")
+        self.add_port("shaft")
         self.speed = None if speed is None else float(speed)
 
     def branches(self) -> list[Branch]:

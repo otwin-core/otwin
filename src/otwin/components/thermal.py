@@ -1,6 +1,6 @@
 """Lumped heat transfer: across is temperature [K], through is heat flow [W].
 
-``ThermalMass`` has one terminal, ``port``. ``ThermalResistance`` and
+``ThermalMass`` has one port, ``port``. ``ThermalResistance`` and
 ``Convection`` connect two ports. ``HeatSource`` injects heat; ``Ambient``
 holds a temperature.
 
@@ -47,8 +47,8 @@ class ThermalMass(Component):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.terminal("port")
-        self.C = self.param("capacity", capacity, "J/K")
+        self.add_port("port")
+        self.C = self.add_parameter("capacity", capacity, "J/K")
         if temperature < 0:
             raise ValueError(f"{self.name}: temperature is absolute, in kelvin")
         self.initial_temperature = float(temperature)
@@ -86,11 +86,11 @@ class ThermalResistance(Component):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.terminal("a")
-        self.terminal("b")
+        self.add_port("a")
+        self.add_port("b")
         self._law = law
         if law is None:
-            self.R = self.param("resistance", resistance, "K/W")
+            self.R = self.add_parameter("resistance", resistance, "K/W")
 
     def branches(self) -> list[Branch]:
         law = self._law if self._law is not None else (lambda dT: dT / self.R)
@@ -105,9 +105,9 @@ class Convection(Component):
 
     def __init__(self, conductance: float = 1.0, *, name: str | None = None) -> None:
         super().__init__(name)
-        self.terminal("a")
-        self.terminal("b")
-        self.hA = self.param("conductance", conductance, "W/K")
+        self.add_port("a")
+        self.add_port("b")
+        self.hA = self.add_parameter("conductance", conductance, "W/K")
 
     def branches(self) -> list[Branch]:
         return [ResistorBranch(self, self.a, self.b, law=lambda dT: self.hA * dT)]
@@ -121,7 +121,7 @@ class HeatSource(Component):
 
     def __init__(self, heat: float | None = None, *, name: str | None = None) -> None:
         super().__init__(name)
-        self.terminal("port")
+        self.add_port("port")
         self.heat = None if heat is None else float(heat)
 
     def branches(self) -> list[Branch]:
@@ -149,7 +149,7 @@ class Ambient(Component):
         self, temperature: float | None = 293.15, *, name: str | None = None
     ) -> None:
         super().__init__(name)
-        self.terminal("port")
+        self.add_port("port")
         self.temperature = None if temperature is None else float(temperature)
 
     def branches(self) -> list[Branch]:

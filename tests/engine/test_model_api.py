@@ -146,7 +146,7 @@ def test_model_is_a_twin_model_for_the_estimators(backend):
     s = (
         System(rotor, bearing, housing)
         .connect(rotor.shaft, bearing.a)
-        .connect(bearing.b, housing.terminal)
+        .connect(bearing.b, housing.port)
     )
     model = otwin.compile(s, backend=backend, measurements=["rotor.angular_velocity"])
     tf = np.linspace(0, 3600, 361)
@@ -232,10 +232,10 @@ def test_chain_syntax():
         Ground(),
     )
     s = v >> r >> c  # V.n - R.p, R.n - C.p
-    s.connect(c.n, v.p, g.terminal)  # close the loop back to the source
+    s.connect(c.n, v.p, g.port)  # close the loop back to the source
     m = otwin.compile(s)
     tr = m.simulate(t_span=(0, 5), dt=0.01, solver="rk45")
-    # the source's p terminal sits on the capacitor's n side, so the capacitor charges negative
+    # the source's p port sits on the capacitor's n side, so the capacitor charges negative
     assert tr["C.voltage"][-1] == pytest.approx(-(1 - np.exp(-5)), abs=1e-8)
 
 
@@ -249,6 +249,6 @@ def test_unused_fixed_component_still_compiles():
     s = (
         System(mass, spring, damper, wall)
         .connect(mass.flange, spring.a, damper.a)
-        .connect(spring.b, damper.b, wall.terminal)
+        .connect(spring.b, damper.b, wall.port)
     )
     assert otwin.compile(s).n_states == 2

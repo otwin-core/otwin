@@ -1,7 +1,7 @@
 """Translational mechanics: across is velocity [m/s], through is force [N].
 
-A ``Mass`` has one terminal, ``flange``; its velocity is measured against the
-inertial frame. ``Spring`` and ``Damper`` act between terminals ``a`` and
+A ``Mass`` has one port, ``flange``; its velocity is measured against the
+inertial frame. ``Spring`` and ``Damper`` act between ports ``a`` and
 ``b``; nail one of them to a :class:`Fixed` point when it is attached to the
 world. ``ForceSource`` pushes on its flange in the positive direction.
 """
@@ -40,8 +40,8 @@ class Mass(Component):
         self, mass: float = 1.0, *, velocity: float = 0.0, name: str | None = None
     ) -> None:
         super().__init__(name)
-        self.terminal("flange")
-        self.m = self.param("mass", mass, "kg")
+        self.add_port("flange")
+        self.m = self.add_parameter("mass", mass, "kg")
         self.initial_velocity = float(velocity)
 
     def branches(self) -> list[Branch]:
@@ -78,9 +78,9 @@ class Spring(Component):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.terminal("a")
-        self.terminal("b")
-        self.k = self.param("stiffness", stiffness, "N/m")
+        self.add_port("a")
+        self.add_port("b")
+        self.k = self.add_parameter("stiffness", stiffness, "N/m")
         self.initial_extension = float(extension)
 
     def branches(self) -> list[Branch]:
@@ -117,11 +117,13 @@ class Damper(Component):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.terminal("a")
-        self.terminal("b")
+        self.add_port("a")
+        self.add_port("b")
         self._law = law
         if law is None:
-            self.c = self.param("damping", damping, "N s/m", nonneg=True, positive=False)
+            self.c = self.add_parameter(
+                "damping", damping, "N s/m", nonneg=True, positive=False
+            )
 
     def branches(self) -> list[Branch]:
         law = self._law if self._law is not None else (lambda v: self.c * v)
@@ -140,7 +142,7 @@ class ForceSource(Component):
 
     def __init__(self, force: float | None = None, *, name: str | None = None) -> None:
         super().__init__(name)
-        self.terminal("flange")
+        self.add_port("flange")
         self.force = None if force is None else float(force)
 
     def branches(self) -> list[Branch]:
@@ -165,7 +167,7 @@ class VelocitySource(Component):
 
     def __init__(self, velocity: float | None = None, *, name: str | None = None) -> None:
         super().__init__(name)
-        self.terminal("flange")
+        self.add_port("flange")
         self.velocity = None if velocity is None else float(velocity)
 
     def branches(self) -> list[Branch]:

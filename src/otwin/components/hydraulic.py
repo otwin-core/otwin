@@ -1,6 +1,6 @@
 """Hydraulics: across is pressure [Pa], through is volumetric flow [m^3/s].
 
-A ``Tank`` has one terminal, ``port``, at its base; the pressure there is
+A ``Tank`` has one port, ``port``, at its base; the pressure there is
 gauge pressure over atmosphere. ``Orifice`` and ``Pipe`` connect two ports.
 ``Atmosphere`` is the reference.
 """
@@ -66,11 +66,11 @@ class Tank(Component):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.terminal("port")
-        self.A = self.param("area", area, "m^2")
-        self.z = self.param("base_elevation", base_elevation, "m", positive=False)
-        self.rho = self.param("density", density, "kg/m^3")
-        self.g = self.param("gravity", gravity, "m/s^2")
+        self.add_port("port")
+        self.A = self.add_parameter("area", area, "m^2")
+        self.z = self.add_parameter("base_elevation", base_elevation, "m", positive=False)
+        self.rho = self.add_parameter("density", density, "kg/m^3")
+        self.g = self.add_parameter("gravity", gravity, "m/s^2")
         if level < 0:
             raise ValueError(f"{self.name}: level must not be negative")
         self.initial_level = float(level)
@@ -120,11 +120,11 @@ class Orifice(Component):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.terminal("a")
-        self.terminal("b")
-        self.a_ = self.param("area", area, "m^2")
-        self.cd = self.param("discharge_coefficient", discharge_coefficient, "")
-        self.rho = self.param("density", density, "kg/m^3")
+        self.add_port("a")
+        self.add_port("b")
+        self.a_ = self.add_parameter("area", area, "m^2")
+        self.cd = self.add_parameter("discharge_coefficient", discharge_coefficient, "")
+        self.rho = self.add_parameter("density", density, "kg/m^3")
 
     def branches(self) -> list[Branch]:
         def law(dp: Expr) -> Expr:
@@ -152,8 +152,8 @@ class Pipe(Component):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.terminal("a")
-        self.terminal("b")
+        self.add_port("a")
+        self.add_port("b")
         given = sum(v is not None for v in (resistance, friction, law))
         if given != 1:
             raise ValueError(
@@ -162,9 +162,9 @@ class Pipe(Component):
         self._law = law
         self.R = self.K = None
         if resistance is not None:
-            self.R = self.param("resistance", resistance, "Pa s/m^3")
+            self.R = self.add_parameter("resistance", resistance, "Pa s/m^3")
         if friction is not None:
-            self.K = self.param("friction", friction, "Pa s^2/m^6")
+            self.K = self.add_parameter("friction", friction, "Pa s^2/m^6")
 
     def branches(self) -> list[Branch]:
         if self._law is not None:
@@ -189,9 +189,9 @@ class FluidInertance(Component):
         self, inertance: float = 1.0, *, flow: float = 0.0, name: str | None = None
     ) -> None:
         super().__init__(name)
-        self.terminal("a")
-        self.terminal("b")
-        self.I = self.param("inertance", inertance, "kg/m^4")  # noqa: E741
+        self.add_port("a")
+        self.add_port("b")
+        self.I = self.add_parameter("inertance", inertance, "kg/m^4")  # noqa: E741
         self.initial_flow = float(flow)
 
     def branches(self) -> list[Branch]:
@@ -221,8 +221,8 @@ class FlowSource(Component):
 
     def __init__(self, flow: float | None = None, *, name: str | None = None) -> None:
         super().__init__(name)
-        self.terminal("a")
-        self.terminal("b")
+        self.add_port("a")
+        self.add_port("b")
         self.flow = None if flow is None else float(flow)
 
     def branches(self) -> list[Branch]:
@@ -247,8 +247,8 @@ class PressureSource(Component):
 
     def __init__(self, pressure: float | None = None, *, name: str | None = None) -> None:
         super().__init__(name)
-        self.terminal("a")
-        self.terminal("b")
+        self.add_port("a")
+        self.add_port("b")
         self.pressure = None if pressure is None else float(pressure)
 
     def branches(self) -> list[Branch]:

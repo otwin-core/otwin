@@ -4,7 +4,7 @@ Pipeline::
 
     System
       -> flatten composites, validate parameters and names
-      -> build nodes (union of connected terminals, one reference node)
+      -> build nodes (union of connected ports, one reference node)
       -> collect branches: storages, resistors, sources, two-ports
       -> pin node potentials through across-storages and across-sources
       -> write one conservation equation per unpinned node group
@@ -18,7 +18,7 @@ Pipeline::
       -> symbolic Jacobian of the executable form
       -> PHSIR
 
-Every failure is reported in physical terms: which terminals, which
+Every failure is reported in physical terms: which ports, which
 components, what to change. The compiler never returns a model it cannot
 account for.
 """
@@ -36,11 +36,12 @@ from .components.base import (
     Branch,
     Component,
     ComponentQuantities,
+    Connection,
     Ground,
+    Port,
     ResistorBranch,
     SourceBranch,
     StorageBranch,
-    Terminal,
     TwoPortBranch,
 )
 from .expr import Expr
@@ -78,7 +79,7 @@ class StructureWarning(UserWarning):
 class _Node:
     def __init__(self, index: int) -> None:
         self.index = index
-        self.terminals: list[Terminal] = []
+        self.ports: list[Port] = []
         self.domain: str = "any"
         self.reference = False
         self.name = ""
@@ -103,7 +104,7 @@ class _Ctx:
     nodes: list[_Node]
     ref: _Node
     branches: list[Branch]
-    node_of: dict[Terminal, _Node]
+    node_of: dict[Port, _Node]
     states: list[StateVar] = field(default_factory=list)
     state_syms: list[Expr] = field(default_factory=list)
     effort_syms: list[Expr] = field(default_factory=list)
@@ -124,7 +125,7 @@ class _Ctx:
     representation: str = "port-hamiltonian"
 
 
-def _terminal_str(t: Terminal | None) -> str:
+def _terminal_str(t: Port | None) -> str:
     return "reference" if t is None else t.qualified
 
 
@@ -209,31 +210,29 @@ def _validate_components(comps: list[Component]) -> None:
                 raise CompileError(f"invalid parameter: {e}") from None
 
 
-def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _Ctx:
-    parent: dict[Terminal, Terminal] = {}
+def _build_nodes(comps: list[Component], links: list[Connection]) -> _Ctx:
+    parent: dict[Port, Port] = {}
 
-    def find(t: Terminal) -> Terminal:
+    def find(t: Port) -> Port:
         while parent.setdefault(t, t) is not t:
             parent[t] = parent[parent[t]]
             t = parent[t]
         return t
 
-    def union(a: Terminal, b: Terminal) -> None:
+    def union(a: Port, b: Port) -> None:
         ra, rb = find(a), find(b)
         if ra is not rb:
             parent[ra] = rb
 
-    terminals: list[Terminal] = [t for c in comps for t in c.terminals.values()]
-    for t in terminals:
+    ports: list[Port] = [t for c in comps for t in c.ports.values()]
+    for t in ports:
         find(t)
-    ref_terminals = [
-        t for c in comps if isinstance(c, Ground) for t in c.terminals.values()
-    ]
+    ref_terminals = [t for c in comps if isinstance(c, Ground) for t in c.ports.values()]
     for link in links:
         for t in link:
             if t not in parent:
                 raise CompileError(
-                    f"terminal {t.qualified} belongs to a component that is not in the "
+                    f"port {t.qualified} belongs to a component that is not in the "
                     "system; add it with System.add or connect it"
                 )
         for t in link[1:]:
@@ -241,12 +240,12 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
     for t in ref_terminals[1:]:
         union(ref_terminals[0], t)
 
-    groups: dict[Terminal, list[Terminal]] = defaultdict(list)
-    for t in terminals:
+    groups: dict[Port, list[Port]] = defaultdict(list)
+    for t in ports:
         groups[find(t)].append(t)
 
     nodes: list[_Node] = []
-    node_of: dict[Terminal, _Node] = {}
+    node_of: dict[Port, _Node] = {}
     ref = _Node(0)
     ref.reference = True
     ref.name = "reference"
@@ -254,11 +253,11 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
     if ref_terminals:
         ref_root = find(ref_terminals[0])
         for t in groups.pop(ref_root):
-            ref.terminals.append(t)
+            ref.ports.append(t)
             node_of[t] = ref
     for members in groups.values():
         n = _Node(len(nodes))
-        n.terminals = members
+        n.ports = members
         domains = {t.domain for t in members if t.domain != "any"}
         if len(domains) > 1:
             names = ", ".join(f"{t.qualified} [{t.domain}]" for t in members)
@@ -278,17 +277,17 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
             node_of[t] = n
 
     dangling = [
-        n.terminals[0]
+        n.ports[0]
         for n in nodes[1:]
-        if len(n.terminals) == 1
-        and not isinstance(n.terminals[0].component, Ground)
-        and len(n.terminals[0].component.terminals) > 1
+        if len(n.ports) == 1
+        and not isinstance(n.ports[0].component, Ground)
+        and len(n.ports[0].component.ports) > 1
     ]
     if dangling:
         names = ", ".join(t.qualified for t in dangling)
         raise CompileError(
-            f"terminal(s) not connected to anything: {names}. Every terminal of a "
-            "two-terminal component must be connected; use Ground (Fixed, Atmosphere) "
+            f"port(s) not connected to anything: {names}. Every port of a "
+            "two-port component must be connected; use Ground (Fixed, Atmosphere) "
             "for the ones that are nailed down."
         )
     linked = {t for link in links for t in link}
@@ -326,7 +325,7 @@ def _collect_branches(ctx: _Ctx) -> None:
         )
 
 
-def _node(ctx: _Ctx, t: Terminal | None) -> _Node:
+def _node(ctx: _Ctx, t: Port | None) -> _Node:
     return ctx.ref if t is None else ctx.node_of[t]
 
 
@@ -774,14 +773,14 @@ def _outputs(
 def _physical_ir(system: System, ctx: _Ctx, name: str | None) -> PhysicalSystemIR:
     comps = [
         ComponentRecord(
-            c.name, c.type_name, c.domain, tuple(c.parameters), tuple(c.terminals)
+            c.name, c.type_name, c.domain, tuple(c.parameters), tuple(c.ports)
         )
         for c in ctx.comps
     ]
     nodes = [
-        NodeRecord(n.name, n.domain, tuple(t.qualified for t in n.terminals), n.reference)
+        NodeRecord(n.name, n.domain, tuple(t.qualified for t in n.ports), n.reference)
         for n in ctx.nodes
-        if n.terminals or n.reference
+        if n.ports or n.reference
     ]
     branches = []
     for b in ctx.branches:
