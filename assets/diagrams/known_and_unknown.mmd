@@ -1,0 +1,21 @@
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
+flowchart LR
+
+    A["Known physics"] --> D["Physical model"]
+    B["Unknown parameters"] --> E["Parameter estimation"]
+    C["Unknown phenomena"] --> F["Residual learning"]
+
+    D --> G["Hybrid Digital Twin"]
+    E --> G
+    F --> G
+
+    G --> H["Prediction + uncertainty"]

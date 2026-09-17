@@ -65,29 +65,11 @@ You describe a physical system as components, parameters and connections — the
 * validity envelopes;
 * Digital Twin operation.
 
-```mermaid
----
-config:
-  layout: fixed
-  theme: neo
-  fontFamily: '''Open Sans Variable'', sans-serif'
-  themeVariables:
-    fontFamily: '''Open Sans Variable'', sans-serif'
----
-%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+<div align="center">
 
-flowchart LR
-    A["Engineering SYSTEM<br/>(components · connections · parameters)"]
-    B["Otwin MODEL<br/>physical structure"]
-    C["COMPILER<br/>IR · equations · checks"]
-    D["Physics ENGINE<br/>compiled dynamics"]
-    E["Measurements (DATA)<br/>real asset"]
-    F["DIGITAL TWIN<br/>estimate · predict · validate"]
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/otwin_pipeline.svg" alt="otwin pipeline" width="900">
 
-    A --> B --> C --> D
-    D --> F
-    E --> F
-```
+</div>
 
 #### A simulation tells you what a model does. A Digital Twin tells you what a particular asset is doing — and what the model has earned the right to predict
 
@@ -116,41 +98,11 @@ Other things are uncertain:
 
 Otwin is designed around the idea that **known physics should remain structure**, while data should be used to identify and model what the physics does not know.
 
-```mermaid
----
-config:
-  layout: fixed
-  theme: neo
-  fontFamily: '''Open Sans Variable'', sans-serif'
-  themeVariables:
-    fontFamily: '''Open Sans Variable'', sans-serif'
----
-%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+<div align="center">
 
-flowchart TB
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/physics_and_data.svg" alt="physics and data" width="507">
 
-    A["Physical knowledge"]
-    B["Measured data"]
-
-    A --> C["Structured physics model"]
-    B --> D["Parameter estimation"]
-    B --> E["Residual / data model"]
-
-    C --> F["Otwin model"]
-    D --> F
-    E --> F
-
-    F --> G["Compiled dynamics"]
-    G --> H["Simulation"]
-    G --> I["State estimation"]
-    G --> J["Forecasting"]
-    G --> K["Validation"]
-
-    H --> L["Digital Twin"]
-    I --> L
-    J --> L
-    K --> L
-```
+</div>
 
 This leads to a simple principle: **Do not throw away known physics just because some of the physics is unknown.** Use structure where it is known. Use data where it is needed. Keep the two separate enough that you can inspect, test and validate both.
 
@@ -208,38 +160,11 @@ The conformance suite contains physical systems with known answers and tests str
 
 The suite is designed to catch deliberately broken implementations, not just confirm that a reference implementation passes its own tests.
 
-```mermaid
----
-config:
-  layout: fixed
-  theme: neo
-  fontFamily: '''Open Sans Variable'', sans-serif'
-  themeVariables:
-    fontFamily: '''Open Sans Variable'', sans-serif'
----
-%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+<div align="center">
 
-flowchart LR
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/conformance_suite.svg" alt="conformance suite" width="688">
 
-    A["Otwin specification"]
-    B["Physical fixtures"]
-    C["Analytical / closed-form answers"]
-    D["Conformance suite"]
-
-    A --> D
-    B --> D
-    C --> D
-
-    D --> E["Python implementation"]
-    D --> F["Julia implementation"]
-    D --> G["MATLAB implementation"]
-    D --> H["Future implementations"]
-
-    E --> I{"Conformant?"}
-    F --> J{"Conformant?"}
-    G --> K{"Conformant?"}
-    H --> L{"Conformant?"}
-```
+</div>
 
 This is an important architectural boundary: **Otwin is not defined only by its Python implementation.** The Python implementation is the reference implementation and the primary user interface today. The specification defines the contract that allows the ecosystem to grow beyond it.
 
@@ -433,29 +358,11 @@ Nobody wrote a pump equation either. The pump is a pressure source at shut-off, 
 
 Otwin treats the physical system as a graph. **Components** define physical behaviour. **Connections** define how components interact. The compiler turns that graph into an executable dynamical model.
 
-```mermaid
----
-config:
-  layout: fixed
-  theme: neo
-  fontFamily: '''Open Sans Variable'', sans-serif'
-  themeVariables:
-    fontFamily: '''Open Sans Variable'', sans-serif'
----
-%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+<div align="center">
 
-flowchart TD
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/how_it_works.svg" alt="how it works" width="240">
 
-    A["Physical **system**<br/>components · ports · connections · parameters"]
-    B["otwin.System<br/>domain-checked component graph"]
-    C["otwin.compile()<br/>model compiler"]
-    D["Physical System IR<br/>nodes · branches · states · parameters · inputs"]
-    E["Port-Hamiltonian IR<br/>H · J · R · G · D"]
-    F["Rust dynamics engine<br/>implicit midpoint · RK4 · adaptive RK45 · batches"]
-    G["TwinModel<br/>simulate · estimate · forecast · validate · refuse"]
-
-    A --> B --> C --> D --> E --> F --> G
-```
+</div>
 
 Every connection is a physical node. 
 
@@ -515,34 +422,11 @@ The principle is simple: **If the physical topology is invalid or ambiguous, cat
 
 The core Otwin workflow is:
 
-```mermaid
----
-config:
-  layout: fixed
-  theme: neo
-  fontFamily: '''Open Sans Variable'', sans-serif'
-  themeVariables:
-    fontFamily: '''Open Sans Variable'', sans-serif'
----
-%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+<div align="center">
 
-flowchart LR
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/compiler_inputs.svg" alt="compiler inputs" width="900">
 
-    A["Components"] --> E["Otwin compiler"]
-    B["Connections"] --> E
-    C["Parameters"] --> E
-    D["Inputs"] --> E
-
-    E --> F["Physical System IR"]
-    F --> G["Port-Hamiltonian representation"]
-    G --> H["Compiled Rust dynamics"]
-    H --> I["TwinModel"]
-
-    I --> J["Simulation"]
-    I --> K["State estimation"]
-    I --> L["Forecasting"]
-    I --> M["Validation"]
-```
+</div>
 
 The architecture deliberately separates the modeling layer from the execution layer.
 
@@ -584,26 +468,11 @@ RotationalDamper(
 
 Real engineering systems rarely belong to a single physical domain. A motor is an electrical system coupled to a rotating mechanical system. A pump couples electrical, rotational and hydraulic behaviour. A heat pump couples electrical, mechanical, thermal and fluid systems. Otwin represents these relationships through the same component-and-connection model.
 
-```mermaid
----
-config:
-  layout: fixed
-  theme: neo
-  fontFamily: '''Open Sans Variable'', sans-serif'
-  themeVariables:
-    fontFamily: '''Open Sans Variable'', sans-serif'
----
-%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+<div align="center">
 
-flowchart LR
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/multi_domain.svg" alt="multi domain" width="655">
 
-    A["Electrical domain<br/>voltage · current"]
-    B["DC Motor<br/>electromechanical coupling"]
-    C["Rotational domain<br/>torque · angular velocity"]
-    D["Mechanical load"]
-
-    A --> B --> C --> D
-```
+</div>
 
 For example, a supply, a DC motor and a fan on its shaft:
 
@@ -769,29 +638,11 @@ Not every physical mechanism is known exactly. That does not mean the entire sys
 
 The compiled physical model is the white-box model foundation. Otwin lets data fill the gaps without throwing that structure away.
 
-```mermaid
----
-config:
-  layout: fixed
-  theme: neo
-  fontFamily: '''Open Sans Variable'', sans-serif'
-  themeVariables:
-    fontFamily: '''Open Sans Variable'', sans-serif'
----
-%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+<div align="center">
 
-flowchart LR
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/known_and_unknown.svg" alt="known and unknown" width="660">
 
-    A["Known physics"] --> D["Physical model"]
-    B["Unknown parameters"] --> E["Parameter estimation"]
-    C["Unknown phenomena"] --> F["Residual learning"]
-
-    D --> G["Hybrid Digital Twin"]
-    E --> G
-    F --> G
-
-    G --> H["Prediction + uncertainty"]
-```
+</div>
 
 This means you can start from physical knowledge and progressively incorporate measurements without abandoning the model you understand.
 
@@ -892,28 +743,11 @@ otwin.HybridModel(
 
 The residual can be learned with a Gaussian process, neural network or another callable model. The physical model remains the structural prior.
 
-```mermaid
----
-config:
-  layout: fixed
-  theme: neo
-  fontFamily: '''Open Sans Variable'', sans-serif'
-  themeVariables:
-    fontFamily: '''Open Sans Variable'', sans-serif'
----
-%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+<div align="center">
 
-flowchart LR
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/hybrid_twin.svg" alt="hybrid twin" width="516">
 
-    A["Known physics"] --> C["Physical model"]
-    B["Observed data"] --> D["Residual model"]
-
-    C --> E["Hybrid Digital Twin"]
-    D --> E
-
-    E --> F["Prediction"]
-    E --> G["Uncertainty"]
-```
+</div>
 
 `otwin.hybrid.residual_data` provides the training target representing what the physical model leaves unexplained.
 
@@ -948,45 +782,11 @@ This provides a path for models that do not yet have a native component represen
 
 A simulation model describes a system. A Digital Twin represents a **specific physical asset** and keeps its model connected to observations of that asset.
 
-```mermaid
----
-config:
-  layout: fixed
-  theme: neo
-  fontFamily: '''Open Sans Variable'', sans-serif'
-  themeVariables:
-    fontFamily: '''Open Sans Variable'', sans-serif'
----
-%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+<div align="center">
 
-flowchart TD
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/model_to_twin.svg" alt="model to twin" width="246">
 
-    A["Physical asset"]
-    B["Measurements"]
-    C["Physics model"]
-    D["State estimation"]
-    E["Parameter calibration"]
-    F["Physics + data"]
-    G["Forecast"]
-    H["Uncertainty"]
-    I["Validation"]
-    J["Validated Digital Twin"]
-    K["Decision"]
-    L["Refusal"]
-
-    A --> B
-    B --> D
-    C --> D
-    D --> E
-    E --> F
-    F --> G
-    G --> H
-    H --> I
-    I --> J
-
-    J --> K
-    J --> L
-```
+</div>
 
 The model can therefore move through a lifecycle:
 
@@ -1250,27 +1050,11 @@ Returning a number anyway would hide that limitation.
 
 This is one of the central ideas in Otwin.
 
-```mermaid
----
-config:
-  layout: fixed
-  theme: neo
-  fontFamily: '''Open Sans Variable'', sans-serif'
-  themeVariables:
-    fontFamily: '''Open Sans Variable'', sans-serif'
----
-%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+<div align="center">
 
-flowchart LR
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/validity_envelope.svg" alt="validity envelope" width="644">
 
-    A["Question"] --> B{"Inside validated envelope?"}
-
-    B -->|"Yes"| C["Answer"]
-    B -->|"No"| D["Refuse"]
-
-    C --> E["Prediction + evidence"]
-    D --> F["Explain which boundary was exceeded"]
-```
+</div>
 
 A model should not become more certain simply because someone asks it a harder question. Outside the evidence established during validation, the correct behaviour may be to report the limitation.
 
@@ -1352,45 +1136,11 @@ See [`docs/developer`](docs/developer) for architecture and development document
 
 # Architecture at a glance
 
-```mermaid
----
-config:
-  layout: fixed
-  theme: neo
-  fontFamily: '''Open Sans Variable'', sans-serif'
-  themeVariables:
-    fontFamily: '''Open Sans Variable'', sans-serif'
----
-%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
-flowchart TD
+<div align="center">
 
-    P["Python API"]
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/architecture.svg" alt="architecture" width="578">
 
-    P --> S["System & components"]
-    P --> M["Model estimation"]
-    P --> F["Forecasting"]
-    P --> V["Validation"]
-
-    S --> C["Otwin compiler"]
-
-    C --> IR["Physical System IR"]
-    IR --> PHS["Port-Hamiltonian IR"]
-
-    PHS --> R["Rust core"]
-    R --> E["otwin-engine"]
-
-    E --> T["TwinModel"]
-
-    T --> SIM["Simulation"]
-    T --> EST["State estimation"]
-    T --> PRE["Prediction"]
-    T --> VAL["Validation"]
-
-    SIM --> DT["Digital Twin"]
-    EST --> DT
-    PRE --> DT
-    VAL --> DT
-```
+</div>
 
 The separation is deliberate:
 

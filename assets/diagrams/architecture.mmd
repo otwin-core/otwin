@@ -1,0 +1,37 @@
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+flowchart TD
+
+    P["Python API"]
+
+    P --> S["System & components"]
+    P --> M["Model estimation"]
+    P --> F["Forecasting"]
+    P --> V["Validation"]
+
+    S --> C["Otwin compiler"]
+
+    C --> IR["Physical System IR"]
+    IR --> PHS["Port-Hamiltonian IR"]
+
+    PHS --> R["Rust core"]
+    R --> E["otwin-engine"]
+
+    E --> T["TwinModel"]
+
+    T --> SIM["Simulation"]
+    T --> EST["State estimation"]
+    T --> PRE["Prediction"]
+    T --> VAL["Validation"]
+
+    SIM --> DT["Digital Twin"]
+    EST --> DT
+    PRE --> DT
+    VAL --> DT

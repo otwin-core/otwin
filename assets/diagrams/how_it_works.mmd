@@ -1,0 +1,21 @@
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
+flowchart TD
+
+    A["Physical system<br/>components · ports · connections · parameters"]
+    B["otwin.System<br/>domain-checked component graph"]
+    C["otwin.compile()<br/>model compiler"]
+    D["Physical System IR<br/>nodes · branches · states · parameters · inputs"]
+    E["Port-Hamiltonian IR<br/>H · J · R · G · D"]
+    F["Rust dynamics engine<br/>implicit midpoint · RK4 · adaptive RK45 · batches"]
+    G["TwinModel<br/>simulate · estimate · forecast · validate · refuse"]
+
+    A --> B --> C --> D --> E --> F --> G

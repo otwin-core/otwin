@@ -1,0 +1,37 @@
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
+flowchart TD
+
+    A["Physical asset"]
+    B["Measurements"]
+    C["Physics model"]
+    D["State estimation"]
+    E["Parameter calibration"]
+    F["Physics + data"]
+    G["Forecast"]
+    H["Uncertainty"]
+    I["Validation"]
+    J["Validated Digital Twin"]
+    K["Decision"]
+    L["Refusal"]
+
+    A --> B
+    B --> D
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    H --> I
+    I --> J
+
+    J --> K
+    J --> L

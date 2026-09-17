@@ -1,0 +1,21 @@
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
+flowchart LR
+    A["Engineering SYSTEM<br/>(components · connections · parameters)"]
+    B["Otwin MODEL<br/>physical structure"]
+    C["COMPILER<br/>IR · equations · checks"]
+    D["Physics ENGINE<br/>compiled dynamics"]
+    E["Measurements (DATA)<br/>real asset"]
+    F["DIGITAL TWIN<br/>estimate · predict · validate"]
+
+    A --> B --> C --> D
+    D --> F
+    E --> F

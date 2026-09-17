@@ -1,0 +1,20 @@
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
+flowchart LR
+
+    A["Known physics"] --> C["Physical model"]
+    B["Observed data"] --> D["Residual model"]
+
+    C --> E["Hybrid Digital Twin"]
+    D --> E
+
+    E --> F["Prediction"]
+    E --> G["Uncertainty"]

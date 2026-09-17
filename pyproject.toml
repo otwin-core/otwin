@@ -5,24 +5,30 @@ build-backend = "hatchling.build"
 [project]
 name = "otwin"
 version = "2.0.0"
-description = "Digital twins with a compiled physics engine: describe a system with components, compile it, simulate, estimate, forecast, validate."
+description = "The open-source physics engine for engineering systems: describe a system with components, compile it, simulate, estimate, forecast, validate."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Javier Marin", email = "javier@jmarin.info" }]
 keywords = [
-    "digital-twin",
     "physics-engine",
+    "engineering-systems",
+    "digital-twin",
     "model-compiler",
-    "port-hamiltonian",
-    "bond-graph",
+    "system-dynamics",
+    "multiphysics",
+    "simulation",
+    "electrical",
+    "hydraulic",
+    "thermal",
+    "mechanical",
+    "battery",
+    "pump",
+    "state-estimation",
+    "forecasting",
     "condition-monitoring",
     "prognostics",
-    "energy-storage",
-    "battery",
-    "sunspec",
-    "modbus",
-    "state-estimation",
+    "port-hamiltonian",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

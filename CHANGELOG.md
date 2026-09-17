@@ -8,6 +8,18 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 From 2.0.0 the public API changes only with a major version. Pin an exact
 version in anything you depend on.
 
+## [Unreleased]
+
+### Changed
+
+- The README diagrams are SVG images rendered from Mermaid sources in
+  `assets/diagrams/` (`python assets/render_diagrams.py`), so they show on
+  PyPI and anywhere else the README is read. CI checks that every image is
+  up to date with its source.
+- PyPI keywords and the short description now describe what Otwin is for
+  (a physics engine for engineering systems, its domains and uses) rather
+  than its internals.
+
 ## [2.0.0] — 2026-09-17
 
 An engineer describes a physical system with components and connections and
@@ -353,6 +365,7 @@ this repository.
 - Connectors are read-only. Closed-loop actuation is deliberately out of scope.
 - No production deployment on an operating asset is known to the maintainer.
 
+[Unreleased]: https://github.com/otwin-core/otwin/compare/v2.0.0...HEAD
 [2.0.0]: https://github.com/otwin-core/otwin/compare/v0.4.0...v2.0.0
 [0.4.0]: https://github.com/otwin-core/otwin/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/otwin-core/otwin/compare/v0.3.0...v0.3.1

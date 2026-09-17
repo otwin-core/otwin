@@ -107,6 +107,15 @@ New code needs the test that would fail without it. In particular:
   hardware, and the simulator must drive the same decode path as the real
   source. A test that bypasses the decoder tests nothing.
 
+## README diagrams
+
+The diagrams in the README are SVG files in `assets/diagrams/`, rendered from
+the Mermaid source of the same name next to each one. PyPI does not render
+Mermaid, so the README embeds the images. To change a diagram, edit the
+`.mmd` file and run `python assets/render_diagrams.py` (needs
+`npm install -g @mermaid-js/mermaid-cli`); commit both files. CI fails when an
+SVG is older than its source.
+
 ## Git
 
 Never commit to `main`. Every change opens a branch and a pull request.

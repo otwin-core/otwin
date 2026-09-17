@@ -1,0 +1,33 @@
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
+flowchart TB
+
+    A["Physical knowledge"]
+    B["Measured data"]
+
+    A --> C["Structured physics model"]
+    B --> D["Parameter estimation"]
+    B --> E["Residual / data model"]
+
+    C --> F["Otwin model"]
+    D --> F
+    E --> F
+
+    F --> G["Compiled dynamics"]
+    G --> H["Simulation"]
+    G --> I["State estimation"]
+    G --> J["Forecasting"]
+    G --> K["Validation"]
+
+    H --> L["Digital Twin"]
+    I --> L
+    J --> L
+    K --> L
