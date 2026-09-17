@@ -5,7 +5,14 @@
 # mints a short-lived token for this exact workflow, in this exact repository,
 # running in the `pypi` environment, and for nothing else.
 #
-# Triggered only by pushing a tag of the form v1.2.3.
+# Triggered only by pushing a tag of the form v1.2.3. The sequence:
+#
+#   tag -> tests -> build + attest -> install the built wheels in a clean
+#   environment and import -> PyPI (environment `pypi`, may require
+#   approval) -> install & import from PyPI -> GitHub release with the
+#   artifacts and the changelog.
+#
+# Nothing reaches pypi.org until the same bytes installed and imported.
 name: Release
 
 on:
@@ -16,8 +23,24 @@ on:
 permissions: {}
 
 jobs:
+  test:
+    name: Tests before anything is built
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: pytest -q
+
   build:
     name: Build and attest
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -78,6 +101,7 @@ jobs:
   # workflow and the `pypi` environment, exactly like otwin's.
   engine-wheels:
     name: engine wheel / ${{ matrix.os }}
+    needs: test
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -116,9 +140,53 @@ jobs:
           path: wheels/
           retention-days: 7
 
+  smoke:
+    name: Install the built wheels in a clean environment and import
+    needs: [build, engine-wheels]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: engine-wheels-*
+          path: engine/
+          merge-multiple: true
+      - name: pip install the wheels that are about to be published
+        # Dependencies come from PyPI; the two otwin distributions come from
+        # the artifacts of this run, exactly the bytes the publish jobs upload.
+        run: |
+          python -m venv /tmp/fresh
+          /tmp/fresh/bin/pip install --quiet dist/otwin-*.whl engine/otwin_engine-*manylinux*x86_64.whl
+      - name: import otwin and run one model
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          /tmp/fresh/bin/python - <<PY
+          import otwin
+          assert otwin.__version__ == "$V", otwin.__version__
+          from otwin.components.mechanical import Mass, Spring, Damper, ForceSource, Fixed
+          mass, spring, damper = Mass(1.0, name="mass"), Spring(20.0, name="spring"), Damper(0.3, name="damper")
+          weight, ceiling = ForceSource(9.81, name="weight"), Fixed(name="ceiling")
+          system = mass >> spring >> ceiling
+          system.connect(mass.flange, damper.a, weight.flange)
+          system.connect(damper.b, ceiling.port)
+          model = otwin.compile(system)
+          assert model.backend == "rust", model.backend
+          run = model.simulate(t_span=(0, 20), dt=0.05)
+          q = run["spring.extension"][-1]
+          assert abs(q - weight.force / spring.stiffness) < 0.02, q
+          print("otwin", otwin.__version__, "on the", model.backend, "backend: q =", round(float(q), 3), "m")
+          PY
+
   publish-engine:
     name: Publish otwin-engine to PyPI
-    needs: engine-wheels
+    needs: smoke
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -133,10 +201,14 @@ jobs:
           merge-multiple: true
       - run: ls -la dist
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          # If the otwin upload below fails after the engine is already on
+          # PyPI, rerunning the workflow must not die here on "file exists".
+          skip-existing: true
 
   publish:
     name: Publish to PyPI
-    needs: [build, publish-engine]
+    needs: publish-engine
     runs-on: ubuntu-latest
 
     # The environment is the security boundary. PyPI's trusted publisher is
@@ -202,13 +274,44 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          V="${GITHUB_REF_NAME#v}"
+          # Release notes are the changelog entry for this version, verbatim.
+          gh api "repos/$GH_REPO/contents/CHANGELOG.md?ref=$GITHUB_REF_NAME" \
+            --jq .content | base64 -d > CHANGELOG.md
+          awk -v v="$V" '
+            $0 ~ "^## \\[" v "\\]" {on=1; next}
+            on && /^## \[/ {exit}
+            on {print}
+          ' CHANGELOG.md > notes.md
+          test -s notes.md || echo "See CHANGELOG.md." > notes.md
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             echo "release $GITHUB_REF_NAME exists; uploading assets"
             gh release upload "$GITHUB_REF_NAME" dist/* attest/* --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
           else
             echo "no release for $GITHUB_REF_NAME; creating it with the assets"
             gh release create "$GITHUB_REF_NAME" dist/* attest/* \
-              --title "$GITHUB_REF_NAME" \
-              --generate-notes \
+              --title "otwin $V" \
+              --notes-file notes.md \
               --verify-tag
           fi
+
+  smoke-pypi:
+    name: Install and import from PyPI
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: pip install otwin[engine]
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          for i in $(seq 1 12); do
+            pip install "otwin[engine]==$V" && break
+            echo "not on the index yet (try $i)"; sleep 30
+          done
+      - run: |
+          V="${GITHUB_REF_NAME#v}"
+          python -c "import otwin; assert otwin.__version__ == '$V'; print('pip install otwin ->', otwin.__version__)"
