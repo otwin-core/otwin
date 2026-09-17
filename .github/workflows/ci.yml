@@ -80,7 +80,7 @@ jobs:
 
           system = otwin.System(mass, spring, damper, weight, ceiling)
           system.connect(mass.flange, spring.a, damper.a, weight.flange)
-          system.connect(spring.b, damper.b, ceiling.terminal)
+          system.connect(spring.b, damper.b, ceiling.port)
 
           model = otwin.compile(system)
           run = model.simulate(t_span=(0, 20), dt=0.05)
