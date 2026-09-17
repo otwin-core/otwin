@@ -1,0 +1,18 @@
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
+flowchart LR
+
+    A["Electrical domain<br/>voltage · current"]
+    B["DC Motor<br/>electromechanical coupling"]
+    C["Rotational domain<br/>torque · angular velocity"]
+    D["Mechanical load"]
+
+    A --> B --> C --> D

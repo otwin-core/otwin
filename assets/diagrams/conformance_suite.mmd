@@ -1,0 +1,30 @@
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
+flowchart LR
+
+    A["Otwin specification"]
+    B["Physical fixtures"]
+    C["Analytical / closed-form answers"]
+    D["Conformance suite"]
+
+    A --> D
+    B --> D
+    C --> D
+
+    D --> E["Python implementation"]
+    D --> F["Julia implementation"]
+    D --> G["MATLAB implementation"]
+    D --> H["Future implementations"]
+
+    E --> I{"Conformant?"}
+    F --> J{"Conformant?"}
+    G --> K{"Conformant?"}
+    H --> L{"Conformant?"}

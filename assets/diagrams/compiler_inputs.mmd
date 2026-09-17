@@ -1,0 +1,26 @@
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
+flowchart LR
+
+    A["Components"] --> E["Otwin compiler"]
+    B["Connections"] --> E
+    C["Parameters"] --> E
+    D["Inputs"] --> E
+
+    E --> F["Physical System IR"]
+    F --> G["Port-Hamiltonian representation"]
+    G --> H["Compiled Rust dynamics"]
+    H --> I["TwinModel"]
+
+    I --> J["Simulation"]
+    I --> K["State estimation"]
+    I --> L["Forecasting"]
+    I --> M["Validation"]

@@ -1,0 +1,19 @@
+---
+config:
+  layout: fixed
+  theme: neo
+  fontFamily: '''Open Sans Variable'', sans-serif'
+  themeVariables:
+    fontFamily: '''Open Sans Variable'', sans-serif'
+---
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
+
+flowchart LR
+
+    A["Question"] --> B{"Inside validated envelope?"}
+
+    B -->|"Yes"| C["Answer"]
+    B -->|"No"| D["Refuse"]
+
+    C --> E["Prediction + evidence"]
+    D --> F["Explain which boundary was exceeded"]
