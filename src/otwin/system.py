@@ -24,12 +24,9 @@ Everything the system knows can be inspected before compiling:
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from .components.base import Component, Connection, Port
-
-if TYPE_CHECKING:
-    from .components.base import Composite, Ground, Parameter
+from .components.base import Component, Composite, Connection, Ground, Parameter, Port
 
 __all__ = ["PhysicalSystem", "System", "chain", "ConnectionError_"]
 
@@ -228,6 +225,15 @@ def _series_pair(c: Component) -> tuple[Port, Port]:
         f"{c.name} has ports {list(c.ports)}: not a series element; connect it "
         "with System.connect"
     )
+
+
+def _component_rshift(self: Component, other: Any) -> PhysicalSystem:
+    return chain(self, other)
+
+
+# ``a >> b`` on components builds a chain. The operator lives here rather than
+# in components.base so that the component modules never import this one.
+Component.__rshift__ = _component_rshift  # type: ignore[method-assign]
 
 
 def _iter_ports(conns: Iterable[Connection]) -> Iterable[Port]:
