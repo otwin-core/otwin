@@ -80,12 +80,12 @@ config:
 %%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 18, "padding": 6, "curve": "linear"}, "themeVariables": {"fontSize": "13px"}}}%%
 
 flowchart LR
-    A["Engineering system<br/>components · connections · parameters"]
-    B["Otwin model<br/>physical structure"]
-    C["Compiler<br/>IR · equations · checks"]
-    D["Physics engine<br/>compiled dynamics"]
-    E["Measurements<br/>real asset"]
-    F["Digital Twin<br/>estimate · predict · validate"]
+    A["Engineering SYSTEM<br/>(components · connections · parameters)"]
+    B["Otwin MODEL<br/>physical structure"]
+    C["COMPILER<br/>IR · equations · checks"]
+    D["Physics ENGINE<br/>compiled dynamics"]
+    E["Measurements (DATA)<br/>real asset"]
+    F["DIGITAL TWIN<br/>estimate · predict · validate"]
 
     A --> B --> C --> D
     D --> F
@@ -174,7 +174,7 @@ WHAT A PHYSICAL MODEL MEANS
             │
       ┌─────┼─────┐
       │     │     │
-   Python  Julia  MATLAB
+   Python  Julia* MATLAB*
       │     │     │
       └─────┼─────┘
             │
@@ -184,7 +184,11 @@ WHAT A PHYSICAL MODEL MEANS
 
 A physics model should not be considered correct simply because one implementation produces plausible numbers. It should be possible to define what the model means, define physical properties that must hold, provide known reference answers, and test independent implementations against the same specification.
 
-That is the role of **[otwin-spec](https://github.com/otwin-core/otwin-spec)**.
+<div align="center">
+
+**[See Otwin Specifications](https://github.com/otwin-core/otwin-spec)**
+
+</div>
 
 <br>
 
@@ -242,7 +246,11 @@ flowchart LR
 
 This is an important architectural boundary: **Otwin is not defined only by its Python implementation.** The Python implementation is the reference implementation and the primary user interface today. The specification defines the contract that allows the ecosystem to grow beyond it.
 
-See **[otwin-spec](https://github.com/otwin-core/otwin-spec)** for the normative specification and conformance suite.
+<div align="center">
+
+**[See Otwin Specificiations](https://github.com/otwin-core/otwin-spec)** for the normative specification and conformance suite.
+
+</div>
 
 <br>
 
@@ -252,11 +260,9 @@ See **[otwin-spec](https://github.com/otwin-core/otwin-spec)** for the normative
 pip install "otwin[engine]"
 ```
 
-`otwin` provides the Python modeling framework.
+- `otwin` provides the Python modeling framework.
 
-`otwin[engine]` adds the compiled Rust runtime, with binary wheels for Linux, macOS and Windows.
-
-Without the engine package, models can still run through the NumPy reference backend.
+- `otwin[engine]` adds the compiled Rust runtime, with binary wheels for Linux, macOS and Windows. Without the engine package, models can still run through the NumPy reference backend.
 
 <br>
 
@@ -264,7 +270,7 @@ Without the engine package, models can still run through the NumPy reference bac
 
 A mass hanging from a spring and damper under gravity. You describe the physical system. You don't need to write Newton's equation yourself.
 
-Two verbs describe any system, and one rule says which to use. `>>` joins components in a line, the way the drawing reads: `mass >> spring >> ceiling`. `connect` joins ports where a line is not enough: three things meeting at one point, or a second circuit attached to a port. Here the mass hangs from the spring, and the damper and the weight meet the mass at the same point.
+Two verbs describe any **system**, and one rule says which to use. `>>` joins components in a line, the way the drawing reads: `mass >> spring >> ceiling`. `connect` joins ports where a line is not enough: three things meeting at one point, or a second circuit attached to a port. Here the mass hangs from the spring, and the damper and the weight meet the mass at the same point.
 
 ```python
 import otwin
@@ -276,13 +282,11 @@ from otwin.components.mechanical import (
     Fixed,
 )
 
-k, m, c, g0 = 20.0, 1.0, 0.3, 9.81
+mass = Mass(1.0, name="mass")
+spring = Spring(20.0, name="spring")
+damper = Damper(0.3, name="damper")
 
-mass = Mass(m, name="mass")
-spring = Spring(k, name="spring")
-damper = Damper(c, name="damper")
-
-weight = ForceSource(m * g0, name="weight")
+weight = ForceSource(1.0 * 9.81, name="weight")
 ceiling = Fixed(name="ceiling")
 
 system = mass >> spring >> ceiling                 # the line
@@ -369,11 +373,11 @@ cooling = Convection(0.5, name="cooling")          # W/K
 air = Ambient(298.15, name="air")
 gnd = Ground(name="gnd")
 
-module = gnd >> cell >> load >> gnd                # the electrical loop, closed on ground
-module.connect(cell.thermal, cooling.a)            # the thermal circuit hangs off the cell
-module.connect(cooling.b, air.port)
+system = gnd >> cell >> load >> gnd                # the electrical loop, closed on ground
+system.connect(cell.thermal, cooling.a)            # the thermal circuit hangs off the cell
+system.connect(cooling.b, air.port)
 
-model = otwin.compile(module, dt=10.0)
+model = otwin.compile(system, dt=10.0)
 
 state = model.initial_state()
 for _ in range(360):                               # one hour at 50 A
@@ -396,25 +400,18 @@ A pump line is a line and nothing else, so `>>` is all it takes; one-port compon
 
 <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Pump_line.png" height="200">
 
-</div>
-
-<div align="center">
-
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Pump_line.png" height="200">
-
-</div>
 
 ```python
 from otwin.components.hydraulic import Atmosphere, Filter, Pipe, Pump, Tank
 
-line = (
+system = (
     Tank(area=5000.0, level=3.0, name="tank")
     >> Pipe(resistance=5e5, name="suction")
     >> Pump(shutoff=4e5, max_flow=0.08, name="pump")      # nameplate curve
     >> Filter(resistance=2e6, name="filter")
     >> Atmosphere(name="outfall")
 )
-model = otwin.compile(line, dt=1.0)
+model = otwin.compile(system, dt=1.0)
 
 state = model.initial_state()
 for _ in range(900):
@@ -454,7 +451,7 @@ config:
 
 flowchart TD
 
-    A["Physical system<br/>components · ports · connections · parameters"]
+    A["Physical **system**<br/>components · ports · connections · parameters"]
     B["otwin.System<br/>domain-checked component graph"]
     C["otwin.compile()<br/>model compiler"]
     D["Physical System IR<br/>nodes · branches · states · parameters · inputs"]
