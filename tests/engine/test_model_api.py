@@ -231,12 +231,12 @@ def test_chain_syntax():
         Capacitor(1.0, name="C"),
         Ground(),
     )
-    s = v >> r >> c  # V.n - R.p, R.n - C.p
-    s.connect(c.n, v.p, g.port)  # close the loop back to the source
+    s = v >> r >> c  # a source is left at p: V.p - R.p, R.n - C.p
+    s.connect(c.n, v.n, g.port)  # close the loop back to the source
     m = otwin.compile(s)
     tr = m.simulate(t_span=(0, 5), dt=0.01, solver="rk45")
-    # the source's p port sits on the capacitor's n side, so the capacitor charges negative
-    assert tr["C.voltage"][-1] == pytest.approx(-(1 - np.exp(-5)), abs=1e-8)
+    # the chain follows the flow the source pushes, so the capacitor charges positive
+    assert tr["C.voltage"][-1] == pytest.approx(1 - np.exp(-5), abs=1e-8)
 
 
 def test_unused_fixed_component_still_compiles():

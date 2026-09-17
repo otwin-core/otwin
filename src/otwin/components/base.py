@@ -327,7 +327,15 @@ class Component:
     Subclasses set ``domain`` and ``type_name``, declare ports and
     parameters in ``__init__`` with :meth:`port` and :meth:`param`, and
     return their constitutive relations from :meth:`branches`.
+
+    ``series_ports`` names the (entry, exit) ports a chain ``a >> b >> c``
+    passes through. Passive two-ports use their natural pair (``p, n``;
+    ``a, b``; ``inlet, outlet``); sources set it the other way round so that
+    the chain follows the flow they push out (``gnd >> supply >> load >> gnd``
+    puts ``supply.p`` on the load side).
     """
+
+    series_ports: tuple[str, str] | None = None
 
     domain: ClassVar[str] = ""
     type_name: ClassVar[str] = "component"

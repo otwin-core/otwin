@@ -13,6 +13,10 @@ An electric drive: a voltage supply, a DC motor, and a fan on the shaft whose
 torque grows with the square of the speed. You say what exists and what touches
 what. You do not write an equation.
 
+Two verbs describe any system. `>>` joins components in a line, the way the
+drawing reads; `connect` joins ports where a line is not enough: three things
+meeting at one point, or a second circuit attached to a port.
+
 ```python
 import numpy as np
 import otwin
@@ -26,11 +30,10 @@ motor = DCMotor(resistance=1.0, inductance=0.5, torque_constant=0.5,
 fan = RotationalDamper(law=lambda w: 0.002 * w * abs(w), name="fan")   # a nonlinear load
 gnd, housing = Ground(), Housing()
 
-drive = otwin.System(supply, motor, fan, gnd, housing, name="drive")
-drive.connect(supply.p, motor.p)
-drive.connect(supply.n, motor.n, gnd.port)
-drive.connect(motor.shaft, fan.a)
+drive = gnd >> supply >> motor >> gnd        # the electrical loop, closed on ground
+drive.connect(motor.shaft, fan.a)            # the shaft: a second circuit, in another domain
 drive.connect(fan.b, housing.port)
+drive.name = "drive"
 
 model = otwin.compile(drive)
 print(model.state_names)

@@ -55,6 +55,7 @@ class Battery(Composite):
 
     type_name = "battery"
     domain = "electrical"
+    series_ports = ("n", "p")
 
     def __init__(
         self,

@@ -78,9 +78,9 @@ jobs:
           mass, spring, damper = Mass(m, name="mass"), Spring(k, name="spring"), Damper(c, name="damper")
           weight, ceiling = ForceSource(m * g0, name="weight"), Fixed(name="ceiling")
 
-          system = otwin.System(mass, spring, damper, weight, ceiling)
-          system.connect(mass.flange, spring.a, damper.a, weight.flange)
-          system.connect(spring.b, damper.b, ceiling.port)
+          system = mass >> spring >> ceiling
+          system.connect(mass.flange, damper.a, weight.flange)
+          system.connect(damper.b, ceiling.port)
 
           model = otwin.compile(system)
           run = model.simulate(t_span=(0, 20), dt=0.05)
