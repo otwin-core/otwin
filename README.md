@@ -398,6 +398,12 @@ A pump line is a line and nothing else, so `>>` is all it takes; one-port compon
 
 </div>
 
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Pump_line.png" height="200">
+
+</div>
+
 ```python
 from otwin.components.hydraulic import Atmosphere, Filter, Pipe, Pump, Tank
 
