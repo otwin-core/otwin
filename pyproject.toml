@@ -132,6 +132,17 @@ ignore = [
     "E731",
 ]
 
+[tool.interrogate]
+# Every public name is documented; the API reference is generated from these
+# docstrings, so a missing one is a blank page. Private helpers, dunders,
+# __init__ and nested functions are left to the reader of the code.
+ignore-init-method = true
+ignore-magic = true
+ignore-private = true
+ignore-nested-functions = true
+fail-under = 100
+exclude = ["src/otwin/_version.py"]
+
 [tool.mypy]
 python_version = "3.10"
 warn_unused_ignores = true

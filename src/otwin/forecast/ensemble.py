@@ -45,6 +45,7 @@ class Ensemble:
 
     @property
     def n_members(self) -> int:
+        """Number of members in the ensemble (at least two)."""
         return len(self.members)
 
     def forecast_trajectories(

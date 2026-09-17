@@ -253,7 +253,7 @@ class Integrator(Protocol):
     An integrator is *structure-preserving* if it maintains the model's
     invariants discretely — for a port-Hamiltonian model, that means energy
     cannot increase with ``u = 0``, at any step size. Implementations should
-    declare this honestly via :attr:`preserves_structure`, because tools and
+    declare this accurately via :attr:`preserves_structure`, because tools and
     the conformance suite branch on it.
     """
 

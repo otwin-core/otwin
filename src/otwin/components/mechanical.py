@@ -45,6 +45,8 @@ class Mass(Component):
         self.initial_velocity = float(velocity)
 
     def branches(self) -> list[Branch]:
+        """One across storage against the frame, state ``momentum`` (kg m/s):
+        ``v = p / m``, energy ``p^2 / 2m``."""
         return [
             StorageBranch(
                 self,
@@ -84,6 +86,8 @@ class Spring(Component):
         self.initial_extension = float(extension)
 
     def branches(self) -> list[Branch]:
+        """One through storage ``a`` to ``b``, state ``extension`` (m):
+        ``F = k x``, energy ``k x^2 / 2``."""
         return [
             StorageBranch(
                 self,
@@ -126,6 +130,8 @@ class Damper(Component):
             )
 
     def branches(self) -> list[Branch]:
+        """One resistor branch ``a`` to ``b``: ``F = c v`` of the relative
+        velocity, or ``law(v)`` when a law was given."""
         law = self._law if self._law is not None else (lambda v: self.c * v)
         return [ResistorBranch(self, self.a, self.b, law=law)]
 
@@ -146,6 +152,7 @@ class ForceSource(Component):
         self.force = None if force is None else float(force)
 
     def branches(self) -> list[Branch]:
+        """One through source into ``flange``: the force (N), an input when ``None``."""
         return [
             SourceBranch(
                 self,
@@ -171,6 +178,8 @@ class VelocitySource(Component):
         self.velocity = None if velocity is None else float(velocity)
 
     def branches(self) -> list[Branch]:
+        """One across source: the velocity (m/s) of ``flange`` against the
+        frame, an input when ``None``."""
         return [
             SourceBranch(
                 self,

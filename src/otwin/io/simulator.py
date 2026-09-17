@@ -40,11 +40,14 @@ class SimulatedFault(TransportError):
 
 @dataclass(frozen=True)
 class _Range:
+    """A contiguous run of ``count`` registers from ``start`` in one register bank."""
+
     start: int
     count: int
     register_type: str
 
     def overlaps(self, address: int, count: int, register_type: str) -> bool:
+        """Whether a read of ``count`` registers at ``address`` touches this range."""
         if register_type != self.register_type:
             return False
         return address < self.start + self.count and self.start < address + count
@@ -69,6 +72,7 @@ class _SimulatorBase:
         self._closed = False
 
     def _bank(self, register_type: str) -> dict[int, int]:
+        """The ``address -> word`` map for ``"holding"`` or ``"input"`` registers."""
         try:
             return self._banks[register_type]
         except KeyError:
@@ -197,6 +201,7 @@ class ModbusSimulator(_SimulatorBase):
             self.set_value(spec.name, "" if spec.dtype == "string" else 0.0)
 
     def _spec(self, name: str) -> RegisterSpec:
+        """The :class:`RegisterSpec` for tag ``name``, or ``KeyError`` listing the map."""
         try:
             return self.registers[name]
         except KeyError:
@@ -438,6 +443,7 @@ class SunSpecSimulator(_SimulatorBase):
 
     @soc.setter
     def soc(self, value: float) -> None:
+        """Set the state of charge and rebuild every register derived from it."""
         v = float(value)
         if not 0.0 <= v <= 1.0:
             raise ValueError(

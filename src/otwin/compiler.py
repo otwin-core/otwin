@@ -79,6 +79,8 @@ class StructureWarning(UserWarning):
 # Node bookkeeping
 # ----------------------------------------------------------------------------
 class _Node:
+    """A set of ports joined into one potential. Index 0 is the reference."""
+
     def __init__(self, index: int) -> None:
         self.index = index
         self.ports: list[Port] = []
@@ -102,6 +104,16 @@ class _Pin:
 
 @dataclass
 class _Ctx:
+    """Everything the passes share while compiling one system.
+
+    Filled in order: components, nodes and branches by :func:`_build_nodes`
+    and :func:`_collect_branches`; states, efforts, parameters and ports by
+    :func:`_declare_symbols`; series-resistor placeholders, node potentials
+    and two-port currents by the potential passes; secant placeholders and the
+    final parameter renaming by assembly. ``effort_syms`` are placeholders for
+    ``dH/dx`` that are substituted only after J and R have been read off.
+    """
+
     comps: list[Component]
     nodes: list[_Node]
     ref: _Node
@@ -132,6 +144,7 @@ class _Ctx:
 
 
 def _terminal_str(t: Port | None) -> str:
+    """A port's qualified name for messages, ``"reference"`` for ``None``."""
     return "reference" if t is None else t.qualified
 
 
@@ -205,6 +218,8 @@ def compile_system(
 # Validation and nodes
 # ----------------------------------------------------------------------------
 def _validate_components(comps: list[Component]) -> None:
+    """Reject duplicate names and out-of-range parameters among the flattened
+    components, as :class:`CompileError`."""
     seen: dict[str, Component] = {}
     for c in comps:
         if c.name in seen:
@@ -220,6 +235,12 @@ def _validate_components(comps: list[Component]) -> None:
 
 
 def _build_nodes(comps: list[Component], links: list[Connection]) -> _Ctx:
+    """Union-find the connected ports into nodes and start the context.
+
+    All :class:`Ground` ports merge into node 0, the reference. Refuses a node
+    that mixes domains, a port that belongs to no listed component, and an
+    unconnected port of a multi-port component; warns about a loose ground.
+    """
     parent: dict[Port, Port] = {}
 
     def find(t: Port) -> Port:
@@ -327,13 +348,17 @@ def _composites(components: list[Component]) -> list[Component]:
 
 
 def _leaves(c: Component) -> list[Component]:
-
+    """The non-composite components under ``c`` (``c`` itself if it is one)."""
     if isinstance(c, Composite):
         return [leaf for part in c.parts for leaf in _leaves(part)]
     return [c]
 
 
 def _collect_branches(ctx: _Ctx) -> None:
+    """Ask every component for its branches and fill ``ctx.branches`` and
+    ``ctx.storage_branches``. A heat branch or a non-power-conjugate (thermal)
+    storage marks the representation pseudo-port-Hamiltonian; a system with no
+    storage is refused."""
     for c in ctx.comps:
         for b in c.branches():
             if b.a.domain != "any" and b.a.domain not in DOMAINS:
@@ -360,10 +385,20 @@ def _collect_branches(ctx: _Ctx) -> None:
 
 
 def _node(ctx: _Ctx, t: Port | None) -> _Node:
+    """The node of a port; ``None`` is the reference."""
     return ctx.ref if t is None else ctx.node_of[t]
 
 
 def _declare_symbols(ctx: _Ctx) -> None:
+    """Create the model's variables from the collected branches.
+
+    Parameters become :class:`ParamVar` entries plus a renaming from the
+    component's identity-based symbol to ``<component>.<name>``. Each storage
+    yields a state symbol, an energy ``H(x)``, its gradient and an effort
+    placeholder ``__effort.i``. Each source becomes a port: an input symbol
+    when its value is ``None``, otherwise a ``<name>.<quantity>`` parameter;
+    inputs are listed first.
+    """
     for c in ctx.comps:
         for pname, p in c.parameters.items():
             ctx.params.append(
@@ -413,6 +448,9 @@ def _declare_symbols(ctx: _Ctx) -> None:
 # Potentials
 # ----------------------------------------------------------------------------
 def _pins(ctx: _Ctx) -> list[_Pin]:
+    """The branches whose across variable is known before any potential is:
+    across storages (their effort), across sources (their port value) and
+    series resistors (their placeholder)."""
     pins: list[_Pin] = []
     for b in ctx.branches:
         if isinstance(b, StorageBranch) and b.kind == "across":
@@ -596,6 +634,9 @@ def _dependent_message(p: _Pin, n: _Node, other: _Node, ctx: _Ctx) -> str:
 
 
 def _across(ctx: _Ctx, b: Branch, second: bool = False) -> Expr:
+    """``potential(a) - potential(b)`` of a branch (of its second side for a
+    two-port when ``second``), with series-resistor placeholders substituted
+    by the current ``ctx.inverse_map``."""
     if second:
         assert isinstance(b, TwoPortBranch)
         v = ctx.potentials[_node(ctx, b.a2)] - ctx.potentials[_node(ctx, b.b2)]
@@ -693,6 +734,14 @@ def _incident(ctx: _Ctx) -> dict[_Node, list[tuple[Branch, int, float]]]:
 
 
 def _solve_unknowns(ctx: _Ctx, unknown_groups: list[tuple[Expr, list[_Node]]]) -> None:
+    """Determine the unpinned potentials and the two-port currents.
+
+    One conservation equation per unknown node group (sum of non-pin
+    throughs over its nodes) plus the across and through relations of each
+    two-port form a system that must be linear in the unknowns; a nonlinear
+    law there is refused as an algebraic loop. The solution is substituted
+    into ``ctx.potentials`` and ``ctx.twoport_currents``.
+    """
     twoports = [b for b in ctx.branches if isinstance(b, TwoPortBranch)]
     for k, b in enumerate(twoports):
         ctx.twoport_currents[b] = (
@@ -802,6 +851,15 @@ def _solve_linear(M: list[list[Expr]], b: list[Expr], syms: list[Expr]) -> list[
 def _assemble(
     ctx: _Ctx, structural: bool
 ) -> tuple[list[Expr], list[Expr], dict[Component, ComponentQuantities]]:
+    """Build ``dx/dt`` for every state and the conjugate output of every port.
+
+    The through variable of each pin branch is recovered by conservation,
+    peeling the pin trees from the leaves inward. An across storage's rate is
+    its through, a through storage's rate is its across. With ``structural``
+    the nonlinear laws are frozen secant conductances (placeholders recorded
+    in ``ctx.secants``); otherwise the laws stand as written and the per-
+    component quantities for :meth:`Component.extra_outputs` are collected.
+    """
     inc = _incident(ctx)
     ctx.inverse_map = _inverse_map(ctx, structural)
     n_states = len(ctx.storage_branches)
@@ -873,6 +931,12 @@ def _assemble(
 def _extract_structure(
     ctx: _Ctx, rhs: list[Expr], port_out: list[Expr]
 ) -> tuple[list[list[Expr]], list[list[Expr]], list[list[Expr]], list[list[Expr]]]:
+    """Read ``J, R, G, D`` off the structural form by differentiation.
+
+    ``A = d(rhs)/d(effort)`` splits into ``J = (A - A^T)/2`` and
+    ``R = -(A + A^T)/2``; ``G = d(rhs)/d(port)`` and ``D = d(port_out)/d(port)``.
+    Secant placeholders and efforts are substituted back afterwards.
+    """
     n = len(ctx.storage_branches)
     P = len(ctx.ports)
     effort_map = dict(zip(ctx.effort_syms, ctx.grad_H, strict=True))
@@ -895,6 +959,10 @@ def _outputs(
     quantities: dict[Component, ComponentQuantities],
     effort_map: dict[Expr, Expr],
 ) -> dict[str, OutputVar]:
+    """The named outputs of the model: every state and its component's
+    energy, the across, through and power of every branch (heat flow for a
+    heat branch, both sides of a two-port), each component's and composite's
+    ``extra_outputs``, and the total ``energy``."""
     out: dict[str, OutputVar] = {}
 
     def put(name: str, unit: str, e: Expr) -> None:
@@ -945,6 +1013,8 @@ def _outputs(
 
 
 def _physical_ir(system: System, ctx: _Ctx, name: str | None) -> PhysicalSystemIR:
+    """The structural record of the system: components, nodes with their
+    ports, branches with their kind and end nodes, and the variables."""
     comps = [
         ComponentRecord(
             c.name, c.type_name, c.domain, tuple(c.parameters), tuple(c.ports)

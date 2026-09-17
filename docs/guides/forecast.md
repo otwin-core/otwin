@@ -1,7 +1,7 @@
 # Forecast — `otwin.forecast`
 
 What happens next, and how sure. The largest module in the package, and the one
-with the most ways to fool yourself — so it is built to make the honest path the
+with the most ways to fool yourself — so it is built to make the right path the
 easy one.
 
 The reasoning is in [Leakage-free evaluation](../concepts/leakage.md) and
@@ -34,7 +34,7 @@ something that might leak.
 {func}`~otwin.forecast.persistence`, {func}`~otwin.forecast.mean_forecast`,
 {func}`~otwin.forecast.drift`, {func}`~otwin.forecast.seasonal_naive`.
 {func}`~otwin.forecast.get_best_baseline` picks the strongest by RMSE — the only
-honest comparator, since beating the weakest proves nothing.
+comparator that means anything, since beating the weakest proves nothing.
 
 ## Evaluating
 

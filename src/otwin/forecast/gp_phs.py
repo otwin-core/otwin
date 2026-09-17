@@ -19,6 +19,11 @@ import numpy.typing as npt
 
 
 def _require_sklearn() -> Any:
+    """Return ``(GaussianProcessRegressor, ConstantKernel, RBF, WhiteKernel)`` from scikit-learn.
+
+    Raises:
+        ImportError: If scikit-learn is not installed, naming the ``[gp]`` extra.
+    """
     try:
         import sklearn  # noqa: F401
         from sklearn.gaussian_process import GaussianProcessRegressor
@@ -72,6 +77,7 @@ class GPPHS:
     def _features(
         self, X: npt.NDArray[np.floating], U: npt.NDArray[np.floating] | None
     ) -> npt.NDArray[np.floating]:
+        """GP input matrix: states ``(n, n_states)`` with inputs appended as columns when present."""
         X = np.atleast_2d(X)
         if U is None or self.n_inputs == 0:
             return X

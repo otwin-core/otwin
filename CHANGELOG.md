@@ -8,6 +8,27 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 From 2.0.0 the public API changes only with a major version. Pin an exact
 version in anything you depend on.
 
+## [Unreleased]
+
+### Added
+
+- `docs/reference/components.md`: every component with its constructor,
+  ports, parameters (unit, value, validity rule, meaning), states, inputs and
+  outputs, generated from the components by `docs/generate_components.py`
+  and checked in CI.
+- A docstring on every public name (checked in CI with `interrogate`), and
+  a one-line meaning on every component parameter.
+
+### Changed
+
+- The documentation overview (`docs/index.md`) is a continuous introduction
+  to what Otwin is, what it is not, the elements of a model, the compiler,
+  the model, the twin layer and the three worked systems, aligned with the
+  README.
+- The API reference is ordered by task (describe, compile, simulate, read
+  the asset, fit, estimate, forecast, validate) ahead of the per-module
+  listing.
+
 ## [2.0.1] — 2026-09-17
 
 ### Changed
@@ -365,6 +386,7 @@ this repository.
 - Connectors are read-only. Closed-loop actuation is deliberately out of scope.
 - No production deployment on an operating asset is known to the maintainer.
 
+[Unreleased]: https://github.com/otwin-core/otwin/compare/v2.0.1...HEAD
 [2.0.1]: https://github.com/otwin-core/otwin/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/otwin-core/otwin/compare/v0.4.0...v2.0.0
 [0.4.0]: https://github.com/otwin-core/otwin/compare/v0.3.1...v0.4.0

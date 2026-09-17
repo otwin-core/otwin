@@ -357,7 +357,7 @@ class TwinManifest:
         Deliberately strict: ``leakage_free`` must be the boolean ``True``, not
         merely truthy. Manifests arrive from MATLAB and Julia, where a boolean
         can round-trip as ``1`` or as the string ``"false"`` — and the one
-        property that certifies honest validation must not accept those.
+        property that certifies validation must not accept those.
         """
         if not self.validation:
             return False

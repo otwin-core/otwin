@@ -334,9 +334,11 @@ class ExtendedKalmanFilter:
         self.P = _symmetrise(self.P0.copy())
 
     def _f(self, x: Array, u: Array, t: float) -> Array:
+        """``model.rhs(x, u, t)`` as a float array, shape ``(n,)``."""
         return np.asarray(self.model.rhs(x, u, t), dtype=float)
 
     def _h(self, x: Array, u: Array, t: float) -> Array:
+        """``model.observe(x, u, t)`` as a float array of at least one dimension, shape ``(m,)``."""
         return np.atleast_1d(np.asarray(self.model.observe(x, u, t), dtype=float))
 
     def _H(self, x: Array, u: Array, t: float) -> Array:
@@ -418,6 +420,7 @@ class ExtendedKalmanFilter:
         return self.update(y, u, t + dt)
 
     def _empty_inputs(self, n_steps: int, us: Array | None) -> Array:
+        """Coerce ``us`` to shape ``(n_steps, n_inputs)``; ``None`` gives ``(n_steps, 0)``."""
         if us is None:
             return np.zeros((n_steps, 0))
         us = np.asarray(us, dtype=float)

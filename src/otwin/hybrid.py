@@ -109,15 +109,18 @@ class HybridModel(CustomDynamics):
         self.param_names = list(physics.param_names)
 
     def physics_rhs(self, x: Array, u: Array | None = None, t: float = 0.0) -> Array:
+        """The physics part of ``dx/dt`` alone, from the compiled model."""
         return self.physics.rhs(x, u, t)
 
     def residual_rhs(self, x: Array, u: Array | None = None, t: float = 0.0) -> Array:
+        """The residual part of ``dx/dt`` alone, zero on the states the mask excludes."""
         r = np.asarray(
             self._res_fn(x, np.zeros(self.n_inputs) if u is None else u, t), dtype=float
         )
         return np.where(self._mask, r, 0.0)
 
     def summary(self) -> str:
+        """The physics summary followed by the residual type and the states it acts on."""
         return (
             self.physics.summary()
             + f"\nResidual: {type(self.residual).__name__} on states "
@@ -129,6 +132,12 @@ class HybridModel(CustomDynamics):
 def _as_residual_fn(
     residual: Any, n_states: int, n_inputs: int
 ) -> Callable[[Array, Array, float], Array]:
+    """Normalise a residual to a callable ``r(x, u, t) -> (n_states,)``.
+
+    Accepts an object with ``predict(X[, U])`` (a fitted GP; the mean is used),
+    an object with ``rhs(x, u, t)``, or a plain callable. Raises ``TypeError``
+    otherwise.
+    """
     if hasattr(residual, "predict"):
 
         def gp(x: Array, u: Array, t: float) -> Array:

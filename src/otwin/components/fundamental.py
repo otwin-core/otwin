@@ -89,11 +89,15 @@ _UNITS = {
 
 
 def _check_domain(domain: str) -> None:
+    """Raise ``ValueError`` unless ``domain`` is one of :data:`DOMAINS`."""
     if domain not in DOMAINS:
         raise ValueError(f"unknown domain {domain!r}; one of {sorted(DOMAINS)}")
 
 
 class _TwoPort(Component):
+    """Base of the fundamental elements: ports ``p`` and ``n`` in a domain
+    chosen at construction."""
+
     def __init__(self, domain: str, name: str | None) -> None:
         _check_domain(domain)
         self.domain = domain
@@ -145,6 +149,8 @@ class Storage(_TwoPort):
         self.state_unit = units["state_a" if kind == "across" else "state_t"]
 
     def branches(self) -> list[Branch]:
+        """One storage of the chosen kind, ``p`` to ``n``, state ``state``:
+        energy ``x^2 / (2 coefficient)`` or the ``energy`` function given."""
         c = self.coef
         energy = self._energy if self._energy is not None else (lambda x: x * x / (2 * c))
         return [
@@ -193,6 +199,8 @@ class Dissipator(_TwoPort):
             )
 
     def branches(self) -> list[Branch]:
+        """One resistor branch ``p`` to ``n``: ``through = across / resistance``,
+        or ``law(across)`` when a law was given."""
         law = self._law if self._law is not None else (lambda e: e / self.R)
         return [ResistorBranch(self, self.p, self.n, law=law)]
 
@@ -226,6 +234,8 @@ class Source(_TwoPort):
         self.quantity = d.across if kind == "across" else d.through
 
     def branches(self) -> list[Branch]:
+        """One source of the chosen kind, ``p`` to ``n``, in the domain's unit;
+        an input when ``value`` is ``None``."""
         return [
             SourceBranch(
                 self,

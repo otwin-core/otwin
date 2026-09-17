@@ -172,6 +172,7 @@ KNOWN_UNITS: frozenset[str] = frozenset(_SI) | frozenset(_ALIASES)
 
 
 def _canonical(unit: str) -> str:
+    """Resolve an alias to its key in ``_SI``; raise :class:`UnknownUnitError` otherwise."""
     if unit in _SI:
         return unit
     if unit in _ALIASES:

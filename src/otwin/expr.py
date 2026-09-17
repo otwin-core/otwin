@@ -79,10 +79,12 @@ class Expr:
     # ------------------------------------------------------------------ basics
     @property
     def is_const(self) -> bool:
+        """True for a constant leaf; its number is in ``value``."""
         return self.op == "const"
 
     @property
     def is_symbol(self) -> bool:
+        """True for a symbol leaf; ``kind`` and ``name`` identify it."""
         return self.op == "sym"
 
     @property
@@ -113,9 +115,11 @@ class Expr:
         raise TypeError("an Expr has no truth value; use is_zero() or evaluate() instead")
 
     def is_zero(self) -> bool:
+        """True for the constant ``0``; a subtree that folds to zero already is one."""
         return self.is_const and self.value == 0.0
 
     def is_one(self) -> bool:
+        """True for the constant ``1``."""
         return self.is_const and self.value == 1.0
 
     # --------------------------------------------------------------- operators
@@ -184,9 +188,12 @@ class Expr:
         return out
 
     def depends_on(self, kind: str) -> bool:
+        """True if any symbol of the given kind (``state``, ``param``, ``input``,
+        ``time``) appears in the tree."""
         return any(s.kind == kind for s in self.symbols())
 
     def depends_on_symbol(self, sym: Expr) -> bool:
+        """True if the symbol ``sym`` appears in the tree."""
         return sym in self.symbols()
 
     def substitute(self, mapping: dict[Expr, Expr]) -> Expr:
@@ -222,11 +229,13 @@ class Expr:
         return [self.op, *[a.to_json() for a in self.args]]
 
     def count_nodes(self) -> int:
+        """Number of nodes in the tree, leaves included: a size measure."""
         return 1 + sum(a.count_nodes() for a in self.args)
 
 
 # ------------------------------------------------------------------ constructors
 def const(value: float) -> Expr:
+    """A constant leaf. ``-0.0`` is folded to ``0.0`` so it compares equal to zero."""
     v = float(value)
     if v == 0.0:
         v = 0.0  # fold -0.0
@@ -238,12 +247,14 @@ _ONE = const(1.0)
 
 
 def symbol(kind: str, name: str) -> Expr:
+    """A symbol leaf of kind ``state``, ``param``, ``input`` or ``time``."""
     if kind not in _SYMBOL_KINDS:
         raise ValueError(f"symbol kind must be one of {_SYMBOL_KINDS}, got {kind!r}")
     return Expr("sym", kind=kind, name=name)
 
 
 def as_expr(x: Any) -> Expr:
+    """Coerce a number (or a bool, as ``1``/``0``) to a constant; an ``Expr`` passes through."""
     if isinstance(x, Expr):
         return x
     if isinstance(x, bool):
@@ -274,6 +285,8 @@ def _rebuild(op: str, args: tuple[Expr, ...], value: Any = None) -> Expr:
 
 
 def _unary(op: str, a: Expr) -> Expr:
+    """Build a unary node, folding constants and pushing ``neg`` into
+    products, quotients and differences."""
     if a.is_const:
         return const(_apply_unary(op, a.value))
     if op == "neg":
@@ -289,12 +302,15 @@ def _unary(op: str, a: Expr) -> Expr:
 
 
 def _binary(op: str, a: Expr, b: Expr) -> Expr:
+    """Build a binary node, folding it to a constant when both operands are."""
     if a.is_const and b.is_const:
         return const(_apply_binary(op, a.value, b.value))
     return Expr(op, (a, b))
 
 
 def add(a: Expr, b: Expr) -> Expr:
+    """``a + b`` with simplification: zeros dropped, ``a + a = 2 a``, constants
+    moved first, like terms over a common denominator or factor merged."""
     if a.is_zero():
         return b
     if b.is_zero():
@@ -323,6 +339,8 @@ def add(a: Expr, b: Expr) -> Expr:
 
 
 def sub(a: Expr, b: Expr) -> Expr:
+    """``a - b`` with simplification: ``a - a`` folds to ``0`` by structural
+    equality, negative constants turn into additions, like terms merge."""
     if b.is_zero():
         return a
     if a.is_zero():
@@ -347,6 +365,8 @@ def sub(a: Expr, b: Expr) -> Expr:
 
 
 def mul(a: Expr, b: Expr) -> Expr:
+    """``a * b`` with simplification: zero and one absorbed, constants moved
+    first and combined, ``a * (c / a)`` cancelled."""
     if a.is_zero() or b.is_zero():
         return _ZERO
     if a.is_one():
@@ -378,6 +398,9 @@ def mul(a: Expr, b: Expr) -> Expr:
 
 
 def div(a: Expr, b: Expr) -> Expr:
+    """``a / b`` with simplification: a constant divisor becomes a factor
+    ``1/c``, ``a / a`` folds to ``1``, nested quotients are flattened and common
+    factors cancelled. Raises ``ZeroDivisionError`` for a constant zero divisor."""
     if b.is_zero():
         raise ZeroDivisionError("division by a constant zero in an expression")
     if a.is_zero():
@@ -410,6 +433,7 @@ def div(a: Expr, b: Expr) -> Expr:
 
 
 def power(a: Expr, b: Expr) -> Expr:
+    """``a ** b``, folding the exponents ``0`` and ``1`` and the bases ``0`` and ``1``."""
     if b.is_zero():
         return _ONE
     if b.is_one():
@@ -424,22 +448,27 @@ def power(a: Expr, b: Expr) -> Expr:
 
 
 def neg(a: Expr) -> Expr:
+    """``-a``; a double negation cancels."""
     return _unary("neg", a)
 
 
 def sqrt(a: Any) -> Expr:
+    """Square root; evaluates to NaN for a negative argument."""
     return _unary("sqrt", as_expr(a))
 
 
 def exp(a: Any) -> Expr:
+    """Exponential; overflow evaluates to ``inf``."""
     return _unary("exp", as_expr(a))
 
 
 def log(a: Any) -> Expr:
+    """Natural logarithm; ``-inf`` at zero, NaN for a negative argument."""
     return _unary("log", as_expr(a))
 
 
 def abs_(a: Any) -> Expr:
+    """Absolute value (``abs(expr)`` also works); ``abs(abs(a))`` folds to one node."""
     a = as_expr(a)
     if a.op == "abs":
         return a
@@ -447,30 +476,39 @@ def abs_(a: Any) -> Expr:
 
 
 def tanh(a: Any) -> Expr:
+    """Hyperbolic tangent, the usual smooth stand-in for ``sign``."""
     return _unary("tanh", as_expr(a))
 
 
 def sin(a: Any) -> Expr:
+    """Sine."""
     return _unary("sin", as_expr(a))
 
 
 def cos(a: Any) -> Expr:
+    """Cosine."""
     return _unary("cos", as_expr(a))
 
 
 def sign(a: Any) -> Expr:
+    """``-1``, ``0`` or ``1``; its derivative is taken as zero."""
     return _unary("sign", as_expr(a))
 
 
 def maximum(a: Any, b: Any) -> Expr:
+    """The larger of two expressions; differentiates through whichever is active."""
     return _binary("max", as_expr(a), as_expr(b))
 
 
 def minimum(a: Any, b: Any) -> Expr:
+    """The smaller of two expressions; differentiates through whichever is active."""
     return _binary("min", as_expr(a), as_expr(b))
 
 
 def where(cond: Any, a: Any, b: Any) -> Expr:
+    """``a`` where ``cond`` is nonzero, else ``b``. Comparisons such as
+    ``x > 0`` are expressions evaluating to ``1`` or ``0``, so they serve as
+    ``cond``. Folds when ``cond`` is constant or both branches are equal."""
     cond, a, b = as_expr(cond), as_expr(a), as_expr(b)
     if cond.is_const:
         return a if cond.value != 0.0 else b
@@ -540,6 +578,8 @@ def interp_integral(
 
 # ----------------------------------------------------------------- evaluation
 def _apply_unary(op: str, v: float) -> float:
+    """Apply a unary operator to a number, returning NaN or ``inf`` instead
+    of raising outside the domain."""
     if op == "neg":
         return -v
     if op == "sqrt":
@@ -565,6 +605,8 @@ def _apply_unary(op: str, v: float) -> float:
 
 
 def _apply_binary(op: str, a: float, b: float) -> float:
+    """Apply a binary operator to two numbers; ``gt`` gives ``1.0`` or ``0.0``,
+    division by zero gives a signed ``inf`` or NaN."""
     if op == "add":
         return a + b
     if op == "sub":
@@ -588,6 +630,7 @@ def _apply_binary(op: str, a: float, b: float) -> float:
 
 
 def _eval(e: Expr, env: dict[str, float]) -> float:
+    """Recursive evaluation of ``e`` with symbols looked up by ``key`` in ``env``."""
     if e.is_const:
         return e.value  # type: ignore[return-value]
     if e.is_symbol:
@@ -608,6 +651,8 @@ def _eval(e: Expr, env: dict[str, float]) -> float:
 
 
 def _eval_pw(table: tuple[Any, Any], x: float) -> float:
+    """Evaluate a :func:`piecewise` table at ``x``: binary search for the
+    segment, then the quadratic in ``x - knots[i]``; the end segments extrapolate."""
     knots, coefs = table
     # segment i covers [knots[i], knots[i+1]); the end segments extrapolate
     lo, hi = 0, len(coefs) - 1
@@ -630,6 +675,9 @@ def _eval_pw(table: tuple[Any, Any], x: float) -> float:
 
 # ------------------------------------------------------------ differentiation
 def _diff(e: Expr, s: Expr) -> Expr:
+    """Partial derivative of ``e`` with respect to the symbol ``s``, built
+    through the simplifying constructors. ``sign`` and ``gt`` differentiate
+    to zero; ``max``, ``min`` and ``where`` differentiate the active branch."""
     if e.is_const:
         return _ZERO
     if e.is_symbol:
@@ -733,6 +781,8 @@ _PREC = {"add": 1, "sub": 1, "mul": 2, "div": 2, "neg": 3, "pow": 4}
 
 
 def _fmt(e: Expr, parent: int) -> str:
+    """Infix rendering for ``repr``, parenthesised only where the operator
+    binds more loosely than ``parent``; symbols print as ``kind:name``."""
     if e.is_const:
         v = e.value
         return repr(int(v)) if float(v).is_integer() and abs(v) < 1e15 else repr(v)

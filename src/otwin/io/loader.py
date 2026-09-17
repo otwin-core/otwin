@@ -29,6 +29,7 @@ def path_for(name: str) -> Path:
 
 
 def _dataset(name: str) -> Dataset:
+    """The registry entry for ``name``, or ``KeyError`` listing the known names."""
     if name not in DATASETS:
         raise KeyError(f"unknown dataset {name!r}; known: {sorted(DATASETS)}")
     return DATASETS[name]
@@ -52,6 +53,7 @@ def describe(name: str) -> str:
 
 
 def _sha256(path: Path, chunk: int = 1 << 20) -> str:
+    """Hex SHA-256 digest of a file, read in ``chunk``-byte blocks."""
     h = hashlib.sha256()
     with open(path, "rb") as fh:
         while block := fh.read(chunk):

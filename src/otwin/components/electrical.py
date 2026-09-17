@@ -27,6 +27,8 @@ __all__ = [
 
 
 class _TwoTerminal(Component):
+    """Base of the electrical two-terminal elements: ports ``p`` and ``n``."""
+
     domain = "electrical"
 
     def __init__(self, name: str | None = None) -> None:
@@ -57,6 +59,7 @@ class Resistor(_TwoTerminal):
             self.R = self.add_parameter("resistance", resistance, "ohm", "v = R i")
 
     def branches(self) -> list[Branch]:
+        """One resistor branch ``p`` to ``n``: ``i = v / R``, or ``law(v)`` when a law was given."""
         law = self._law if self._law is not None else (lambda v: v / self.R)
         return [ResistorBranch(self, self.p, self.n, law=law)]
 
@@ -78,6 +81,7 @@ class Capacitor(_TwoTerminal):
         self.initial_voltage = float(voltage)
 
     def branches(self) -> list[Branch]:
+        """One across storage with state ``charge`` (C): ``v = q / C``, energy ``q^2 / 2C``."""
         return [
             StorageBranch(
                 self,
@@ -110,6 +114,7 @@ class Inductor(_TwoTerminal):
         self.initial_current = float(current)
 
     def branches(self) -> list[Branch]:
+        """One through storage with state ``flux`` (Wb): ``i = phi / L``, energy ``phi^2 / 2L``."""
         return [
             StorageBranch(
                 self,
@@ -136,6 +141,7 @@ class VoltageSource(_TwoTerminal):
         self.voltage = None if voltage is None else float(voltage)
 
     def branches(self) -> list[Branch]:
+        """One across source: ``v_p - v_n`` equals the voltage (V), an input when ``None``."""
         return [
             SourceBranch(
                 self,
@@ -160,6 +166,7 @@ class CurrentSource(_TwoTerminal):
         self.current = None if current is None else float(current)
 
     def branches(self) -> list[Branch]:
+        """One through source: the current (A) delivered out of ``p``, an input when ``None``."""
         return [
             SourceBranch(
                 self,

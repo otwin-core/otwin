@@ -62,6 +62,8 @@ class ThermalMass(Component):
         self.initial_temperature = float(temperature)
 
     def branches(self) -> list[Branch]:
+        """One across storage against the datum, state ``heat`` (J): ``T = E / C``,
+        storage function ``E^2 / 2C``."""
         return [
             StorageBranch(
                 self,
@@ -77,6 +79,7 @@ class ThermalMass(Component):
         ]
 
     def extra_outputs(self, q: ComponentQuantities) -> dict[str, tuple[str, Expr]]:
+        """``temperature`` (K): the stored heat over the capacity."""
         return {"temperature": ("K", q.state["heat"] / self.C)}
 
 
@@ -101,6 +104,8 @@ class ThermalResistance(Component):
             self.R = self.add_parameter("resistance", resistance, "K/W", "dT = R q")
 
     def branches(self) -> list[Branch]:
+        """One resistor branch ``a`` to ``b``: ``Q = (T_a - T_b) / R``, or
+        ``law(dT)`` when a law was given."""
         law = self._law if self._law is not None else (lambda dT: dT / self.R)
         return [ResistorBranch(self, self.a, self.b, law=law)]
 
@@ -118,6 +123,7 @@ class Convection(Component):
         self.hA = self.add_parameter("conductance", conductance, "W/K", "h A: q = hA dT")
 
     def branches(self) -> list[Branch]:
+        """One resistor branch ``a`` to ``b``: ``Q = hA (T_a - T_b)``."""
         return [ResistorBranch(self, self.a, self.b, law=lambda dT: self.hA * dT)]
 
 
@@ -133,6 +139,7 @@ class HeatSource(Component):
         self.heat = None if heat is None else float(heat)
 
     def branches(self) -> list[Branch]:
+        """One through source into ``port``: the heat flow (W), an input when ``None``."""
         return [
             SourceBranch(
                 self,
@@ -171,6 +178,8 @@ class Losses(Component):
         self.sources = list(sources)
 
     def branches(self) -> list[Branch]:
+        """One heat branch into ``port`` summing ``across * through`` of the
+        resistor branches of ``sources``."""
         return [HeatBranch(self, self.port, None, sources=list(self.sources))]
 
 
@@ -189,6 +198,8 @@ class Ambient(Component):
         self.temperature = None if temperature is None else float(temperature)
 
     def branches(self) -> list[Branch]:
+        """One across source: the temperature (K) of ``port`` against the datum,
+        an input when ``None``."""
         return [
             SourceBranch(
                 self,

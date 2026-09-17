@@ -89,6 +89,9 @@ class Tank(Component):
         self.initial_level = float(level)
 
     def branches(self) -> list[Branch]:
+        """One across storage against atmosphere, state ``volume`` (m^3):
+        ``p = rho g (z + V / A)`` with ``V`` clamped at zero inside the energy
+        ``rho g (z V + V^2 / 2A)``."""
         return [
             StorageBranch(
                 self,
@@ -111,6 +114,7 @@ class Tank(Component):
         ]
 
     def extra_outputs(self, q: ComponentQuantities) -> dict[str, tuple[str, Expr]]:
+        """``level`` (m): the stored volume over the free-surface area."""
         return {"level": ("m", q.state["volume"] / self.A)}
 
 
@@ -145,6 +149,10 @@ class Orifice(Component):
         self.rho = self.add_parameter("density", density, "kg/m^3", "of the liquid")
 
     def branches(self) -> list[Branch]:
+        """One resistor branch ``a`` to ``b`` with both directions of the law:
+        ``Q = sign(dp) Cd A sqrt(2 |dp| / rho)`` and its inverse
+        ``dp = rho Q |Q| / (2 Cd^2 A^2)``."""
+
         def law(dp: Expr) -> Expr:
             return ex.sign(dp) * self.cd * self.a_ * ex.sqrt(2 * abs(dp) / self.rho)
 
@@ -192,6 +200,9 @@ class Pipe(Component):
             )
 
     def branches(self) -> list[Branch]:
+        """One resistor branch ``a`` to ``b``: ``Q = dp / R`` (laminar, inverse
+        ``dp = R Q``), ``Q = sign(dp) sqrt(|dp| / K)`` (turbulent, inverse
+        ``dp = K Q |Q|``), or ``law(dp)`` alone when a law was given."""
         inverse = None
         if self._law is not None:
             law = self._law
@@ -225,6 +236,8 @@ class FluidInertance(Component):
         self.initial_flow = float(flow)
 
     def branches(self) -> list[Branch]:
+        """One through storage ``a`` to ``b``, state ``flow_momentum`` (Pa s):
+        ``Q = p / I``, energy ``p^2 / 2I``."""
         return [
             StorageBranch(
                 self,
@@ -257,6 +270,8 @@ class FlowSource(Component):
         self.flow = None if flow is None else float(flow)
 
     def branches(self) -> list[Branch]:
+        """One through source: the flow (m^3/s) drawn from ``b`` and delivered
+        at ``a``, an input when ``None``."""
         return [
             SourceBranch(
                 self,
@@ -284,6 +299,7 @@ class PressureSource(Component):
         self.pressure = None if pressure is None else float(pressure)
 
     def branches(self) -> list[Branch]:
+        """One across source: ``p_a - p_b`` equals the pressure (Pa), an input when ``None``."""
         return [
             SourceBranch(
                 self,
@@ -327,6 +343,7 @@ class Filter(Component):
         )
 
     def branches(self) -> list[Branch]:
+        """One resistor branch ``a`` to ``b``: ``Q = dp / (R (1 + fouling))``."""
         return [
             ResistorBranch(
                 self, self.a, self.b, law=lambda dp: dp / (self.R * (1 + self.phi))
@@ -334,6 +351,7 @@ class Filter(Component):
         ]
 
     def extra_outputs(self, q: ComponentQuantities) -> dict[str, tuple[str, Expr]]:
+        """``pressure_drop`` (Pa): ``p_a - p_b`` across the filter."""
         return {"pressure_drop": ("Pa", q.across[self.name])}
 
 
@@ -350,6 +368,8 @@ class _Curve(Component):
         self.drops, self.flows = drops, flows
 
     def branches(self) -> list[Branch]:
+        """One resistor branch ``a`` to ``b`` interpolating the tabulated curve
+        both ways: ``Q = sign(drop) interp(|drop|)`` and ``drop = sign(Q) interp(|Q|)``."""
         drops, flows = self.drops, self.flows
         return [
             ResistorBranch(
@@ -431,6 +451,9 @@ class Pump(Composite):
         self.expose("outlet", water.b)
 
     def extra_outputs(self, q: ComponentQuantities) -> dict[str, tuple[str, Expr]]:
+        """``flow`` (m^3/s) through the inertance, ``pressure_rise`` (Pa) as the
+        shut-off head minus the curve and inertance drops, and their product
+        ``hydraulic_power`` (W)."""
         n = self.name
         flow = q.through[f"{n}.water"]
         rise = q.across[f"{n}.head"] - q.across[f"{n}.curve"] - q.across[f"{n}.water"]

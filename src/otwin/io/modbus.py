@@ -87,6 +87,11 @@ WordOrder = Literal["big", "little"]
 
 
 def _words_to_bytes(words: Sequence[int], word_order: str) -> bytes:
+    """Pack 16-bit registers into big-endian bytes, reversing the words for ``"little"``.
+
+    Raises:
+        ValueError: On an unknown ``word_order`` or a value outside ``0..0xFFFF``.
+    """
     if word_order not in ("big", "little"):
         raise ValueError(f"word_order must be 'big' or 'little', got {word_order!r}")
     ordered = list(words) if word_order == "big" else list(reversed(list(words)))

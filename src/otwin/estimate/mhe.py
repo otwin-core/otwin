@@ -53,7 +53,7 @@ class MovingHorizonEstimator:
     estimate — MHE is not a different estimator, it is the same estimator with
     the feasible set written down.
 
-    Arrival cost, honestly:
+    Arrival cost:
         The prior covariance is propagated by the same EKF recursion the
         unconstrained filter uses. That is standard practice and it is an
         approximation: it discards the information that the *earlier* states
@@ -150,6 +150,14 @@ class MovingHorizonEstimator:
     def _parse_bounds(
         self, bounds: Sequence[tuple[float | None, float | None]] | None
     ) -> tuple[Array, Array]:
+        """Turn per-state ``(lo, hi)`` pairs into ``(lo, hi)`` arrays of shape ``(n,)``.
+
+        ``None`` anywhere becomes ``±np.inf``; no bounds at all leaves every
+        state free.
+
+        Raises:
+            ValueError: If the length is not ``n_states`` or any ``lo > hi``.
+        """
         if bounds is None:
             return (
                 np.full(self.n_states, -np.inf),
@@ -185,12 +193,15 @@ class MovingHorizonEstimator:
     # -- model wrappers -------------------------------------------------
 
     def _f(self, x: Array, u: Array, t: float) -> Array:
+        """``model.rhs(x, u, t)`` as a float array, shape ``(n,)``."""
         return np.asarray(self.model.rhs(x, u, t), dtype=float)
 
     def _h(self, x: Array, u: Array, t: float) -> Array:
+        """``model.observe(x, u, t)`` as a float array of at least one dimension, shape ``(m,)``."""
         return np.atleast_1d(np.asarray(self.model.observe(x, u, t), dtype=float))
 
     def _H(self, x: Array, u: Array, t: float) -> Array:
+        """Measurement Jacobian ``∂observe/∂x`` at ``x``, shape ``(m, n)``, analytic if given."""
         if self.jac_h is not None:
             return np.atleast_2d(np.asarray(self.jac_h(x, u, t), dtype=float))
         return _numerical_jacobian(lambda z: self._h(z, u, t), x)

@@ -620,6 +620,7 @@ class ModelInstance:
 
 
 def _import_pysunspec2_modbus() -> Any:
+    """Import ``sunspec2.modbus.modbus``, or raise :class:`MissingDependencyError`."""
     try:
         return importlib.import_module("sunspec2.modbus.modbus")
     except ImportError as exc:
@@ -869,6 +870,12 @@ class SunSpecSource:
         return found
 
     def _find_base(self) -> int:
+        """The first base address carrying the ``"SunS"`` marker.
+
+        Raises:
+            TransportError: If none of :attr:`base_addresses` does, with the
+                outcome of every probe in the message.
+        """
         errors: list[str] = []
         for base in self.base_addresses:
             try:
@@ -885,6 +892,7 @@ class SunSpecSource:
         )
 
     def _collect_unmapped(self) -> None:
+        """Rebuild :attr:`unmapped_points` from the discovered models' definitions."""
         seen: set[tuple[int, str]] = set()
         self.unmapped_points = []
         for inst in self._models or []:
