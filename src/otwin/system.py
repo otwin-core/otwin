@@ -24,9 +24,12 @@ Everything the system knows can be inspected before compiling:
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .components.base import Component, Composite, Connection, Ground, Parameter, Port
+from .components.base import Component, Connection, Port
+
+if TYPE_CHECKING:
+    from .components.base import Composite, Ground, Parameter
 
 __all__ = ["PhysicalSystem", "System", "chain", "ConnectionError_"]
 
