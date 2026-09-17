@@ -1,6 +1,6 @@
 """Electrical primitives: across is voltage [V], through is current [A].
 
-Two-terminal elements have terminals ``p`` and ``n``; current is positive from
+Two-port elements have ports ``p`` and ``n``; current is positive from
 ``p`` to ``n`` inside the element. Sources deliver into ``p``.
 """
 
@@ -31,8 +31,8 @@ class _TwoTerminal(Component):
 
     def __init__(self, name: str | None = None) -> None:
         super().__init__(name)
-        self.terminal("p")
-        self.terminal("n")
+        self.add_port("p")
+        self.add_port("n")
 
 
 class Resistor(_TwoTerminal):
@@ -54,7 +54,7 @@ class Resistor(_TwoTerminal):
         super().__init__(name)
         self._law = law
         if law is None:
-            self.R = self.param("resistance", resistance, "ohm")
+            self.R = self.add_parameter("resistance", resistance, "ohm")
 
     def branches(self) -> list[Branch]:
         law = self._law if self._law is not None else (lambda v: v / self.R)
@@ -74,7 +74,7 @@ class Capacitor(_TwoTerminal):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.C = self.param("capacitance", capacitance, "F")
+        self.C = self.add_parameter("capacitance", capacitance, "F")
         self.initial_voltage = float(voltage)
 
     def branches(self) -> list[Branch]:
@@ -106,7 +106,7 @@ class Inductor(_TwoTerminal):
         name: str | None = None,
     ) -> None:
         super().__init__(name)
-        self.L = self.param("inductance", inductance, "H")
+        self.L = self.add_parameter("inductance", inductance, "H")
         self.initial_current = float(current)
 
     def branches(self) -> list[Branch]:

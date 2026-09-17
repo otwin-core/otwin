@@ -94,14 +94,14 @@ class ComponentRecord:
     type: str
     domain: str
     parameters: tuple[str, ...]
-    terminals: tuple[str, ...]
+    ports: tuple[str, ...]
 
 
 @dataclass(frozen=True)
 class NodeRecord:
     name: str
     domain: str
-    terminals: tuple[str, ...]  # "component.terminal"
+    ports: tuple[str, ...]  # "component.port"
     reference: bool
 
 

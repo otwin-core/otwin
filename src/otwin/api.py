@@ -20,6 +20,7 @@ def compile(  # noqa: A001 - the public verb is deliberately named compile
     measurements: Sequence[str] | None = None,
     jacobian: bool = True,
     check: bool = True,
+    dt: float | None = None,
 ) -> Model:
     """Compile a physical system into an executable :class:`~otwin.runtime.Model`.
 
@@ -31,6 +32,8 @@ def compile(  # noqa: A001 - the public verb is deliberately named compile
         measurements: output names that :meth:`Model.observe` should return.
         jacobian: derive the analytic Jacobian (used by the implicit solver).
         check: evaluate the structural checks at the initial state and warn.
+        dt: default time step for :meth:`Model.step`; :meth:`Model.simulate`
+            takes its own grid and ignores it.
 
     Raises:
         CompileError: with a physical explanation of what cannot be compiled.
@@ -40,4 +43,4 @@ def compile(  # noqa: A001 - the public verb is deliberately named compile
     elif not isinstance(system, System):
         system = System(*system, name=name or "system")
     ir = compile_system(system, name=name, jacobian=jacobian, check=check)
-    return Model(ir, backend=backend, measurements=measurements)
+    return Model(ir, backend=backend, measurements=measurements, dt=dt)

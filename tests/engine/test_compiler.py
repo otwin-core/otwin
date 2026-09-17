@@ -33,7 +33,7 @@ def msd(force=None):
     f = ForceSource(force, name="F")
     s = System(k, m, c, w, f)
     s.connect(m.flange, k.a, c.a, f.flange)
-    s.connect(k.b, c.b, w.terminal)
+    s.connect(k.b, c.b, w.port)
     return s
 
 
@@ -75,14 +75,14 @@ def test_domain_mismatch_is_rejected_at_connect():
 
 def test_dangling_terminal():
     v, r, c, g = VoltageSource(1.0), Resistor(1.0), Capacitor(1.0), Ground()
-    s = System(v, r, c, g).connect(v.p, r.p).connect(v.n, c.n, g.terminal)
+    s = System(v, r, c, g).connect(v.p, r.p).connect(v.n, c.n, g.port)
     with pytest.raises(CompileError, match="not connected"):
         compile_system(s)
 
 
 def test_dependent_storages_are_named():
     c1, c2, g = Capacitor(1.0, name="c1"), Capacitor(2.0, name="c2"), Ground()
-    s = System(c1, c2, g).connect(c1.p, c2.p).connect(c1.n, c2.n, g.terminal)
+    s = System(c1, c2, g).connect(c1.p, c2.p).connect(c1.n, c2.n, g.port)
     with pytest.raises(CompileError, match="dependent storages or sources") as info:
         compile_system(s)
     assert "c1" in str(info.value) and "c2" in str(info.value)
@@ -90,14 +90,14 @@ def test_dependent_storages_are_named():
 
 def test_voltage_source_across_capacitor_is_dependent():
     v, c, g = VoltageSource(1.0, name="V"), Capacitor(1.0, name="C"), Ground()
-    s = System(v, c, g).connect(v.p, c.p).connect(v.n, c.n, g.terminal)
+    s = System(v, c, g).connect(v.p, c.p).connect(v.n, c.n, g.port)
     with pytest.raises(CompileError, match="dependent"):
         compile_system(s)
 
 
 def test_no_storage():
     v, r, g = VoltageSource(1.0), Resistor(1.0), Ground()
-    s = System(v, r, g).connect(v.p, r.p).connect(v.n, r.n, g.terminal)
+    s = System(v, r, g).connect(v.p, r.p).connect(v.n, r.n, g.port)
     with pytest.raises(CompileError, match="stores no energy"):
         compile_system(s)
 
@@ -118,7 +118,7 @@ def test_nonlinear_algebraic_loop_is_refused():
         .connect(r1.n, r2.p)
         .connect(r2.n, ind.p)
     )
-    s.connect(ind.n, v.n, g.terminal)
+    s.connect(ind.n, v.n, g.port)
     with pytest.raises(CompileError, match="nonlinear algebraic loop"):
         compile_system(s)
 
@@ -126,7 +126,7 @@ def test_nonlinear_algebraic_loop_is_refused():
 def test_singular_network_is_refused():
     # a current source feeding only an inductor: the node potential is undetermined
     i, ind, g = CurrentSource(1.0, name="I"), Inductor(1.0, name="L"), Ground()
-    s = System(i, ind, g).connect(i.p, ind.p).connect(i.n, ind.n, g.terminal)
+    s = System(i, ind, g).connect(i.p, ind.p).connect(i.n, ind.n, g.port)
     with pytest.raises(CompileError, match="singular"):
         compile_system(s)
 
@@ -161,8 +161,8 @@ def test_transformer_couples_domains():
         Housing(),
     )
     s = System(v, r, tf, j, b, g, h)
-    s.connect(v.p, r.p).connect(r.n, tf.p1).connect(tf.n1, v.n, g.terminal)
-    s.connect(tf.p2, j.shaft, b.a).connect(tf.n2, b.b, h.terminal)
+    s.connect(v.p, r.p).connect(r.n, tf.p1).connect(tf.n1, v.n, g.port)
+    s.connect(tf.p2, j.shaft, b.a).connect(tf.n2, b.b, h.port)
     ir = compile_system(s)
     # the electrical side has no inductor, so the current is algebraic:
     # i = (V - omega/2) / R, torque on the shaft = -i2 = i / 2 ... check power balance
@@ -187,11 +187,7 @@ def test_tank_compiles_to_torricelli():
         Orifice(0.01, name="drain"),
         Atmosphere(),
     )
-    s = (
-        System(tank, drain, atm)
-        .connect(tank.port, drain.a)
-        .connect(drain.b, atm.terminal)
-    )
+    s = System(tank, drain, atm).connect(tank.port, drain.a).connect(drain.b, atm.port)
     ir = compile_system(s)
     env = ir.environment([2.0 * 1.0])
     dv = ir.rhs[0].evaluate(env)

@@ -93,7 +93,7 @@ def test_flywheel_with_speed_dependent_loss(backend):
     s = (
         System(rotor, bearing, housing)
         .connect(rotor.shaft, bearing.a)
-        .connect(bearing.b, housing.terminal)
+        .connect(bearing.b, housing.port)
     )
     model = otwin.compile(s, backend=backend)
     t = np.linspace(0, 7200, 7201)

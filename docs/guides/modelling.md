@@ -6,12 +6,12 @@ and what the compiler makes of it. Every block runs as written.
 The rule that holds everywhere: a connection shares the *across* variable
 (voltage, velocity, pressure, temperature) and sums the *through* variables
 (current, force, flow, heat) to zero. Components that measure against a
-reference have one terminal; everything else has two, and both must be
+reference have one port; everything else has two, and both must be
 connected.
 
 ## Electrical
 
-`Resistor`, `Capacitor`, `Inductor` have terminals `p` and `n`; current is
+`Resistor`, `Capacitor`, `Inductor` have ports `p` and `n`; current is
 positive from `p` to `n` inside the element. `VoltageSource` imposes `v_p − v_n`;
 `CurrentSource` delivers current out of `p`. `Ground` is the reference.
 
@@ -22,7 +22,7 @@ from otwin.components.electrical import Resistor, Capacitor, Inductor, VoltageSo
 V, R, L, C, g = (VoltageSource(None, name="V"), Resistor(2.0, name="R"),
                  Inductor(0.5, name="L"), Capacitor(1e-3, name="C"), Ground())
 s = otwin.System(V, R, L, C, g)
-s.connect(V.p, R.p).connect(R.n, L.p).connect(L.n, C.p).connect(C.n, V.n, g.terminal)
+s.connect(V.p, R.p).connect(R.n, L.p).connect(L.n, C.p).connect(C.n, V.n, g.port)
 
 m = otwin.compile(s)
 print(m.state_names)
@@ -43,7 +43,7 @@ see [Compilation](../concepts/compilation.md) for the rule.
 
 ## Mechanical, translation and rotation
 
-`Mass` and `Inertia` have one terminal (`flange`, `shaft`) and measure their
+`Mass` and `Inertia` have one port (`flange`, `shaft`) and measure their
 velocity against the inertial frame. `Spring`, `Damper`, `TorsionSpring`,
 `RotationalDamper` act between `a` and `b`. `ForceSource` and `TorqueSource`
 push on their flange or shaft; `VelocitySource` and `SpeedSource` impose a
@@ -56,7 +56,7 @@ mass, spring, damper, wall = Mass(1.0, name="m"), Spring(20.0, name="k"), Damper
 weight = ForceSource(9.81, name="weight")          # a constant force: gravity on a 1 kg mass
 s = otwin.System(mass, spring, damper, weight, wall)
 s.connect(mass.flange, spring.a, damper.a, weight.flange)
-s.connect(spring.b, damper.b, wall.terminal)
+s.connect(spring.b, damper.b, wall.port)
 ```
 
 The spring's state is its extension from the natural length, positive when `a`
@@ -67,7 +67,7 @@ them, which is also the more truthful model.
 
 ## Thermal
 
-`ThermalMass` has one terminal, `port`. `ThermalResistance` (conduction,
+`ThermalMass` has one port, `port`. `ThermalResistance` (conduction,
 `Q = ΔT / R`) and `Convection` (`Q = hA ΔT`) connect two ports. `HeatSource`
 injects heat; `Ambient` holds a temperature. Temperatures are absolute, in
 kelvin.
@@ -100,11 +100,13 @@ statement rather than a first-law one. The heat balance itself is exact. See
 
 ## Hydraulic
 
-`Tank` has one terminal, `port`, at its base; `base_elevation` lifts it above
+`Tank` has one port, `port`, at its base; `base_elevation` lifts it above
 the datum. `Orifice` is Torricelli's law, `Pipe` a laminar (`resistance=`) or
-turbulent (`friction=`) loss, `FluidInertance` the inertia of the water in a
-pipe. `FlowSource` is a pump or a demand, `PressureSource` a head.
-`Atmosphere` is the reference.
+turbulent (`friction=`) loss, `Filter` a laminar loss with a `fouling`
+parameter, `FluidInertance` the inertia of the water in a pipe. `Pump` is a
+centrifugal pump given by its curve, `FlowSource` a fixed flow or a demand,
+`PressureSource` a head. `Atmosphere` is the reference. A line of these reads
+left to right with `>>`; see [Devices](devices.md).
 
 ```python
 from otwin.components.hydraulic import Tank, Orifice, Pipe, Atmosphere
@@ -112,7 +114,7 @@ from otwin.components.hydraulic import Tank, Orifice, Pipe, Atmosphere
 upper, lower = Tank(2.0, level=1.5, name="upper"), Tank(3.0, level=0.2, name="lower")
 pipe, drain, atm = Pipe(friction=5e5, name="pipe"), Orifice(0.005, name="drain"), Atmosphere()
 s = otwin.System(upper, lower, pipe, drain, atm)
-s.connect(upper.port, pipe.a).connect(pipe.b, lower.port, drain.a).connect(drain.b, atm.terminal)
+s.connect(upper.port, pipe.a).connect(pipe.b, lower.port, drain.a).connect(drain.b, atm.port)
 
 m = otwin.compile(s)
 run = m.simulate(t_span=(0, 300), dt=0.5)
@@ -130,7 +132,7 @@ as an increase.
 
 ## Coupling domains
 
-`Transformer` and `Gyrator` are lossless two-ports with terminals `p1, n1` on
+`Transformer` and `Gyrator` are lossless two-ports with ports `p1, n1` on
 one side and `p2, n2` on the other, each side in the domain you give it. A
 gearbox is a transformer between two rotational sides, a lever between two
 mechanical ones, an electric machine a transformer between electrical and
@@ -155,14 +157,32 @@ you can change them later with `model.set_parameters({"weight.force": 19.62})`.
 Every dissipative element takes `law=`, a function of its across variable
 returning its through variable, written with ordinary arithmetic and the
 functions in {mod}`otwin.expr` (`sqrt`, `exp`, `log`, `abs`, `tanh`,
-`maximum`, `minimum`, `where`). The compiler traces it into an expression
-the engine runs, differentiates it for the Jacobian, and reads its secant
-into `R`. NumPy functions and Python `if` do not trace; use `where`.
+`maximum`, `minimum`, `where`, and `interp` for a measured table). The
+compiler traces it into an expression the engine runs, differentiates it for
+the Jacobian, and reads its secant into `R`. NumPy functions and Python `if`
+do not trace; use `where`.
+
+Some laws are natural the other way round: a pump curve gives the pressure
+rise as a function of the flow, turbulent friction is `dp = K Q |Q|`. Such an
+element must sit in series with something that sets its flow (an inertance,
+an inductor, a spring, a flow source, or another element of its kind); the
+compiler then reads the pressure off the flow instead of inverting the law.
+`Pipe(friction=)`, `Orifice` and `Pump` carry both forms, so they work either
+way. A law of your own goes in as `ResistorBranch(inverse=...)`; see
+[Adding components](../developer/components.md).
+
+## Heat from losses
+
+`Losses(r0, r1, ...)` in {mod}`otwin.components.thermal` collects the power
+dissipated by the listed components and delivers it as heat flow into its
+`port`. Connect that port to the `ThermalMass` that warms up. Nothing about
+the power has to be written: the compiler already knows `across * through`
+of every resistor, damper and pipe. `Battery(thermal=...)` is built this way.
 
 ## What to do when the compiler refuses
 
 The message names the components. The table in
 [Compilation](../concepts/compilation.md#what-the-compiler-refuses) lists each
-refusal and the fix. The common ones: a loose terminal on a two-terminal
+refusal and the fix. The common ones: a loose port on a two-port
 component, two storages of the same kind in parallel, a nonlinear element on a
 node nothing pins.

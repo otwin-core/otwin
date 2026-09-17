@@ -9,9 +9,9 @@ An energy-based model -- a bond graph written in state-space form:
 structure: gyrators, transformers). ``R`` removes power and can never add it
 (the resistive elements: friction, damping, ohmic loss). ``H`` is the energy
 stored (the C and I elements: springs, inertias, tank levels, state of charge).
-``g`` is where power crosses the system boundary -- the terminals.
+``g`` is where power crosses the system boundary -- the ports.
 
-The consequence, with the terminals open: **stored energy cannot increase.**
+The consequence, with the ports open: **stored energy cannot increase.**
 Not approximately, not for well-chosen parameters, not only inside the range
 you fitted. That is an algebraic property of ``J`` and ``R``, so it holds at
 any step size and any horizon, and ``otwin-spec`` checks it rather than taking

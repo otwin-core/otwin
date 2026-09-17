@@ -1,4 +1,4 @@
-# Components, terminals and systems
+# Components, ports and systems
 
 What you describe. Nothing on this page involves an equation.
 
@@ -15,19 +15,19 @@ Every physical domain otwin models has two variables that multiply to a power
 | hydraulic | pressure [Pa] | volumetric flow [m³/s] |
 | thermal | temperature [K] | heat flow [W] |
 
-A **terminal** is a point on a component where one pair of these variables is
-exposed. A **connection** joins terminals into a **node**. At a node the across
-variable is shared by every terminal and the through variables of the branches
+A **port** is a point on a component where one pair of these variables is
+exposed. A **connection** joins ports into a **node**. At a node the across
+variable is shared by every port and the through variables of the branches
 meeting there sum to zero. That one rule is Kirchhoff's two laws, Newton's
 third law, conservation of mass at a pipe junction and conservation of heat at
 a wall. It is what lets one compiler serve all five domains, and it is why a
-connection between terminals of different domains is refused at `connect`.
+connection between ports of different domains is refused at `connect`.
 
 ## What a component declares
 
-A component is a class with terminals, parameters and one or more
-**branches**, each a constitutive relation between two terminals (or one
-terminal and the reference):
+A component is a class with ports, parameters and one or more
+**branches**, each a constitutive relation between two ports (or one
+port and the reference):
 
 | branch | relation | examples |
 |---|---|---|
@@ -44,10 +44,10 @@ brings a **law**, linear by default and anything traceable on request. A source
 with `None` for its value becomes an **input** of the compiled model; a source
 with a number becomes a constant parameter you can still change afterwards.
 
-The one-terminal components (`Mass`, `Inertia`, `Tank`, `ThermalMass`,
+The one-port components (`Mass`, `Inertia`, `Tank`, `ThermalMass`,
 `ForceSource`, `HeatSource`, `Ambient`) measure their across variable against
-the reference, so they have nothing to connect on the other side. Two-terminal
-components must have both terminals connected; the compiler names the dangling
+the reference, so they have nothing to connect on the other side. Two-port
+components must have both ports connected; the compiler names the dangling
 one otherwise. The reference itself is `Ground`, or its domain-flavoured
 aliases `Fixed`, `Housing`, `Atmosphere`.
 
@@ -73,16 +73,19 @@ result, and `simulate(x0=...)` overrides it by name.
 A high-level device is a component built from primitives.
 {class}`~otwin.components.composite.DCMotor` is a `Resistor`, an `Inductor`, a
 `Transformer` from the electrical to the rotational domain, an `Inertia` and a
-`RotationalDamper`, wired internally and exposing `p`, `n` and `shaft`. The
+`RotationalDamper`, wired internally and exposing `p`, `n` and `shaft`.
+{class}`~otwin.components.battery.Battery` and
+{class}`~otwin.components.hydraulic.Pump` are built the same way. The
 compiler flattens composites before it does anything else, so nothing inside
 one is special-cased and its states appear as `motor.armature.flux`,
-`motor.rotor.angular_momentum`. Writing your own is the recommended way to add
-a battery, a pump or a heat exchanger; see [Adding components](../developer/components.md).
+`bat.ocv.charge`, `pump.water.flow_momentum`. Writing your own is the
+recommended way to add a heat exchanger or a converter; see
+[Adding components](../developer/components.md).
 
 ## Systems
 
 {class}`otwin.System` holds components and connections. It checks domains and
-names, and does nothing else. `a >> b >> c` chains two-terminal components in
+names, and does nothing else. `a >> b >> c` chains two-port components in
 series when that is the natural picture; `system.connect(...)` joins any number
-of terminals into one node. A single component can be compiled on its own
+of ports into one node. A single component can be compiled on its own
 (`otwin.compile(Mass(2.0))`) when that is the whole system.

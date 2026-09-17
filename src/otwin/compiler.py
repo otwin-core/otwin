@@ -4,7 +4,7 @@ Pipeline::
 
     System
       -> flatten composites, validate parameters and names
-      -> build nodes (union of connected terminals, one reference node)
+      -> build nodes (union of connected ports, one reference node)
       -> collect branches: storages, resistors, sources, two-ports
       -> pin node potentials through across-storages and across-sources
       -> write one conservation equation per unpinned node group
@@ -18,7 +18,7 @@ Pipeline::
       -> symbolic Jacobian of the executable form
       -> PHSIR
 
-Every failure is reported in physical terms: which terminals, which
+Every failure is reported in physical terms: which ports, which
 components, what to change. The compiler never returns a model it cannot
 account for.
 """
@@ -36,11 +36,14 @@ from .components.base import (
     Branch,
     Component,
     ComponentQuantities,
+    Composite,
+    Connection,
     Ground,
+    HeatBranch,
+    Port,
     ResistorBranch,
     SourceBranch,
     StorageBranch,
-    Terminal,
     TwoPortBranch,
 )
 from .expr import Expr
@@ -78,7 +81,7 @@ class StructureWarning(UserWarning):
 class _Node:
     def __init__(self, index: int) -> None:
         self.index = index
-        self.terminals: list[Terminal] = []
+        self.ports: list[Port] = []
         self.domain: str = "any"
         self.reference = False
         self.name = ""
@@ -103,7 +106,8 @@ class _Ctx:
     nodes: list[_Node]
     ref: _Node
     branches: list[Branch]
-    node_of: dict[Terminal, _Node]
+    node_of: dict[Port, _Node]
+    composites: list[Component] = field(default_factory=list)
     states: list[StateVar] = field(default_factory=list)
     state_syms: list[Expr] = field(default_factory=list)
     effort_syms: list[Expr] = field(default_factory=list)
@@ -121,10 +125,13 @@ class _Ctx:
     pin_order: list[_Node] = field(default_factory=list)
     secants: dict[Expr, Expr] = field(default_factory=dict)
     rename: dict[Expr, Expr] = field(default_factory=dict)
+    # resistors whose flow is set in series: branch -> (placeholder, through a->b)
+    series: dict[ResistorBranch, tuple[Expr, Expr]] = field(default_factory=dict)
+    inverse_map: dict[Expr, Expr] = field(default_factory=dict)
     representation: str = "port-hamiltonian"
 
 
-def _terminal_str(t: Terminal | None) -> str:
+def _terminal_str(t: Port | None) -> str:
     return "reference" if t is None else t.qualified
 
 
@@ -140,9 +147,12 @@ def compile_system(
         raise CompileError("the system has no components")
     _validate_components(comps)
     ctx = _build_nodes(comps, links)
+    ctx.composites = _composites(system.components)
     _collect_branches(ctx)
     _declare_symbols(ctx)
+    _series_resistors(ctx)
     unknown_eqs = _pin_potentials(ctx)
+    ctx.inverse_map = _inverse_map(ctx, structural=False)
     _solve_unknowns(ctx, unknown_eqs)
     rhs_exec, port_out_exec, quantities = _assemble(ctx, structural=False)
     rhs_struct, port_out_struct, _ = _assemble(ctx, structural=True)
@@ -209,31 +219,29 @@ def _validate_components(comps: list[Component]) -> None:
                 raise CompileError(f"invalid parameter: {e}") from None
 
 
-def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _Ctx:
-    parent: dict[Terminal, Terminal] = {}
+def _build_nodes(comps: list[Component], links: list[Connection]) -> _Ctx:
+    parent: dict[Port, Port] = {}
 
-    def find(t: Terminal) -> Terminal:
+    def find(t: Port) -> Port:
         while parent.setdefault(t, t) is not t:
             parent[t] = parent[parent[t]]
             t = parent[t]
         return t
 
-    def union(a: Terminal, b: Terminal) -> None:
+    def union(a: Port, b: Port) -> None:
         ra, rb = find(a), find(b)
         if ra is not rb:
             parent[ra] = rb
 
-    terminals: list[Terminal] = [t for c in comps for t in c.terminals.values()]
-    for t in terminals:
+    ports: list[Port] = [t for c in comps for t in c.ports.values()]
+    for t in ports:
         find(t)
-    ref_terminals = [
-        t for c in comps if isinstance(c, Ground) for t in c.terminals.values()
-    ]
+    ref_terminals = [t for c in comps if isinstance(c, Ground) for t in c.ports.values()]
     for link in links:
         for t in link:
             if t not in parent:
                 raise CompileError(
-                    f"terminal {t.qualified} belongs to a component that is not in the "
+                    f"port {t.qualified} belongs to a component that is not in the "
                     "system; add it with System.add or connect it"
                 )
         for t in link[1:]:
@@ -241,12 +249,12 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
     for t in ref_terminals[1:]:
         union(ref_terminals[0], t)
 
-    groups: dict[Terminal, list[Terminal]] = defaultdict(list)
-    for t in terminals:
+    groups: dict[Port, list[Port]] = defaultdict(list)
+    for t in ports:
         groups[find(t)].append(t)
 
     nodes: list[_Node] = []
-    node_of: dict[Terminal, _Node] = {}
+    node_of: dict[Port, _Node] = {}
     ref = _Node(0)
     ref.reference = True
     ref.name = "reference"
@@ -254,11 +262,11 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
     if ref_terminals:
         ref_root = find(ref_terminals[0])
         for t in groups.pop(ref_root):
-            ref.terminals.append(t)
+            ref.ports.append(t)
             node_of[t] = ref
     for members in groups.values():
         n = _Node(len(nodes))
-        n.terminals = members
+        n.ports = members
         domains = {t.domain for t in members if t.domain != "any"}
         if len(domains) > 1:
             names = ", ".join(f"{t.qualified} [{t.domain}]" for t in members)
@@ -278,17 +286,17 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
             node_of[t] = n
 
     dangling = [
-        n.terminals[0]
+        n.ports[0]
         for n in nodes[1:]
-        if len(n.terminals) == 1
-        and not isinstance(n.terminals[0].component, Ground)
-        and len(n.terminals[0].component.terminals) > 1
+        if len(n.ports) == 1
+        and not isinstance(n.ports[0].component, Ground)
+        and len(n.ports[0].component.ports) > 1
     ]
     if dangling:
         names = ", ".join(t.qualified for t in dangling)
         raise CompileError(
-            f"terminal(s) not connected to anything: {names}. Every terminal of a "
-            "two-terminal component must be connected; use Ground (Fixed, Atmosphere) "
+            f"port(s) not connected to anything: {names}. Every port of a "
+            "two-port component must be connected; use Ground (Fixed, Atmosphere) "
             "for the ones that are nailed down."
         )
     linked = {t for link in links for t in link}
@@ -302,12 +310,37 @@ def _build_nodes(comps: list[Component], links: list[tuple[Terminal, ...]]) -> _
     return _Ctx(comps=comps, nodes=nodes, ref=ref, branches=[], node_of=node_of)
 
 
+def _composites(components: list[Component]) -> list[Component]:
+    """Every composite in the tree, outermost first."""
+
+    out: list[Component] = []
+
+    def visit(c: Component) -> None:
+        if isinstance(c, Composite):
+            out.append(c)
+            for part in c.parts:
+                visit(part)
+
+    for c in components:
+        visit(c)
+    return out
+
+
+def _leaves(c: Component) -> list[Component]:
+
+    if isinstance(c, Composite):
+        return [leaf for part in c.parts for leaf in _leaves(part)]
+    return [c]
+
+
 def _collect_branches(ctx: _Ctx) -> None:
     for c in ctx.comps:
         for b in c.branches():
             if b.a.domain != "any" and b.a.domain not in DOMAINS:
                 raise CompileError(f"{c.name}: unknown domain {b.a.domain!r}")
             ctx.branches.append(b)
+            if isinstance(b, HeatBranch):
+                ctx.representation = "pseudo-port-hamiltonian"
             if isinstance(b, StorageBranch):
                 if b.kind not in ("across", "through"):
                     raise CompileError(
@@ -326,7 +359,7 @@ def _collect_branches(ctx: _Ctx) -> None:
         )
 
 
-def _node(ctx: _Ctx, t: Terminal | None) -> _Node:
+def _node(ctx: _Ctx, t: Port | None) -> _Node:
     return ctx.ref if t is None else ctx.node_of[t]
 
 
@@ -388,7 +421,94 @@ def _pins(ctx: _Ctx) -> list[_Pin]:
         elif isinstance(b, SourceBranch) and b.kind == "across":
             k = ctx.port_branches.index(b)
             pins.append(_Pin(b, _node(ctx, b.a), _node(ctx, b.b), ctx.port_values[k]))
+        elif isinstance(b, ResistorBranch) and b in ctx.series:
+            sym, _ = ctx.series[b]
+            pins.append(_Pin(b, _node(ctx, b.a), _node(ctx, b.b), sym))
     return pins
+
+
+def _series_resistors(ctx: _Ctx) -> None:
+    """Find resistors with an inverse law whose flow is fixed by a series
+    element, and give each a placeholder for its across variable.
+
+    The flow of a branch is known before any potential is when the branch is a
+    through storage (its state), a through source (its input) or a resistor
+    already found here. A resistor shares that flow when one of its nodes has
+    exactly those two branches on it.
+    """
+    inc = _incident(ctx)
+    known: dict[Branch, Expr] = {}  # branch -> through a -> b
+    for b in ctx.branches:
+        if isinstance(b, StorageBranch) and b.kind == "through":
+            known[b] = ctx.effort_syms[ctx.storage_branches.index(b)]
+        elif isinstance(b, SourceBranch) and b.kind == "through":
+            known[b] = -ctx.port_values[ctx.port_branches.index(b)]
+    candidates = [
+        b for b in ctx.branches if isinstance(b, ResistorBranch) and b.inverse is not None
+    ]
+    progress = True
+    while progress:
+        progress = False
+        for r in candidates:
+            if r in known:
+                continue
+            for end in (r.a, r.b):
+                node = _node(ctx, end)
+                if node is ctx.ref or len(inc[node]) != 2:
+                    continue
+                (b1, _, s1), (b2, _, s2) = inc[node]
+                other, s_other, s_r = (b2, s2, s1) if b1 is r else (b1, s1, s2)
+                if other not in known or isinstance(other, TwoPortBranch):
+                    continue
+                # conservation at a two-branch node: s_r i_r + s_other i_other = 0
+                i_r = -s_r * s_other * known[other]
+                sym = ex.symbol("param", f"__inv.{len(ctx.series)}.{r.component.name}")
+                ctx.series[r] = (sym, i_r)
+                known[r] = i_r
+                progress = True
+                break
+    for r in candidates:
+        if r not in known and r.law is None:
+            raise CompileError(
+                f"{r.component.name} gives its across variable as a function of its "
+                "flow, so its flow must be set by a series element: an inductor, "
+                "spring or fluid inertance, a flow or current source, or another such "
+                "element. Put one in series with it, or give it a law= of the across "
+                "variable instead."
+            )
+
+
+def _inverse_map(ctx: _Ctx, structural: bool) -> dict[Expr, Expr]:
+    """What the placeholders of series resistors stand for in each form:
+    the inverse law of the flow, or a frozen secant resistance times the flow."""
+    out: dict[Expr, Expr] = {}
+    for k, (r, (sym, i)) in enumerate(ctx.series.items()):
+        assert r.inverse is not None
+        if structural:
+            res = ex.symbol("param", f"__secantR.{k}.{r.component.name}")
+            ctx.secants[res] = _secant_inverse(r, i)
+            out[sym] = res * i
+        else:
+            out[sym] = r.inverse(i)
+    return out
+
+
+def _secant_inverse(r: ResistorBranch, i: Expr) -> Expr:
+    """inverse(i) / i as a resistance: exact for a linear inverse, and at i = 0
+    the slope there when finite, zero otherwise (mirror of :func:`_secant`)."""
+    s = ex.symbol("param", "__i")
+    assert r.inverse is not None
+    law = ex.trace(r.inverse, s)
+    d = law.diff(s)
+    if not d.depends_on_symbol(s) and law.substitute({s: ex.const(0.0)}).is_zero():
+        return d.substitute({s: i})
+    try:
+        at_zero: Expr = d.substitute({s: ex.const(0.0)})
+        if at_zero.is_const and not math.isfinite(at_zero.value or 0.0):
+            at_zero = ex.const(0.0)
+    except ZeroDivisionError:
+        at_zero = ex.const(0.0)
+    return ex.where(abs(i) > _TINY, law.substitute({s: i}) / i, at_zero)
 
 
 def _pin_potentials(ctx: _Ctx) -> list[tuple[Expr, list[_Node]]]:
@@ -478,8 +598,10 @@ def _dependent_message(p: _Pin, n: _Node, other: _Node, ctx: _Ctx) -> str:
 def _across(ctx: _Ctx, b: Branch, second: bool = False) -> Expr:
     if second:
         assert isinstance(b, TwoPortBranch)
-        return ctx.potentials[_node(ctx, b.a2)] - ctx.potentials[_node(ctx, b.b2)]
-    return ctx.potentials[_node(ctx, b.a)] - ctx.potentials[_node(ctx, b.b)]
+        v = ctx.potentials[_node(ctx, b.a2)] - ctx.potentials[_node(ctx, b.b2)]
+    else:
+        v = ctx.potentials[_node(ctx, b.a)] - ctx.potentials[_node(ctx, b.b)]
+    return v.substitute(ctx.inverse_map) if ctx.inverse_map else v
 
 
 def _through_nonpin(ctx: _Ctx, b: Branch, structural: bool, side: int = 1) -> Expr | None:
@@ -494,6 +616,10 @@ def _through_nonpin(ctx: _Ctx, b: Branch, structural: bool, side: int = 1) -> Ex
             return None
         return -ctx.port_values[ctx.port_branches.index(b)]
     if isinstance(b, ResistorBranch):
+        if b in ctx.series:
+            return None  # a pin: its through is the series flow
+        if b.law is None:  # pragma: no cover - refused in _series_resistors
+            raise CompileError(f"{b.component.name}: no law of the across variable")
         v = _across(ctx, b)
         if structural:
             # a frozen conductance, so that d(through)/d(effort) reads off the
@@ -505,13 +631,42 @@ def _through_nonpin(ctx: _Ctx, b: Branch, structural: bool, side: int = 1) -> Ex
     if isinstance(b, TwoPortBranch):
         i1, i2 = ctx.twoport_currents[b]
         return i1 if side == 1 else i2
+    if isinstance(b, HeatBranch):
+        power = _heat_power(ctx, b)
+        if structural:
+            # frozen: heat generation is not part of J or R. It is substituted
+            # back after the structure has been read off, like the secants.
+            sym = ex.symbol("param", f"__heat.{len(ctx.secants)}.{b.component.name}")
+            ctx.secants[sym] = -power
+            return sym
+        return -power
     raise CompileError(f"unknown branch type {type(b).__name__}")
+
+
+def _heat_power(ctx: _Ctx, b: HeatBranch) -> Expr:
+    """Sum of across * through over the resistor branches of ``b.sources``."""
+    total = ex.const(0.0)
+    found = False
+    for r in ctx.branches:
+        if isinstance(r, ResistorBranch) and r.component in b.sources:
+            found = True
+            v = _across(ctx, r)
+            i = ctx.series[r][1] if r in ctx.series else r.law(v)  # type: ignore[misc]
+            total = total + v * i
+    if not found:
+        names = ", ".join(c.name for c in b.sources) or "nothing"
+        raise CompileError(
+            f"{b.component.name}: heat sources ({names}) have no resistor or damper "
+            "branch whose losses could be turned into heat"
+        )
+    return total
 
 
 def _secant(b: ResistorBranch, v: Expr) -> Expr:
     """law(v) / v as a conductance: exact for a linear law, and at v = 0 the
     slope of the law there when that slope is finite, zero otherwise."""
     vs = ex.symbol("param", "__v")
+    assert b.law is not None
     law = ex.trace(b.law, vs)
     d = law.diff(vs)
     if not d.depends_on_symbol(vs) and law.substitute({vs: ex.const(0.0)}).is_zero():
@@ -648,6 +803,7 @@ def _assemble(
     ctx: _Ctx, structural: bool
 ) -> tuple[list[Expr], list[Expr], dict[Component, ComponentQuantities]]:
     inc = _incident(ctx)
+    ctx.inverse_map = _inverse_map(ctx, structural)
     n_states = len(ctx.storage_branches)
     rhs: list[Expr | None] = [None] * n_states
     port_out: list[Expr | None] = [None] * len(ctx.port_branches)
@@ -751,6 +907,10 @@ def _outputs(
         q = quantities[b.component]
         dom = DOMAINS.get(b.domain)
         label = b.label or b.component.name
+        if isinstance(b, HeatBranch):
+            # the heat delivered into the thermal port, positive when warming
+            put(f"{label}.heat_flow", "W", -q.through[label])
+            continue
         if dom is not None:
             put(f"{label}.{dom.across}", dom.across_unit, q.across[label])
             put(f"{label}.{dom.through}", dom.through_unit, q.through[label])
@@ -764,6 +924,19 @@ def _outputs(
     for c in ctx.comps:
         for name, (unit, e) in c.extra_outputs(quantities[c]).items():
             put(f"{c.name}.{name}", unit, e)
+    # composites see the quantities of all their parts, keyed by part label
+    for c in ctx.composites:
+        merged = ComponentQuantities()
+        for part in _leaves(c):
+            q = quantities.get(part)
+            if q is None:
+                continue
+            merged.across.update(q.across)
+            merged.through.update(q.through)
+            merged.state.update({f"{part.name}.{k}": v for k, v in q.state.items()})
+            merged.params.update({f"{part.name}.{k}": v for k, v in q.params.items()})
+        for name, (unit, e) in c.extra_outputs(merged).items():
+            put(f"{c.name}.{name}", unit, e)
     total = ex.const(0.0)
     for h in ctx.energies:
         total = total + h
@@ -774,14 +947,14 @@ def _outputs(
 def _physical_ir(system: System, ctx: _Ctx, name: str | None) -> PhysicalSystemIR:
     comps = [
         ComponentRecord(
-            c.name, c.type_name, c.domain, tuple(c.parameters), tuple(c.terminals)
+            c.name, c.type_name, c.domain, tuple(c.parameters), tuple(c.ports)
         )
         for c in ctx.comps
     ]
     nodes = [
-        NodeRecord(n.name, n.domain, tuple(t.qualified for t in n.terminals), n.reference)
+        NodeRecord(n.name, n.domain, tuple(t.qualified for t in n.ports), n.reference)
         for n in ctx.nodes
-        if n.terminals or n.reference
+        if n.ports or n.reference
     ]
     branches = []
     for b in ctx.branches:

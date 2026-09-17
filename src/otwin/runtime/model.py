@@ -35,14 +35,26 @@ Inputs = Mapping[str, Any] | Array | Callable[..., Any] | None
 
 
 class State:
-    """The state of a compiled model at one instant: values and a time."""
+    """The state of a compiled model at one instant: values and a time.
 
-    __slots__ = ("values", "time", "names")
+    A state returned by :meth:`Model.step` also remembers the inputs that were
+    applied over the step, so ``model.outputs(state)`` reads the model with
+    those inputs (a resistor's power needs the current that was flowing).
+    """
 
-    def __init__(self, values: Array, time: float, names: Sequence[str]) -> None:
+    __slots__ = ("values", "time", "names", "inputs")
+
+    def __init__(
+        self,
+        values: Array,
+        time: float,
+        names: Sequence[str],
+        inputs: Array | None = None,
+    ) -> None:
         self.values = np.asarray(values, dtype=float).ravel().copy()
         self.time = float(time)
         self.names = tuple(names)
+        self.inputs = None if inputs is None else np.asarray(inputs, dtype=float).copy()
         if self.values.shape[0] != len(self.names):
             raise ValueError(
                 f"state has {self.values.shape[0]} values for {len(self.names)} names"
@@ -167,10 +179,15 @@ class Model:
     """A compiled physical system. Create it with :func:`otwin.compile`."""
 
     def __init__(
-        self, ir: PHSIR, backend: str = "auto", measurements: Sequence[str] | None = None
+        self,
+        ir: PHSIR,
+        backend: str = "auto",
+        measurements: Sequence[str] | None = None,
+        dt: float | None = None,
     ) -> None:
         self._ir = ir
         self._backend = _bk.select_backend(ir, backend)
+        self.dt: float | None = None if dt is None else float(dt)
         self.state_names: list[str] = ir.state_names()
         self.input_names: list[str] = ir.input_names()
         self.param_names: list[str] = ir.param_names()
@@ -233,7 +250,7 @@ class Model:
         self, values: Mapping[str, float] | None = None, **kw: float
     ) -> Model:
         """A copy of the model with different parameter values."""
-        m = Model(self._ir, backend=self.backend)
+        m = Model(self._ir, backend=self.backend, dt=self.dt)
         m.set_parameters(self.parameters)
         m.set_parameters(values, **kw)
         m._measurements = self._measurements
@@ -241,6 +258,7 @@ class Model:
 
     # --------------------------------------------------------------- state
     def initial_state(self) -> State:
+        """The state the components were declared with (``voltage=``, ``level=`` ...)."""
         return State(self._x0, 0.0, self.state_names)
 
     def reset(self) -> State:
@@ -310,7 +328,17 @@ class Model:
         u: Array | Mapping[str, float] | None = None,
         t: float = 0.0,
     ) -> dict[str, float]:
-        """Every named quantity at one state."""
+        """Every named quantity at one state.
+
+        With a :class:`State` from :meth:`step` and no ``u``, the inputs of
+        that step and its time are used.
+        """
+        if isinstance(x, State):
+            if u is None and x.inputs is not None:
+                u = x.inputs
+            if t == 0.0:
+                t = x.time
+            x = x.values
         vals = self._backend.outputs(np.asarray(x, dtype=float), self._u(u), t)
         return {k: float(v) for k, v in zip(self.output_names, vals, strict=True)}
 
@@ -412,16 +440,34 @@ class Model:
         self,
         state: State | Array,
         inputs: Any = None,
-        dt: float = 1e-3,
+        dt: float | None = None,
         *,
         solver: str = "midpoint",
         **options: Any,
     ) -> State:
-        """Advance one step. Returns a new :class:`State`."""
+        """Advance the model one time step and return the new :class:`State`.
+
+        ::
+
+            state = model.initial_state()
+            for u in schedule:
+                state = model.step(state, {"supply": u})
+
+        ``dt`` defaults to the one given at ``otwin.compile(system, dt=...)``
+        or to ``model.dt``. For long runs prefer :meth:`simulate`, which
+        stays inside the engine for the whole horizon.
+        """
+        if dt is None:
+            dt = self.dt
+        if dt is None:
+            raise TypeError(
+                "step needs a time step: pass dt=..., set model.dt, or compile "
+                "with otwin.compile(system, dt=...)"
+            )
         s = self.state(state)
         u = self._u(inputs)
-        xn = self._backend.step(s.values, u, s.time, dt, solver, **options)
-        return State(xn, s.time + dt, self.state_names)
+        xn = self._backend.step(s.values, u, s.time, float(dt), solver, **options)
+        return State(xn, s.time + float(dt), self.state_names, inputs=u)
 
     def _time_grid(
         self, t_span: tuple[float, float] | None, dt: float | None, t: Array | None
@@ -598,7 +644,7 @@ class Model:
             physical=ir.physical,
             metadata={**ir.metadata, "closed_loop": sorted(k.name for k in mapping)},
         )
-        m = Model(new_ir, backend=self.backend)
+        m = Model(new_ir, backend=self.backend, dt=self.dt)
         m.set_parameters(self.parameters)
         if self._measurements is not None:
             m._measurements = list(self._measurements)
@@ -686,7 +732,7 @@ class Model:
                 "residual": {k: repr(ex.as_expr(v)) for k, v in all_terms.items()},
             },
         )
-        m = Model(new_ir, backend=self.backend)
+        m = Model(new_ir, backend=self.backend, dt=self.dt)
         m.set_parameters(self.parameters)
         if self._measurements is not None:
             m._measurements = list(self._measurements)

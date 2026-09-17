@@ -42,7 +42,7 @@ def mass_spring_damper(
     wall = Fixed(name="wall")
     s = System(spring, mass, damper, force, wall, name="mass_spring_damper")
     s.connect(mass.flange, spring.a, damper.a, force.flange)
-    s.connect(spring.b, damper.b, wall.terminal)
+    s.connect(spring.b, damper.b, wall.port)
     return s
 
 
@@ -66,7 +66,7 @@ def water_tank(
     atm = Atmosphere(name="atmosphere")
     s = System(tank, drain, inlet, atm, name="water_tank")
     s.connect(tank.port, drain.a, inlet.a)
-    s.connect(drain.b, inlet.b, atm.terminal)
+    s.connect(drain.b, inlet.b, atm.port)
     return s
 
 
@@ -87,7 +87,7 @@ def dc_motor(
     gnd = Ground(name="ground")
     s = System(motor, supply, gnd, name="dc_motor")
     s.connect(supply.p, motor.p)
-    s.connect(motor.n, supply.n, gnd.terminal)
+    s.connect(motor.n, supply.n, gnd.port)
     return s
 
 

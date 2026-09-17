@@ -34,11 +34,11 @@ class Transformer(Component):
     ) -> None:
         super().__init__(name)
         self.domain = domain_1
-        self.terminal("p1", domain_1)
-        self.terminal("n1", domain_1)
-        self.terminal("p2", domain_2)
-        self.terminal("n2", domain_2)
-        self.n = self.param("ratio", ratio, "", positive=False)
+        self.add_port("p1", domain_1)
+        self.add_port("n1", domain_1)
+        self.add_port("p2", domain_2)
+        self.add_port("n2", domain_2)
+        self.n = self.add_parameter("ratio", ratio, "", positive=False)
 
     def branches(self) -> list[Branch]:
         return [
@@ -71,11 +71,11 @@ class Gyrator(Component):
     ) -> None:
         super().__init__(name)
         self.domain = domain_1
-        self.terminal("p1", domain_1)
-        self.terminal("n1", domain_1)
-        self.terminal("p2", domain_2)
-        self.terminal("n2", domain_2)
-        self.r = self.param("ratio", ratio, "", positive=False)
+        self.add_port("p1", domain_1)
+        self.add_port("n1", domain_1)
+        self.add_port("p2", domain_2)
+        self.add_port("n2", domain_2)
+        self.r = self.add_parameter("ratio", ratio, "", positive=False)
 
     def branches(self) -> list[Branch]:
         return [

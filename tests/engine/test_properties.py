@@ -17,7 +17,7 @@ def ladder(rs, cs, ls):
     parts = []
     g = Ground(name="g")
     s = System(g)
-    prev = g.terminal
+    prev = g.port
     for i, (r, c, ind) in enumerate(zip(rs, cs, ls, strict=True)):
         R = Resistor(r, name=f"R{i}")
         C = Capacitor(c, voltage=1.0 + i, name=f"C{i}")
@@ -25,7 +25,7 @@ def ladder(rs, cs, ls):
         s.add(R, C, L)
         s.connect(prev, R.p)
         s.connect(R.n, C.p, L.p)
-        s.connect(C.n, L.n, g.terminal)
+        s.connect(C.n, L.n, g.port)
         prev = R.n
         parts.append((R, C, L))
     return s
@@ -65,12 +65,7 @@ def test_rc_source_power_accounting(r, c, v, x0):
         Capacitor(c, voltage=x0, name="C"),
         Ground(),
     )
-    s = (
-        System(V, R, C, g)
-        .connect(V.p, R.p)
-        .connect(R.n, C.p)
-        .connect(C.n, V.n, g.terminal)
-    )
+    s = System(V, R, C, g).connect(V.p, R.p).connect(R.n, C.p).connect(C.n, V.n, g.port)
     m = otwin.compile(s)
     pb = m.power_balance(m.initial_state())
     assert pb["dH_dt"] == pytest.approx(
@@ -88,7 +83,7 @@ def test_dimensions_are_consistent(m, k):
     s = (
         System(mass, spring, wall)
         .connect(mass.flange, spring.a)
-        .connect(spring.b, wall.terminal)
+        .connect(spring.b, wall.port)
     )
     model = otwin.compile(s)
     assert model.n_states == 2

@@ -1,7 +1,7 @@
 # Guides
 
-Task by task, in the order you would meet them: describe the asset, run it,
-add what the physics leaves out, then the ISO 13374 blocks that turn a
+Task by task, in the order you would meet them: describe the asset, build
+it from devices, run it, add what the physics leaves out, then the ISO 13374 blocks that turn a
 simulation into a twin: acquire, condition, estimate, forecast, advise. Each
 page is what you are trying to do, the call that does it, and the trap that
 comes with it.
@@ -13,6 +13,7 @@ If you know the name you want, go to the [API reference](../api/index.md).
 :maxdepth: 1
 
 modelling
+devices
 simulate
 greybox
 io
@@ -28,6 +29,7 @@ model
 | I want to… | Page |
 |---|---|
 | describe a machine as components and get a model | [Modelling](modelling.md) |
+| build a battery module or a pump line from its data sheet and step it | [Devices](devices.md) |
 | run it, with a control law, or a thousand times | [Simulation](simulate.md) |
 | add what the physics leaves out and fit it from data | [Grey-box models](greybox.md) |
 | read a battery inverter over Modbus | [Acquire](io.md) |
