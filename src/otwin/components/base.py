@@ -393,6 +393,18 @@ class Component:
     def value(self, name: str) -> float:
         return self.parameters[name].value
 
+    def __getattr__(self, name: str) -> float:
+        """``spring.stiffness`` is the number given at construction.
+
+        Every declared parameter reads back by its own name, so a hand check
+        can use exactly what the model uses (``weight.force / spring.stiffness``).
+        The short symbols used inside laws (``self.k``) stay what they are.
+        """
+        params = self.__dict__.get("parameters")
+        if params is not None and name in params:
+            return params[name].value
+        raise AttributeError(f"{type(self).__name__!s} has no attribute {name!r}")
+
     # ---------------------------------------------------------------- output
     def branches(self) -> list[Branch]:
         raise NotImplementedError

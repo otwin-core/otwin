@@ -75,8 +75,8 @@ class Battery(Composite):
             raise ValueError(f"{self.name}: capacity must be positive (ampere-hours)")
         if not 0.0 <= soc <= 1.0:
             raise ValueError(f"{self.name}: soc must be between 0 and 1")
-        self.capacity_ah = float(capacity)
-        self.charge_full = self.capacity_ah * 3600.0  # coulombs
+        self.capacity = float(capacity)  # Ah, readable back as bat.capacity
+        self.charge_full = self.capacity * 3600.0  # coulombs
         socs, volts = _sample(ocv, ocv_points, self.name)
         self.ocv_table = (socs, volts)
         q_knots = [s * self.charge_full for s in socs]
