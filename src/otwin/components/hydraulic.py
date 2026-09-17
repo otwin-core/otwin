@@ -1,11 +1,13 @@
 """Hydraulics: across is pressure [Pa], through is volumetric flow [m^3/s].
 
 A ``Tank`` has one port, ``port``, at its base; the pressure there is
-gauge pressure over atmosphere. ``Orifice`` and ``Pipe`` connect two ports.
-``Atmosphere`` is the reference.
+gauge pressure over atmosphere. ``Orifice``, ``Pipe``, ``Filter`` and ``Pump``
+connect two ports. ``Atmosphere`` is the reference.
 """
 
 from __future__ import annotations
+
+from collections.abc import Sequence
 
 from .. import expr as ex
 from ..expr import Expr
@@ -13,6 +15,7 @@ from .base import (
     Branch,
     Component,
     ComponentQuantities,
+    Composite,
     Ground,
     Law,
     ResistorBranch,
@@ -27,6 +30,8 @@ __all__ = [
     "FluidInertance",
     "FlowSource",
     "PressureSource",
+    "Filter",
+    "Pump",
     "Atmosphere",
 ]
 
@@ -130,7 +135,10 @@ class Orifice(Component):
         def law(dp: Expr) -> Expr:
             return ex.sign(dp) * self.cd * self.a_ * ex.sqrt(2 * abs(dp) / self.rho)
 
-        return [ResistorBranch(self, self.a, self.b, law=law)]
+        def inverse(q: Expr) -> Expr:
+            return self.rho * q * abs(q) / (2 * self.cd * self.cd * self.a_ * self.a_)
+
+        return [ResistorBranch(self, self.a, self.b, law=law, inverse=inverse)]
 
 
 class Pipe(Component):
@@ -167,13 +175,16 @@ class Pipe(Component):
             self.K = self.add_parameter("friction", friction, "Pa s^2/m^6")
 
     def branches(self) -> list[Branch]:
+        inverse = None
         if self._law is not None:
             law = self._law
         elif self.R is not None:
             law = lambda dp: dp / self.R  # noqa: E731
+            inverse = lambda q: q * self.R  # noqa: E731
         else:
             law = lambda dp: ex.sign(dp) * ex.sqrt(abs(dp) / self.K)  # noqa: E731
-        return [ResistorBranch(self, self.a, self.b, law=law)]
+            inverse = lambda q: self.K * q * abs(q)  # noqa: E731
+        return [ResistorBranch(self, self.a, self.b, law=law, inverse=inverse)]
 
 
 class FluidInertance(Component):
@@ -263,3 +274,147 @@ class PressureSource(Component):
                 quantity="pressure",
             )
         ]
+
+
+class Filter(Component):
+    """A filter, membrane or strainer: a linear resistance that fouls.
+
+    ``dp = R Q`` with ``R = resistance * (1 + fouling)``. ``fouling`` is a
+    parameter (0 when clean) so a maintenance study can raise it with
+    ``model.with_parameters({"<name>.fouling": 0.8})`` or identify it from
+    measurements. Ports ``a`` (upstream) and ``b`` (downstream).
+
+    Extra output: ``<name>.pressure_drop`` in Pa.
+    """
+
+    domain = "hydraulic"
+    type_name = "filter"
+
+    def __init__(
+        self,
+        resistance: float,
+        *,
+        fouling: float = 0.0,
+        name: str | None = None,
+    ) -> None:
+        super().__init__(name)
+        self.add_port("a")
+        self.add_port("b")
+        self.R = self.add_parameter("resistance", resistance, "Pa s/m^3")
+        self.fouling = self.add_parameter(
+            "fouling", fouling, "", "extra resistance as a fraction of clean", False, True
+        )
+
+    def branches(self) -> list[Branch]:
+        return [
+            ResistorBranch(
+                self, self.a, self.b, law=lambda dp: dp / (self.R * (1 + self.fouling))
+            )
+        ]
+
+    def extra_outputs(self, q: ComponentQuantities) -> dict[str, tuple[str, Expr]]:
+        return {"pressure_drop": ("Pa", q.across[self.name])}
+
+
+class _Curve(Component):
+    """The loss below shut-off of a tabulated pump: ``drop(Q)`` and its inverse."""
+
+    domain = "hydraulic"
+    type_name = "pump_curve"
+
+    def __init__(self, drops: list[float], flows: list[float], *, name: str) -> None:
+        super().__init__(name)
+        self.add_port("a")
+        self.add_port("b")
+        self.drops, self.flows = drops, flows
+
+    def branches(self) -> list[Branch]:
+        drops, flows = self.drops, self.flows
+        return [
+            ResistorBranch(
+                self,
+                self.a,
+                self.b,
+                law=lambda drop: ex.sign(drop) * ex.interp(abs(drop), drops, flows),
+                inverse=lambda q: ex.sign(q) * ex.interp(abs(q), flows, drops),
+            )
+        ]
+
+
+class Pump(Composite):
+    """A centrifugal pump given by its curve: pressure rise against flow.
+
+    Give either the table ``curve=[(flow, pressure_rise), ...]`` in m^3/s and
+    Pa, from shut-off (flow 0) to the end of the curve, or the two numbers of
+    a parabola: ``shutoff`` (pressure rise at zero flow) and ``max_flow`` (flow
+    at zero pressure rise), giving ``dp = shutoff (1 - (Q / max_flow)^2)``.
+
+    Ports ``inlet`` (suction) and ``outlet`` (discharge). Flow is positive from
+    inlet to outlet. Inside, the pump is a pressure source at the shut-off
+    value in series with a hydraulic loss that follows the curve and the
+    inertia of the water in the pump (``inertance``, kg/m^4, by default
+    that of about ten metres of pipe). The inertia is what every real pump
+    line has, and it makes the flow a state: the compiler integrates it
+    instead of solving the curve against the network at every step.
+
+    Outputs: ``<name>.flow`` (m^3/s), ``<name>.pressure_rise`` (Pa),
+    ``<name>.hydraulic_power`` (W, the power handed to the water).
+    """
+
+    type_name = "pump"
+    domain = "hydraulic"
+
+    def __init__(
+        self,
+        curve: Sequence[tuple[float, float]] | None = None,
+        *,
+        shutoff: float | None = None,
+        max_flow: float | None = None,
+        inertance: float = 1e6,
+        name: str | None = None,
+    ) -> None:
+        super().__init__(name)
+        if curve is not None:
+            if shutoff is not None or max_flow is not None:
+                raise ValueError(
+                    f"{self.name}: give curve or (shutoff, max_flow), not both"
+                )
+            pts = sorted((float(q), float(dp)) for q, dp in curve)
+            if len(pts) < 2 or pts[0][0] != 0.0:
+                raise ValueError(
+                    f"{self.name}: curve needs at least two points, the first at flow 0"
+                )
+            flows = [q for q, _ in pts]
+            rises = [dp for _, dp in pts]
+            if any(b >= a for a, b in zip(rises[:-1], rises[1:], strict=True)):
+                raise ValueError(f"{self.name}: pressure rise must fall as flow grows")
+            dp0 = rises[0]
+            drops = [dp0 - dp for dp in rises]  # increasing, starts at 0
+            loss = _Curve(drops, flows, name="curve")
+        else:
+            if shutoff is None or max_flow is None:
+                raise ValueError(
+                    f"{self.name}: give curve=[...] or shutoff= and max_flow="
+                )
+            if shutoff <= 0 or max_flow <= 0:
+                raise ValueError(f"{self.name}: shutoff and max_flow must be positive")
+            dp0 = float(shutoff)
+            loss = Pipe(friction=dp0 / float(max_flow) ** 2, name="curve")
+        self.shutoff = dp0
+        head = PressureSource(dp0, name="head")
+        water = FluidInertance(inertance, name="water")
+        self.add(head, loss, water)
+        self.connect(head.a, loss.a)
+        self.connect(loss.b, water.a)
+        self.expose("inlet", head.b)
+        self.expose("outlet", water.b)
+
+    def extra_outputs(self, q: ComponentQuantities) -> dict[str, tuple[str, Expr]]:
+        n = self.name
+        flow = q.through[f"{n}.water"]
+        rise = q.across[f"{n}.head"] - q.across[f"{n}.curve"] - q.across[f"{n}.water"]
+        return {
+            "flow": ("m^3/s", flow),
+            "pressure_rise": ("Pa", rise),
+            "hydraulic_power": ("W", rise * flow),
+        }

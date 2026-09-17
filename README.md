@@ -301,7 +301,7 @@ system.connect(
 system.connect(
     spring.b,
     damper.b,
-    ceiling.terminal,
+    ceiling.port,
 )
 
 model = otwin.compile(system)
@@ -371,7 +371,7 @@ config:
 
 flowchart TD
 
-    A["Physical system<br/>components · terminals · connections · parameters"]
+    A["Physical system<br/>components · ports · connections · parameters"]
     B["otwin.System<br/>domain-checked component graph"]
     C["otwin.compile()<br/>model compiler"]
     D["Physical System IR<br/>nodes · branches · states · parameters · inputs"]
@@ -584,7 +584,7 @@ drive.connect(
 drive.connect(
     supply.n,
     motor.n,
-    gnd.terminal,
+    gnd.port,
 )
 
 drive.connect(
@@ -594,7 +594,7 @@ drive.connect(
 
 drive.connect(
     fan.b,
-    housing.terminal,
+    housing.port,
 )
 
 model = otwin.compile(drive)
@@ -1391,7 +1391,7 @@ Contributions are welcome.
 A new physical component is one of the easiest places to start:
 
 1. define the component;
-2. define its terminals;
+2. define its ports;
 3. define its parameters;
 4. define its constitutive law;
 5. provide a closed-form or reference result where possible;

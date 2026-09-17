@@ -29,7 +29,7 @@ rule: Python never runs inside the numerical loop.
 src/otwin/
   expr.py            symbolic expressions: build, simplify, differentiate, serialise, lower
   ir.py              PhysicalSystemIR, PHSIR: the contract between compiler and runtime
-  components/        one module per domain; base.py holds Component, Branch, Terminal
+  components/        one module per domain; base.py holds Component, Branch, Port
   system.py          System, chain
   compiler.py        graph -> IR: nodes, pins, symbolic elimination, J/R split, Jacobian
   api.py             otwin.compile

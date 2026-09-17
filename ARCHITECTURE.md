@@ -25,7 +25,7 @@ otwin/
 │       ├── hybrid.py         with_residual support, HybridModel, fit_parameters
 │       │
 │       ├── components/       the physical primitives
-│       │   ├── base.py           Component, Composite, Terminal, Branch kinds, Ground
+│       │   ├── base.py           Component, Composite, Port, Branch kinds, Ground
 │       │   ├── electrical.py mechanical.py rotational.py hydraulic.py thermal.py
 │       │   ├── twoport.py        Transformer, Gyrator
 │       │   ├── composite.py      DCMotor

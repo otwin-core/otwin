@@ -7,7 +7,7 @@ Practices follow [ColPrac](https://github.com/SciML/ColPrac).
 1. **A component.** A physical primitive the library lacks (a check valve, a
    thermal contact, a battery with a state of charge) or a composite device
    built from primitives (a pump, a heat exchanger). It is a class with
-   terminals, parameters and one constitutive law, plus a closed-form result
+   ports, parameters and one constitutive law, plus a closed-form result
    it must reproduce as a test in `tests/engine/test_golden.py`.
    [docs/developer/components.md](docs/developer/components.md) walks through
    both kinds.

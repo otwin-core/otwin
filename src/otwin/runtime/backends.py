@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from ..expr import Expr
+from ..expr import Expr, _eval_pw
 from ..ir import PHSIR
 
 __all__ = [
@@ -250,6 +250,7 @@ def _div(a: float, b: float) -> float:
 
 
 _NS = {
+    "_pw": _eval_pw,
     "_sign": _sign,
     "_sqrt": _sqrt,
     "_log": _log,
@@ -291,6 +292,8 @@ def _codegen(e: Expr, order: dict[str, int]) -> str:
         return f"(1.0 if {a[0]} > {a[1]} else 0.0)"
     if op == "where":
         return f"({a[1]} if {a[0]} != 0.0 else {a[2]})"
+    if op == "pw":
+        return f"_pw({e.value!r}, {a[0]})"
     if op in ("sqrt", "exp", "log", "abs", "tanh", "sin", "cos", "sign"):
         return f"_{op}({a[0]})"
     raise ValueError(op)

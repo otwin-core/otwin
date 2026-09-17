@@ -181,10 +181,14 @@ System = PhysicalSystem
 
 
 def chain(*items: Any, name: str = "system") -> PhysicalSystem:
-    """Connect two-port components in series: ``a >> b >> c``.
+    """Connect components in series: ``tank >> pipe >> pump >> outfall``.
 
-    Each component must expose a pair of ports ``(p, n)`` or ``(a, b)``.
-    The chain is left open; close it with ``system.connect``.
+    A two-port component (ports ``(p, n)``, ``(a, b)`` or
+    ``(inlet, outlet)``) is entered at its first port and left at its second.
+    A one-port component (a tank, a ground, an atmosphere, a thermal mass) is
+    joined to the node between its neighbours. Anything else must be connected
+    with :meth:`PhysicalSystem.connect`. The chain ends open unless its last
+    item is a one-port; close it with ``system.connect`` if needed.
     """
     system = PhysicalSystem(name=name)
     prev_out: Port | None = None
@@ -211,11 +215,15 @@ def chain(*items: Any, name: str = "system") -> PhysicalSystem:
 
 
 def _series_pair(c: Component) -> tuple[Port, Port]:
-    for a, b in (("p", "n"), ("a", "b")):
+    for a, b in (("p", "n"), ("a", "b"), ("inlet", "outlet")):
         if a in c.ports and b in c.ports:
             return c.ports[a], c.ports[b]
+    if len(c.ports) == 1:
+        (only,) = c.ports.values()
+        return only, only
     raise ConnectionError_(
-        f"{c.name} is not a two-port component; connect it with System.connect"
+        f"{c.name} has ports {list(c.ports)}: not a series element; connect it "
+        "with System.connect"
     )
 
 

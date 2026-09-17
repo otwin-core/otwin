@@ -31,11 +31,47 @@ pub enum Instr {
     Min,
     Gt,
     Where,
+    /// Piecewise polynomial of degree <= 2; the index points into `Program::tables`.
+    Pw(usize),
+}
+
+/// A table for `Instr::Pw`: segment `i` covers `knots[i] <= x < knots[i+1]`
+/// and evaluates `c0 + c1 d + c2 d^2` with `d = x - knots[i]`. The end
+/// segments extrapolate.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PwTable {
+    knots: Vec<f64>,
+    coefs: Vec<[f64; 3]>,
+}
+
+impl PwTable {
+    #[inline]
+    fn eval(&self, x: f64) -> f64 {
+        let n = self.coefs.len();
+        let i = if x >= self.knots[n] {
+            n - 1
+        } else if x < self.knots[1] {
+            0
+        } else {
+            // largest i with knots[i] <= x
+            match self
+                .knots
+                .binary_search_by(|k| k.partial_cmp(&x).unwrap_or(std::cmp::Ordering::Less))
+            {
+                Ok(i) => i.min(n - 1),
+                Err(i) => i - 1,
+            }
+        };
+        let d = x - self.knots[i];
+        let [c0, c1, c2] = self.coefs[i];
+        c0 + d * (c1 + d * c2)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     code: Vec<Instr>,
+    tables: Vec<PwTable>,
     pub max_stack: usize,
     pub max_ref: Option<usize>,
 }
@@ -44,6 +80,7 @@ impl Program {
     pub fn constant(v: f64) -> Program {
         Program {
             code: vec![Instr::Const(v)],
+            tables: Vec::new(),
             max_stack: 1,
             max_ref: None,
         }
@@ -52,7 +89,8 @@ impl Program {
     /// Parse one expression tree.
     pub fn from_json(v: &Value) -> Result<Program> {
         let mut code = Vec::new();
-        parse_into(v, &mut code)?;
+        let mut tables = Vec::new();
+        parse_into(v, &mut code, &mut tables)?;
         let mut depth = 0usize;
         let mut max_stack = 0usize;
         let mut max_ref = None;
@@ -71,7 +109,8 @@ impl Program {
                 | Instr::Tanh
                 | Instr::Sin
                 | Instr::Cos
-                | Instr::Sign => (1, 1),
+                | Instr::Sign
+                | Instr::Pw(_) => (1, 1),
                 Instr::Where => (3, 1),
                 _ => (2, 1),
             };
@@ -90,6 +129,7 @@ impl Program {
         }
         Ok(Program {
             code,
+            tables,
             max_stack,
             max_ref,
         })
@@ -185,6 +225,10 @@ impl Program {
                     let c = stack.pop().unwrap();
                     stack.push(if c != 0.0 { a } else { b })
                 }
+                Instr::Pw(t) => {
+                    let x = stack.pop().unwrap();
+                    stack.push(self.tables[t].eval(x))
+                }
             }
         }
         stack[0]
@@ -199,7 +243,7 @@ impl Program {
     }
 }
 
-fn parse_into(v: &Value, code: &mut Vec<Instr>) -> Result<()> {
+fn parse_into(v: &Value, code: &mut Vec<Instr>, tables: &mut Vec<PwTable>) -> Result<()> {
     let arr = v
         .as_array()
         .ok_or_else(|| EngineError::Malformed(format!("expected a list, got {v}")))?;
@@ -240,9 +284,48 @@ fn parse_into(v: &Value, code: &mut Vec<Instr>) -> Result<()> {
         "where" => {
             arity(3)?;
             for a in &arr[1..4] {
-                parse_into(a, code)?;
+                parse_into(a, code, tables)?;
             }
             code.push(Instr::Where);
+        }
+        "pw" => {
+            arity(3)?;
+            parse_into(&arr[1], code, tables)?;
+            let knots: Vec<f64> = arr[2]
+                .as_array()
+                .ok_or_else(|| EngineError::Malformed("pw knots must be a list".into()))?
+                .iter()
+                .map(|k| {
+                    k.as_f64()
+                        .ok_or_else(|| EngineError::Malformed("pw knot".into()))
+                })
+                .collect::<Result<_>>()?;
+            let coefs: Vec<[f64; 3]> = arr[3]
+                .as_array()
+                .ok_or_else(|| EngineError::Malformed("pw coefs must be a list".into()))?
+                .iter()
+                .map(|c| {
+                    let c = c
+                        .as_array()
+                        .filter(|c| c.len() == 3)
+                        .ok_or_else(|| EngineError::Malformed("pw coef triple".into()))?;
+                    Ok([
+                        c[0].as_f64().unwrap_or(f64::NAN),
+                        c[1].as_f64().unwrap_or(f64::NAN),
+                        c[2].as_f64().unwrap_or(f64::NAN),
+                    ])
+                })
+                .collect::<Result<_>>()?;
+            if knots.len() < 2 || coefs.len() + 1 != knots.len() {
+                return Err(EngineError::Malformed(
+                    "pw needs n+1 knots and n coefficient triples".into(),
+                ));
+            }
+            if knots.windows(2).any(|w| w[1] <= w[0]) {
+                return Err(EngineError::Malformed("pw knots must increase".into()));
+            }
+            tables.push(PwTable { knots, coefs });
+            code.push(Instr::Pw(tables.len() - 1));
         }
         _ => {
             let (n, ins) = match op {
@@ -267,7 +350,7 @@ fn parse_into(v: &Value, code: &mut Vec<Instr>) -> Result<()> {
             };
             arity(n)?;
             for a in &arr[1..=n] {
-                parse_into(a, code)?;
+                parse_into(a, code, tables)?;
             }
             code.push(ins);
         }
@@ -279,6 +362,29 @@ fn parse_into(v: &Value, code: &mut Vec<Instr>) -> Result<()> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn piecewise_interpolates_and_extrapolates() {
+        // interp of (0,3) (1,3.5) (2,3.7) (3,4.2)
+        let p = Program::from_json(&json!([
+            "pw",
+            ["ref", 0],
+            [0.0, 1.0, 2.0, 3.0],
+            [[3.0, 0.5, 0.0], [3.5, 0.2, 0.0], [3.7, 0.5, 0.0]]
+        ]))
+        .unwrap();
+        let mut st = Vec::new();
+        for (x, want) in [
+            (-0.5, 2.75),
+            (0.5, 3.25),
+            (1.5, 3.6),
+            (2.999, 4.1995),
+            (3.0, 4.2),
+            (4.0, 4.7),
+        ] {
+            assert!((p.eval(&[x], &mut st) - want).abs() < 1e-12, "x={x}");
+        }
+    }
 
     #[test]
     fn evaluates_arithmetic() {

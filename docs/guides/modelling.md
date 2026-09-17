@@ -6,12 +6,12 @@ and what the compiler makes of it. Every block runs as written.
 The rule that holds everywhere: a connection shares the *across* variable
 (voltage, velocity, pressure, temperature) and sums the *through* variables
 (current, force, flow, heat) to zero. Components that measure against a
-reference have one terminal; everything else has two, and both must be
+reference have one port; everything else has two, and both must be
 connected.
 
 ## Electrical
 
-`Resistor`, `Capacitor`, `Inductor` have terminals `p` and `n`; current is
+`Resistor`, `Capacitor`, `Inductor` have ports `p` and `n`; current is
 positive from `p` to `n` inside the element. `VoltageSource` imposes `v_p − v_n`;
 `CurrentSource` delivers current out of `p`. `Ground` is the reference.
 
@@ -22,7 +22,7 @@ from otwin.components.electrical import Resistor, Capacitor, Inductor, VoltageSo
 V, R, L, C, g = (VoltageSource(None, name="V"), Resistor(2.0, name="R"),
                  Inductor(0.5, name="L"), Capacitor(1e-3, name="C"), Ground())
 s = otwin.System(V, R, L, C, g)
-s.connect(V.p, R.p).connect(R.n, L.p).connect(L.n, C.p).connect(C.n, V.n, g.terminal)
+s.connect(V.p, R.p).connect(R.n, L.p).connect(L.n, C.p).connect(C.n, V.n, g.port)
 
 m = otwin.compile(s)
 print(m.state_names)
@@ -43,7 +43,7 @@ see [Compilation](../concepts/compilation.md) for the rule.
 
 ## Mechanical, translation and rotation
 
-`Mass` and `Inertia` have one terminal (`flange`, `shaft`) and measure their
+`Mass` and `Inertia` have one port (`flange`, `shaft`) and measure their
 velocity against the inertial frame. `Spring`, `Damper`, `TorsionSpring`,
 `RotationalDamper` act between `a` and `b`. `ForceSource` and `TorqueSource`
 push on their flange or shaft; `VelocitySource` and `SpeedSource` impose a
@@ -56,7 +56,7 @@ mass, spring, damper, wall = Mass(1.0, name="m"), Spring(20.0, name="k"), Damper
 weight = ForceSource(9.81, name="weight")          # a constant force: gravity on a 1 kg mass
 s = otwin.System(mass, spring, damper, weight, wall)
 s.connect(mass.flange, spring.a, damper.a, weight.flange)
-s.connect(spring.b, damper.b, wall.terminal)
+s.connect(spring.b, damper.b, wall.port)
 ```
 
 The spring's state is its extension from the natural length, positive when `a`
@@ -67,7 +67,7 @@ them, which is also the more truthful model.
 
 ## Thermal
 
-`ThermalMass` has one terminal, `port`. `ThermalResistance` (conduction,
+`ThermalMass` has one port, `port`. `ThermalResistance` (conduction,
 `Q = ΔT / R`) and `Convection` (`Q = hA ΔT`) connect two ports. `HeatSource`
 injects heat; `Ambient` holds a temperature. Temperatures are absolute, in
 kelvin.
@@ -100,7 +100,7 @@ statement rather than a first-law one. The heat balance itself is exact. See
 
 ## Hydraulic
 
-`Tank` has one terminal, `port`, at its base; `base_elevation` lifts it above
+`Tank` has one port, `port`, at its base; `base_elevation` lifts it above
 the datum. `Orifice` is Torricelli's law, `Pipe` a laminar (`resistance=`) or
 turbulent (`friction=`) loss, `FluidInertance` the inertia of the water in a
 pipe. `FlowSource` is a pump or a demand, `PressureSource` a head.
@@ -112,7 +112,7 @@ from otwin.components.hydraulic import Tank, Orifice, Pipe, Atmosphere
 upper, lower = Tank(2.0, level=1.5, name="upper"), Tank(3.0, level=0.2, name="lower")
 pipe, drain, atm = Pipe(friction=5e5, name="pipe"), Orifice(0.005, name="drain"), Atmosphere()
 s = otwin.System(upper, lower, pipe, drain, atm)
-s.connect(upper.port, pipe.a).connect(pipe.b, lower.port, drain.a).connect(drain.b, atm.terminal)
+s.connect(upper.port, pipe.a).connect(pipe.b, lower.port, drain.a).connect(drain.b, atm.port)
 
 m = otwin.compile(s)
 run = m.simulate(t_span=(0, 300), dt=0.5)
@@ -130,7 +130,7 @@ as an increase.
 
 ## Coupling domains
 
-`Transformer` and `Gyrator` are lossless two-ports with terminals `p1, n1` on
+`Transformer` and `Gyrator` are lossless two-ports with ports `p1, n1` on
 one side and `p2, n2` on the other, each side in the domain you give it. A
 gearbox is a transformer between two rotational sides, a lever between two
 mechanical ones, an electric machine a transformer between electrical and
@@ -163,6 +163,6 @@ into `R`. NumPy functions and Python `if` do not trace; use `where`.
 
 The message names the components. The table in
 [Compilation](../concepts/compilation.md#what-the-compiler-refuses) lists each
-refusal and the fix. The common ones: a loose terminal on a two-terminal
+refusal and the fix. The common ones: a loose port on a two-port
 component, two storages of the same kind in parallel, a nonlinear element on a
 node nothing pins.

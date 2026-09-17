@@ -25,7 +25,7 @@ name. Structural equality is by value, so ``a - a`` folds to ``0`` even when
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
 __all__ = [
@@ -44,6 +44,9 @@ __all__ = [
     "maximum",
     "minimum",
     "where",
+    "piecewise",
+    "interp",
+    "interp_integral",
     "from_json",
 ]
 
@@ -195,7 +198,7 @@ class Expr:
         new_args = tuple(a.substitute(mapping) for a in self.args)
         if new_args == self.args:
             return self
-        return _rebuild(self.op, new_args)
+        return _rebuild(self.op, new_args, self.value)
 
     def diff(self, sym: Expr) -> Expr:
         """Partial derivative with respect to a symbol."""
@@ -213,6 +216,9 @@ class Expr:
             return ["const", self.value]
         if self.is_symbol:
             return ["sym", self.kind, self.name]
+        if self.op == "pw":
+            knots, coefs = self.value  # type: ignore[misc]
+            return ["pw", self.args[0].to_json(), list(knots), [list(c) for c in coefs]]
         return [self.op, *[a.to_json() for a in self.args]]
 
     def count_nodes(self) -> int:
@@ -254,8 +260,10 @@ _SMART_UNARY: dict[str, Callable[[Expr], Expr]] = {}
 _SMART_BINARY: dict[str, Callable[[Expr, Expr], Expr]] = {}
 
 
-def _rebuild(op: str, args: tuple[Expr, ...]) -> Expr:
+def _rebuild(op: str, args: tuple[Expr, ...], value: Any = None) -> Expr:
     """Rebuild a node through the simplifying constructors."""
+    if op == "pw":
+        return piecewise(args[0], value[0], value[1])
     if op in _UNARY:
         return _SMART_UNARY[op](args[0])
     if op in _BINARY:
@@ -471,6 +479,65 @@ def where(cond: Any, a: Any, b: Any) -> Expr:
     return Expr("where", (cond, a, b))
 
 
+def piecewise(x: Any, knots: Sequence[float], coefs: Sequence[Sequence[float]]) -> Expr:
+    """A piecewise polynomial of degree <= 2 in ``x``, given by a table.
+
+    Segment ``i`` covers ``knots[i] <= x < knots[i+1]`` and evaluates
+    ``c0 + c1 (x - knots[i]) + c2 (x - knots[i])**2`` with
+    ``(c0, c1, c2) = coefs[i]``. Below the first knot the first segment is
+    used, at or above the last knot the last segment: the ends extrapolate.
+    ``len(coefs) == len(knots) - 1``. Differentiable; closed under ``diff``.
+    """
+    x = as_expr(x)
+    ks = tuple(float(k) for k in knots)
+    cs = tuple(tuple(float(v) for v in c) for c in coefs)
+    if len(ks) < 2 or len(cs) != len(ks) - 1 or any(len(c) != 3 for c in cs):
+        raise ValueError("piecewise needs n+1 knots and n triples (c0, c1, c2)")
+    if any(b <= a for a, b in zip(ks[:-1], ks[1:], strict=True)):
+        raise ValueError("piecewise knots must be strictly increasing")
+    if x.is_const:
+        return const(_eval_pw((ks, cs), x.value))  # type: ignore[arg-type]
+    return Expr("pw", (x,), value=(ks, cs))
+
+
+def interp(x: Any, xs: Sequence[float], ys: Sequence[float]) -> Expr:
+    """Linear interpolation of a table ``(xs, ys)`` at ``x``, extrapolating at
+    the ends. This is how a measured curve (an open-circuit voltage, a pump
+    head) enters a law."""
+    xs_ = [float(v) for v in xs]
+    ys_ = [float(v) for v in ys]
+    if len(xs_) != len(ys_) or len(xs_) < 2:
+        raise ValueError("interp needs two equally long tables with at least 2 points")
+    coefs = []
+    for i in range(len(xs_) - 1):
+        slope = (ys_[i + 1] - ys_[i]) / (xs_[i + 1] - xs_[i])
+        coefs.append((ys_[i], slope, 0.0))
+    return piecewise(x, xs_, coefs)
+
+
+def interp_integral(
+    x: Any, xs: Sequence[float], ys: Sequence[float], y0: float = 0.0
+) -> Expr:
+    """The exact integral of :func:`interp` from ``xs[0]`` to ``x``, plus ``y0``.
+
+    Its derivative is ``interp(x, xs, ys)``. Use it as a storage's energy when
+    the *effort* (voltage, pressure) is what you measured as a function of the
+    stored quantity: ``energy = interp_integral(q, charge, ocv)``.
+    """
+    xs_ = [float(v) for v in xs]
+    ys_ = [float(v) for v in ys]
+    if len(xs_) != len(ys_) or len(xs_) < 2:
+        raise ValueError("interp_integral needs two equally long tables")
+    coefs = []
+    acc = float(y0)
+    for i in range(len(xs_) - 1):
+        h = xs_[i + 1] - xs_[i]
+        slope = (ys_[i + 1] - ys_[i]) / h
+        coefs.append((acc, ys_[i], slope / 2.0))
+        acc += ys_[i] * h + slope * h * h / 2.0
+    return piecewise(x, xs_, coefs)
+
+
 # ----------------------------------------------------------------- evaluation
 def _apply_unary(op: str, v: float) -> float:
     if op == "neg":
@@ -535,7 +602,30 @@ def _eval(e: Expr, env: dict[str, float]) -> float:
     if e.op == "where":
         c = _eval(e.args[0], env)
         return _eval(e.args[1], env) if c != 0.0 else _eval(e.args[2], env)
+    if e.op == "pw":
+        return _eval_pw(e.value, _eval(e.args[0], env))  # type: ignore[arg-type]
     raise ValueError(e.op)
+
+
+def _eval_pw(table: tuple[Any, Any], x: float) -> float:
+    knots, coefs = table
+    # segment i covers [knots[i], knots[i+1]); the end segments extrapolate
+    lo, hi = 0, len(coefs) - 1
+    if x >= knots[hi]:
+        i = hi
+    elif x < knots[1]:
+        i = 0
+    else:
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if knots[mid] <= x:
+                lo = mid
+            else:
+                hi = mid - 1
+        i = lo
+    d = x - knots[i]
+    c0, c1, c2 = coefs[i]
+    return c0 + d * (c1 + d * c2)
 
 
 # ------------------------------------------------------------ differentiation
@@ -601,6 +691,13 @@ def _diff(e: Expr, s: Expr) -> Expr:
     if op == "where":
         c, a, b = e.args
         return where(c, _diff(a, s), _diff(b, s))
+    if op == "pw":
+        knots, coefs = e.value  # type: ignore[misc]
+        dcoefs = tuple((c1, 2.0 * c2, 0.0) for (_c0, c1, c2) in coefs)
+        inner = _diff(e.args[0], s)
+        if inner.is_zero():
+            return _ZERO
+        return _binary("mul", piecewise(e.args[0], knots, dcoefs), inner)
     raise ValueError(op)
 
 
@@ -652,6 +749,8 @@ def _fmt(e: Expr, parent: int) -> str:
     if op == "neg":
         s = f"-{_fmt(e.args[0], 3)}"
         return f"({s})" if parent > 3 else s
+    if op == "pw":
+        return f"pw({_fmt(e.args[0], 0)}; {len(e.value[1])} segments)"  # type: ignore[index]
     return f"{op}({', '.join(_fmt(a, 0) for a in e.args)})"
 
 
@@ -665,6 +764,8 @@ def from_json(data: Any) -> Expr:
         return const(data[1])
     if op == "sym":
         return symbol(data[1], data[2])
+    if op == "pw":
+        return piecewise(from_json(data[1]), data[2], data[3])
     args = tuple(from_json(a) for a in data[1:])
     return _rebuild(op, args)
 
@@ -702,6 +803,9 @@ def lower(exprs: Iterable[Expr], order: dict[str, int]) -> list[Any]:
                 return ["ref", order[e.key]]
             except KeyError:
                 raise KeyError(f"symbol {e.key} is not in the engine table") from None
+        if e.op == "pw":
+            knots, coefs = e.value  # type: ignore[misc]
+            return ["pw", go(e.args[0]), list(knots), [list(c) for c in coefs]]
         return [e.op, *[go(a) for a in e.args]]
 
     return [go(e) for e in exprs]

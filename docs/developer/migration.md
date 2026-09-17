@@ -25,7 +25,7 @@ protocols in `otwin.interfaces`:
 |---|---|
 | `otwin.expr` | A small symbolic expression type. Every constitutive law, energy term and control law the compiler sees is an `Expr`, so the engine can evaluate, differentiate and serialise it without calling back into Python |
 | `otwin.components` | The physical primitives, one module per domain (`electrical`, `mechanical`, `rotational`, `hydraulic`, `thermal`, `twoport`, `composite`). A component declares ports, parameters, states and laws. It contains no numerics |
-| `otwin.system` | `System`: the component graph. `connect` joins terminals into nodes. Domain and unit checks happen here, before compilation |
+| `otwin.system` | `System`: the component graph. `connect` joins ports into nodes. Domain and unit checks happen here, before compilation |
 | `otwin.ir` | `PhysicalSystemIR` (what the user described, resolved) and `PHSIR` (the port-Hamiltonian form `ẋ = (J − R)∇H + G u`, `y = Gᵀ∇H + D u`, all entries `Expr`). Both serialise to JSON |
 | `otwin.compiler` | Front end: graph → `PhysicalSystemIR` → `PHSIR`. Nodal analysis with symbolic elimination, structural error reporting, J/R split, symbolic gradient and Jacobian |
 | `otwin.runtime` | `Model`, `State`, `Trajectory`. Owns the compiled representation and dispatches to a backend |

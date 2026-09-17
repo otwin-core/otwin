@@ -28,9 +28,9 @@ gnd, housing = Ground(), Housing()
 
 drive = otwin.System(supply, motor, fan, gnd, housing, name="drive")
 drive.connect(supply.p, motor.p)
-drive.connect(supply.n, motor.n, gnd.terminal)
+drive.connect(supply.n, motor.n, gnd.port)
 drive.connect(motor.shaft, fan.a)
-drive.connect(fan.b, housing.terminal)
+drive.connect(fan.b, housing.port)
 
 model = otwin.compile(drive)
 print(model.state_names)

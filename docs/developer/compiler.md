@@ -9,7 +9,7 @@ All of it is `src/otwin/compiler.py`, one function per stage:
 | stage | function | what it produces |
 |---|---|---|
 | validation | `_validate_components` | unique names, valid parameter values |
-| nodes | `_build_nodes` | union-find over connected terminals; one reference node; domain check per node; dangling-terminal errors |
+| nodes | `_build_nodes` | union-find over connected ports; one reference node; domain check per node; dangling-port errors |
 | branches | `_collect_branches` | the flat list of constitutive relations; the representation flag (thermal storages make it pseudo-port-Hamiltonian) |
 | symbols | `_declare_symbols` | state symbols, effort placeholders `__effort.i`, parameters, ports (inputs first, then constants) |
 | potentials | `_pin_potentials` | BFS over across-storages and across-sources from the reference; every node's potential as an expression in efforts and inputs, or an unknown `__phi.n` per unpinned group; a cycle is a dependent-storage error |
@@ -30,7 +30,7 @@ All of it is `src/otwin/compiler.py`, one function per stage:
   or `t`.** `PHSIR.lower()` fails loudly otherwise, and so does the engine.
 - **Parameters stay symbolic.** Never fold a parameter value into an
   expression; `set_parameters` and `fit_parameters` depend on it.
-- **Errors are physical.** A refusal names components and terminals and says
+- **Errors are physical.** A refusal names components and ports and says
   what to change. Add a test for every new refusal.
 - **The engine stays ignorant.** Anything the runtime needs must fit in the
   lowered IR. If a feature needs the engine to know about components, the

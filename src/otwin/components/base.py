@@ -64,6 +64,7 @@ __all__ = [
     "ResistorBranch",
     "SourceBranch",
     "TwoPortBranch",
+    "HeatBranch",
     "Component",
     "Composite",
     "Ground",
@@ -248,14 +249,25 @@ class StorageBranch(Branch):
 
 @dataclass(eq=False)
 class ResistorBranch(Branch):
-    """A dissipative element: ``through = law(across)``.
+    """A dissipative element: ``through = law(across)``, or the other way
+    round, ``across = inverse(through)``.
 
     The law is any traceable function. A linear law ``lambda v: g * v`` is the
     common case and the only one allowed where the across variable must be
     solved for algebraically (a node with no storage pinning it).
+
+    ``inverse`` is for elements naturally written with the flow as the input:
+    a pump curve ``dp = f(Q)``, turbulent friction ``dp = K Q |Q|``, Coulomb
+    friction ``F = mu sign(v)``. Such a branch must sit in series with
+    something that sets its flow: an inductor, spring or fluid inertance, a
+    flow or current source, or another branch of the same kind. The compiler
+    then reads the across off the flow instead of inverting the law. Give
+    ``law`` too when it is available, so the element also works with its
+    across pinned.
     """
 
-    law: Law = field(default=lambda v: v)
+    law: Law | None = field(default=lambda v: v)
+    inverse: Law | None = None
 
 
 @dataclass(eq=False)
@@ -288,6 +300,25 @@ class TwoPortBranch(Branch):
     b2: Port | None = None
     ratio: Expr = field(default_factory=lambda: ex.const(1.0))
     label2: str = ""
+
+
+@dataclass(eq=False)
+class HeatBranch(Branch):
+    """Losses of other components delivered as heat into a thermal port.
+
+    ``a`` is the thermal port that receives the heat, ``b`` the thermal
+    reference (``None``). ``sources`` lists the components whose dissipated
+    power (``across * through`` of their resistor branches) is summed and
+    injected as heat flow. This is how a battery's ohmic losses warm its cell,
+    or a motor's copper losses warm its housing.
+
+    Heat generation is one-directional (electrical power becomes heat, never
+    the reverse), so a model with a heat branch is reported as
+    ``pseudo-port-hamiltonian``: the heat balance is exact, but temperature
+    times heat flow is not a power and the energy audit spans two bookkeepings.
+    """
+
+    sources: list[Component] = field(default_factory=list)
 
 
 class Component:

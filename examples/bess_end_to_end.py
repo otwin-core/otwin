@@ -86,14 +86,14 @@ banner("HA", "Health Assessment — the energy-based model")
 
 # One store (charge), one dissipative path (self-discharge), one port (current).
 # Described as components, in bank units: the state is the state of charge, the
-# stored energy is 0.5 * 40 * soc^2 MWh, the terminal effort is 40 * soc.
+# stored energy is 0.5 * 40 * soc^2 MWh, the port effort is 40 * soc.
 store = Capacitor(1.0 / 40.0, voltage=40.0 * 0.82, name="store")  # 40 MWh at full charge
 leak = Resistor(1.0 / 1.9e-10, name="leak")  # self-discharge, ~2%/month
-terminals = CurrentSource(None, name="terminals")  # the port: an input
+ports = CurrentSource(None, name="ports")  # the port: an input
 gnd = Ground(name="ground")
-bess = otwin.System(store, leak, terminals, gnd, name="bank")
-bess.connect(store.p, leak.p, terminals.p)
-bess.connect(store.n, leak.n, terminals.n, gnd.terminal)
+bess = otwin.System(store, leak, ports, gnd, name="bank")
+bess.connect(store.p, leak.p, ports.p)
+bess.connect(store.n, leak.n, ports.n, gnd.port)
 bank = otwin.compile(bess)  # H, J, R, G written by the compiler
 print(f"  states            {bank.state_names}   inputs {bank.input_names}")
 struct = bank.check_structure(np.array([0.82]))
@@ -107,7 +107,7 @@ sol = bank.forecast(np.array([0.82]), t_sim, np.zeros((600, 1)))
 E = np.array([bank.energy(x) for x in sol["x"]])
 print(f"  solver            {sol['method']}")
 print(f"  worst energy gain {max(0.0, float(np.max(np.diff(E)))):.2e} MWh over 600 steps")
-print("  energy cannot increase with the terminals open. Algebra, not fitting.")
+print("  energy cannot increase with the ports open. Algebra, not fitting.")
 
 # ---------------------------------------------------------------- SD
 banner("SD", "State Detection — an estimator that cannot cheat")
@@ -117,7 +117,7 @@ t_obs = t_sim[:n_obs]
 truth = sol["x"][:n_obs, :]
 
 # What is actually measured is the port output y = g^T grad_H -- the effort
-# variable at the terminals, not the state itself. Feeding a filter the state
+# variable at the ports, not the state itself. Feeding a filter the state
 # when the model reports the effort is a units error that no exception catches;
 # building the measurement through `observe` makes it impossible.
 meas = np.array([bank.observe(x, np.zeros(1), 0.0) for x in truth])
@@ -131,7 +131,7 @@ meas = meas + rng.normal(0, 0.4, meas.shape)
 obs = EnergyConsistentObserver(
     bank,
     Q=np.array([[1e-8]]),  # the model is good, but not perfect
-    R_meas=np.array([[0.16]]),  # sigma = 0.4 on the terminal measurement
+    R_meas=np.array([[0.16]]),  # sigma = 0.4 on the port measurement
     P0=np.array([[4e-4]]),
     x0=np.array([0.84]),  # the prior is 0.02 too high
 )
@@ -150,7 +150,7 @@ print(
 print(f"  a plain EKF would have injected {obs.energy_injected:.3e} MWh of energy")
 print("  the filter may correct the state. It may not supply power the ports did not.")
 print()
-print("  KNOWN LIMITATION, stated rather than tuned around: with the terminals")
+print("  KNOWN LIMITATION, stated rather than tuned around: with the ports")
 print("  open the energy budget is zero, so *every* upward revision is clamped --")
 print("  even one that is just the filter learning the prior was too low. That")
 print("  makes the estimate one-way. Start the prior over-energetic (as here) or")

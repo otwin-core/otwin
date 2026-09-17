@@ -20,13 +20,21 @@ from .base import (
     Branch,
     Component,
     ComponentQuantities,
+    HeatBranch,
     Law,
     ResistorBranch,
     SourceBranch,
     StorageBranch,
 )
 
-__all__ = ["ThermalMass", "ThermalResistance", "Convection", "HeatSource", "Ambient"]
+__all__ = [
+    "ThermalMass",
+    "ThermalResistance",
+    "Convection",
+    "HeatSource",
+    "Losses",
+    "Ambient",
+]
 
 
 class ThermalMass(Component):
@@ -136,6 +144,34 @@ class HeatSource(Component):
                 quantity="heat flow",
             )
         ]
+
+
+class Losses(Component):
+    """The power dissipated by other components, delivered into ``port`` as heat.
+
+    ``Losses(r0, r1)`` sums the losses of ``r0`` and ``r1`` (any resistor,
+    damper, pipe friction ... anything with a dissipative law) at every instant
+    and injects them as heat flow. Connect ``port`` to the thermal mass that
+    warms up. Nothing has to be written about the power: the compiler already
+    knows ``across * through`` of each source.
+
+    Output: ``<name>.heat_flow`` in watts.
+    """
+
+    domain = "thermal"
+    type_name = "losses"
+
+    def __init__(self, *sources: Component, name: str | None = None) -> None:
+        super().__init__(name)
+        if not sources:
+            raise ValueError(
+                "Losses needs at least one component whose losses it collects"
+            )
+        self.add_port("port")
+        self.sources = list(sources)
+
+    def branches(self) -> list[Branch]:
+        return [HeatBranch(self, self.port, None, sources=list(self.sources))]
 
 
 class Ambient(Component):

@@ -10,7 +10,7 @@ solver.
 ```text
 System
   -> flatten composites; validate names and parameter values
-  -> nodes: the union of connected terminals, plus one reference node
+  -> nodes: the union of connected ports, plus one reference node
   -> branches: storages, resistors, sources, two-ports
   -> potentials: storages and across-sources pin potential differences
   -> one conservation equation per unpinned node group,
@@ -33,7 +33,7 @@ The **Physical System IR** ({class}`~otwin.ir.PhysicalSystemIR`) is the
 resolved description: components, nodes, branches, states, parameters, inputs,
 every name unique and every connection checked. It says what the system is and
 carries no equations. `model.ir().physical` is where to look when you want to
-know which node a terminal ended up on.
+know which node a port ended up on.
 
 The **PHS IR** ({class}`~otwin.ir.PHSIR`) is the mathematical form:
 
@@ -96,12 +96,12 @@ energy live in the advanced API, {class}`~otwin.model.IrreversiblePHS`.
 
 ## What the compiler refuses
 
-Errors name components and terminals, before anything is simulated.
+Errors name components and ports, before anything is simulated.
 
 | the compiler says | what it means | what to do |
 |---|---|---|
-| incompatible connection | terminals of two domains on one node | couple the domains with a `Transformer` or `Gyrator` |
-| not connected to anything | a two-terminal component with a loose end | connect it, or to `Ground` |
+| incompatible connection | ports of two domains on one node | couple the domains with a `Transformer` or `Gyrator` |
+| not connected to anything | a two-port component with a loose end | connect it, or to `Ground` |
 | dependent storages or sources | two capacitors in parallel, two inertias on one shaft, a source across a storage | merge them, or put a resistor, damper or stiff spring between |
 | nonlinear algebraic loop | a nonlinear law on a node no storage or source pins | make that element linear, or add a small storage to the node |
 | singular | a node whose potential nothing determines | give it a path to the reference |

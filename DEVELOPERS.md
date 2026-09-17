@@ -45,7 +45,7 @@ system.connect(
 system.connect(
     spring.b,
     damper.b,
-    fixed.terminal,
+    fixed.port,
 )
 
 model = otwin.compile(system)

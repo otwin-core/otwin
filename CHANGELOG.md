@@ -41,13 +41,13 @@ does. Nothing from 0.4 is removed.
   composite `DCMotor`, and a `catalogue` that rebuilds every reference system
   of `otwin.model.library` from components. Resistive elements take a
   nonlinear `law=`.
-- **`otwin.System`** — the component graph. `connect` joins terminals into a
-  node and checks domains; `a >> b >> c` chains two-terminal parts.
+- **`otwin.System`** — the component graph. `connect` joins ports into a
+  node and checks domains; `a >> b >> c` chains two-port parts.
 - **`otwin.compile`** — the model compiler. Nodal analysis with symbolic
   elimination produces a `PHSIR` whose entries are expressions: `J` exactly
   skew, `R` read off the dissipative laws, `G` and `D` for the ports, the
-  right-hand side and its analytic Jacobian. Errors name terminals and
-  components: incompatible domains, dangling terminals, dependent storages,
+  right-hand side and its analytic Jacobian. Errors name ports and
+  components: incompatible domains, dangling ports, dependent storages,
   nonlinear algebraic loops, singular networks.
 - **`otwin.Model`** — the compiled model: `simulate`, `step`, `simulate_batch`,
   `rhs`, `jacobian`, `energy`, `outputs`, `observe`, `power_balance`,

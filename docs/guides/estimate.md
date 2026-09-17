@@ -1,6 +1,6 @@
 # Estimate — `otwin.estimate`
 
-The state you want is rarely the quantity you measure. You measure terminal
+The state you want is rarely the quantity you measure. You measure port
 voltage and want state of charge; you measure two temperatures and want the
 internal energy split. This block recovers it.
 
