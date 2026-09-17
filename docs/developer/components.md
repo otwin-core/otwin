@@ -121,13 +121,19 @@ Nothing about the new component had to know any of that.
 user thinks in but the state is not: `Tank` exposes `level = volume / area`,
 `ThermalMass` exposes `temperature = heat / capacity`. `q.state`, `q.across`,
 `q.through` and `q.params` give the compiled expressions of this component's
-branches by label.
+branches by label. A composite receives the merged quantities of all its
+parts, keyed by the part's full name (`"bat.ocv"`, `"bat.ocv.charge"`), which
+is how `Battery` computes `soc`, `voltage` and `current` from its parts.
 
 ## Rules the compiler enforces
 
 - Parameters are validated at construction: `positive=True` by default.
 - A `law` must be traceable: arithmetic, `abs`, and the functions in
   `otwin.expr`. Use `where` instead of `if`.
+- A `ResistorBranch` may give `inverse=` (across as a function of through)
+  instead of, or as well as, `law=`. With only `inverse`, the branch must sit
+  in series with an element that fixes its flow; the compiler pins its across
+  from that flow and refuses otherwise, naming the element to add.
 - An across storage pins the potential across its ports, so two of them
   in parallel are refused. Merge them into one component when that is the
   physics.

@@ -5,10 +5,65 @@ All notable changes to this project are recorded here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-From 1.0.0 the public API changes only with a major version. Pin an exact
+From 2.0.0 the public API changes only with a major version. Pin an exact
 version in anything you depend on.
 
-## [Unreleased]
+## [2.0.0] — 2026-09-17
+
+An engineer describes a physical system with components and connections and
+compiles it. The compiler writes the equations. `f(x, u)` is generated, `H`,
+`J`, `R` and `G` are an intermediate representation, and the question the
+release answers is whether a system can be built without writing any of them.
+The two examples in `examples/` are the answer: a battery module and a pump
+station, both real maintenance problems, neither with an equation in it.
+
+Version 1.0.0 was merged but never released; its content is in this entry.
+Nothing from 0.4 is removed.
+
+### Added in 2.0
+
+- **`Component`, `Port`, `Connection`, `PhysicalSystem`** as the engineer's
+  three abstractions, defined in words at the top of `otwin.components.base`
+  and `otwin.system`. A port knows its domain and its two variables; a
+  `Connection` refuses mixed domains at construction and says what to use
+  instead; `otwin.System` (an alias of `PhysicalSystem`) is inspectable before
+  compiling: `components`, `connections`, `ports`, `parameters`, `domains`,
+  `unconnected()`, `summary()`.
+- **The fundamental components** `Storage`, `Dissipator`, `Source`,
+  `Reference` in `otwin.components.fundamental`: the roles every library
+  component plays, written once with the domain as an argument. They compile
+  to the same model as their domain-specific conveniences.
+- **`Battery(capacity, ocv, resistance, rc_branches, thermal)`** — an
+  equivalent-circuit cell or pack: the open-circuit voltage curve as the
+  energy of the charge store (its gradient *is* the table), a series
+  resistance, one RC pair per polarisation branch, and, with `thermal`, a
+  thermal mass warmed by the ohmic losses and a `thermal` port. Outputs `soc`,
+  `voltage`, `current`, `temperature`, `heat_flow`.
+- **`Pump(curve)` or `Pump(shutoff, max_flow)`**, **`Filter(resistance,
+  fouling)`** in `otwin.components.hydraulic`, and **`Losses(*components)`** in
+  `otwin.components.thermal`: the dissipated power of any components delivered
+  as heat into a thermal port, with nothing written about the power.
+- **`a >> b >> c` with one-port components** anywhere in the chain (a tank, a
+  ground, an atmosphere joins the node between its neighbours), so
+  `tank >> pipe >> pump >> filter >> Atmosphere()` compiles and steps.
+- **`otwin.compile(system, dt=...)`** and **`model.step(state)`** without a
+  time step: the step API of the instructions, `state = model.initial_state();
+  state = model.step(state, inputs)`.
+- **Flow-first laws.** `ResistorBranch(inverse=...)` gives the across variable
+  as a function of the flow (a pump curve, `dp = K Q |Q|`). When a series
+  element fixes the flow — an inertance, inductor, spring, flow source, or
+  another such element — the compiler reads the across off it instead of
+  inverting the law; otherwise it says which series element is missing.
+  `Pipe` and `Orifice` carry both forms.
+- **Tabulated curves in the engine.** `expr.piecewise`, `expr.interp` and
+  `expr.interp_integral` (a measured curve, and the exact integral of one to
+  use as a storage energy) lower to a `pw` instruction in the Rust engine and
+  to the NumPy backend with identical results.
+- **Two examples as maintenance problems**, run as tests and checked by hand:
+  `examples/battery_that_runs_hot.py` (aged cells or clogged cooling, told
+  apart with the module's own two sensors) and
+  `examples/pump_station_that_asks_for_more.py` (a year of filter fouling, the
+  drive turned up to hold the flow, the month at which cleaning pays).
 
 ### Fixed
 
@@ -20,15 +75,7 @@ version in anything you depend on.
   attributes and in `dir()`, so `import *` never needs torch); two tests
   lose an `if False` toggle.
 
-## [1.0.0] — 2026-09-15
-
-The library becomes an engine. A physical system is described with components
-and connections, compiled into a physically consistent model, and executed in
-a Rust runtime. Port-Hamiltonian systems move from the API to the intermediate
-representation: the compiler writes `H`, `J`, `R` and `G`; the user no longer
-does. Nothing from 0.4 is removed.
-
-### Added
+### Added (the engine, formerly 1.0.0)
 
 - **Component library.** `otwin.components` with electrical (`Resistor`,
   `Capacitor`, `Inductor`, `VoltageSource`, `CurrentSource`, `Ground`),
@@ -306,7 +353,8 @@ this repository.
 - Connectors are read-only. Closed-loop actuation is deliberately out of scope.
 - No production deployment on an operating asset is known to the maintainer.
 
-[Unreleased]: https://github.com/otwin-core/otwin/compare/v0.3.1...HEAD
+[2.0.0]: https://github.com/otwin-core/otwin/compare/v0.4.0...v2.0.0
+[0.4.0]: https://github.com/otwin-core/otwin/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/otwin-core/otwin/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/otwin-core/otwin/releases/tag/v0.3.0
 [0.2.0]: https://github.com/otwin-core/otwin/releases/tag/v0.2.0

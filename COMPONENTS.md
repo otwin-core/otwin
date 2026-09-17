@@ -14,14 +14,15 @@ flowchart TB
     E["electrical<br/>voltage / current<br/>6 components"]:::dom
     M["mechanical<br/>velocity / force<br/>6 components"]:::dom
     R["rotational<br/>angular velocity / torque<br/>6 components"]:::dom
-    H["hydraulic<br/>pressure / flow<br/>7 components"]:::dom
-    T["thermal<br/>temperature / heat flow<br/>5 components"]:::dom
+    H["hydraulic<br/>pressure / flow<br/>9 components"]:::dom
+    T["thermal<br/>temperature / heat flow<br/>6 components"]:::dom
+    F["fundamental<br/>Storage · Dissipator · Source · Reference<br/>the roles, any domain"]:::x
     TP["twoport<br/>Transformer · Gyrator<br/>couple two domains"]:::x
-    CO["composite<br/>DCMotor<br/>devices from primitives"]:::x
+    CO["devices<br/>Battery · Pump · DCMotor<br/>built from primitives"]:::x
     CA["catalogue<br/>4 ready-made systems"]:::x
  
     PKG --> E & M & R & H & T
-    PKG --> TP & CO & CA
+    PKG --> F & TP & CO & CA
 ```
  
 A capacitor, a mass, a water tank and a hot block of metal look like four different things. To the compiler 
@@ -270,11 +271,12 @@ flowchart LR
     H2["FluidInertance · a, b<br/>inertance [Pa s²/m³] · flow=<br/>state: flow_momentum [Pa s]"]:::ts
     H3["Orifice · a, b<br/>area · discharge_coefficient · density<br/>Q = sign(Δp) c_d A √(2|Δp|/ρ)"]:::rs
     H4["Pipe · a, b<br/>one of: resistance= (laminar)<br/>friction= (turbulent) · law="]:::rs
+    H4b["Filter · a, b<br/>resistance · fouling (0 = clean)<br/>Δp = R (1 + fouling) Q · output: pressure_drop"]:::rs
     H5["PressureSource · a, b<br/>pressure: None → input"]:::ax
-    H6["FlowSource · a, b<br/>flow: None → input (pump, demand)"]:::tx
+    H6["FlowSource · a, b<br/>flow: None → input (demand)"]:::tx
     H7["Atmosphere · port"]:::rf
     H1 ~~~ H2 ~~~ H3 ~~~ H4
-    H5 ~~~ H6 ~~~ H7
+    H4b ~~~ H5 ~~~ H6 ~~~ H7
 ```
  
 ### Thermal
@@ -290,8 +292,9 @@ flowchart LR
     T3["Convection · a, b<br/>conductance hA [W/K]<br/>Q = hA ΔT"]:::rs
     T4["Ambient · port<br/>temperature (default 293.15 K)<br/>None → input"]:::ax
     T5["HeatSource · port<br/>heat: None → input"]:::tx
+    T6["Losses · port<br/>Losses(r0, r1, ...)<br/>the power those components dissipate,<br/>delivered as heat · output: heat_flow"]:::tx
     T1 ~~~ T2 ~~~ T3
-    T4 ~~~ T5
+    T4 ~~~ T5 ~~~ T6
 ```
  
 Temperature × heat flow is not a power, so a thermal model compiles as `pseudo-port-hamiltonian`: the heat balance is exact, the energy audit is a stability statement.
@@ -325,8 +328,30 @@ flowchart LR
     C1e["bearing<br/>RotationalDamper"]:::rs
     C1 --> C1a & C1b & C1c & C1d & C1e
 ```
+
+```mermaid
+flowchart LR
+    classDef as fill:#1a4fd6,color:#fff,stroke:#1a4fd6
+    classDef ts fill:#3b82f6,color:#fff,stroke:#3b82f6
+    classDef rs fill:#c2410c,color:#fff,stroke:#c2410c
+    classDef ax fill:#15803d,color:#fff,stroke:#15803d
+    classDef tx fill:#65a30d,color:#fff,stroke:#65a30d
+    classDef co fill:#a21caf,color:#fff,stroke:#a21caf
+    B["Battery · p, n, thermal<br/>capacity [Ah] · ocv [(soc, V)] · resistance<br/>rc_branches [(R, C)] · thermal [J/K] · soc= · temperature=<br/>outputs: soc · voltage · current · temperature · heat_flow"]:::co
+    Ba["ocv<br/>charge store, energy = ∫ OCV dq"]:::as
+    Bb["r0<br/>Resistor"]:::rs
+    Bc["r1, c1 … rk, ck<br/>Resistor ∥ Capacitor"]:::rs
+    Bd["cell<br/>ThermalMass"]:::as
+    Be["losses<br/>Losses(r0, r1, …)"]:::tx
+    B --> Ba & Bb & Bc & Bd & Be
+    P["Pump · inlet, outlet<br/>curve=[(Q, Δp)] or shutoff=, max_flow=<br/>inertance<br/>outputs: flow · pressure_rise · hydraulic_power"]:::co
+    Pa["head<br/>PressureSource at shut-off"]:::ax
+    Pb["curve<br/>loss below shut-off"]:::rs
+    Pc["water<br/>FluidInertance"]:::ts
+    P --> Pa & Pb & Pc
+```
  
-The compiler flattens a composite before anything else and names the parts `motor.armature`, `motor.rotor`, `motor.bearing`, so their currents, speeds and powers are ordinary outputs.
+The compiler flattens a composite before anything else and names the parts `motor.armature`, `bat.ocv`, `pump.water`, so their currents, speeds, flows and powers are ordinary outputs. `Battery` and `Pump` are described in [the devices guide](docs/guides/devices.md).
  
 ### Catalogue of ready-made systems included in Otwin
  

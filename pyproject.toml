@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "otwin"
-version = "1.0.0"
+version = "2.0.0"
 description = "Digital twins with a compiled physics engine: describe a system with components, compile it, simulate, estimate, forecast, validate."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -52,7 +52,7 @@ sunspec = ["pysunspec2>=1.1", "pymodbus>=3.6,<4.0"]
 # The compiled dynamics engine (Rust, built in this repository under
 # crates/otwin-engine and published as its own wheel). Optional: without it
 # every compiled model runs on the NumPy reference backend, more slowly.
-engine = ["otwin-engine==1.0.0"]
+engine = ["otwin-engine==2.0.0"]
 # Learned models and Gaussian-process intervals.
 nn = ["torch>=2.0"]
 gp = ["scikit-learn>=1.3"]

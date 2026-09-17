@@ -35,14 +35,26 @@ Inputs = Mapping[str, Any] | Array | Callable[..., Any] | None
 
 
 class State:
-    """The state of a compiled model at one instant: values and a time."""
+    """The state of a compiled model at one instant: values and a time.
 
-    __slots__ = ("values", "time", "names")
+    A state returned by :meth:`Model.step` also remembers the inputs that were
+    applied over the step, so ``model.outputs(state)`` reads the model with
+    those inputs (a resistor's power needs the current that was flowing).
+    """
 
-    def __init__(self, values: Array, time: float, names: Sequence[str]) -> None:
+    __slots__ = ("values", "time", "names", "inputs")
+
+    def __init__(
+        self,
+        values: Array,
+        time: float,
+        names: Sequence[str],
+        inputs: Array | None = None,
+    ) -> None:
         self.values = np.asarray(values, dtype=float).ravel().copy()
         self.time = float(time)
         self.names = tuple(names)
+        self.inputs = None if inputs is None else np.asarray(inputs, dtype=float).copy()
         if self.values.shape[0] != len(self.names):
             raise ValueError(
                 f"state has {self.values.shape[0]} values for {len(self.names)} names"
@@ -316,7 +328,17 @@ class Model:
         u: Array | Mapping[str, float] | None = None,
         t: float = 0.0,
     ) -> dict[str, float]:
-        """Every named quantity at one state."""
+        """Every named quantity at one state.
+
+        With a :class:`State` from :meth:`step` and no ``u``, the inputs of
+        that step and its time are used.
+        """
+        if isinstance(x, State):
+            if u is None and x.inputs is not None:
+                u = x.inputs
+            if t == 0.0:
+                t = x.time
+            x = x.values
         vals = self._backend.outputs(np.asarray(x, dtype=float), self._u(u), t)
         return {k: float(v) for k, v in zip(self.output_names, vals, strict=True)}
 
@@ -445,7 +467,7 @@ class Model:
         s = self.state(state)
         u = self._u(inputs)
         xn = self._backend.step(s.values, u, s.time, float(dt), solver, **options)
-        return State(xn, s.time + float(dt), self.state_names)
+        return State(xn, s.time + float(dt), self.state_names, inputs=u)
 
     def _time_grid(
         self, t_span: tuple[float, float] | None, dt: float | None, t: Array | None

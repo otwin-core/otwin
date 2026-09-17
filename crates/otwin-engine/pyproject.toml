@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "otwin-engine"
-version = "1.0.0"
+version = "2.0.0"
 description = "The compiled dynamics engine behind otwin: Rust integrators for compiled physical models."
 readme = "README.md"
 requires-python = ">=3.10"

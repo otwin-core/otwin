@@ -102,9 +102,11 @@ statement rather than a first-law one. The heat balance itself is exact. See
 
 `Tank` has one port, `port`, at its base; `base_elevation` lifts it above
 the datum. `Orifice` is Torricelli's law, `Pipe` a laminar (`resistance=`) or
-turbulent (`friction=`) loss, `FluidInertance` the inertia of the water in a
-pipe. `FlowSource` is a pump or a demand, `PressureSource` a head.
-`Atmosphere` is the reference.
+turbulent (`friction=`) loss, `Filter` a laminar loss with a `fouling`
+parameter, `FluidInertance` the inertia of the water in a pipe. `Pump` is a
+centrifugal pump given by its curve, `FlowSource` a fixed flow or a demand,
+`PressureSource` a head. `Atmosphere` is the reference. A line of these reads
+left to right with `>>`; see [Devices](devices.md).
 
 ```python
 from otwin.components.hydraulic import Tank, Orifice, Pipe, Atmosphere
@@ -155,9 +157,27 @@ you can change them later with `model.set_parameters({"weight.force": 19.62})`.
 Every dissipative element takes `law=`, a function of its across variable
 returning its through variable, written with ordinary arithmetic and the
 functions in {mod}`otwin.expr` (`sqrt`, `exp`, `log`, `abs`, `tanh`,
-`maximum`, `minimum`, `where`). The compiler traces it into an expression
-the engine runs, differentiates it for the Jacobian, and reads its secant
-into `R`. NumPy functions and Python `if` do not trace; use `where`.
+`maximum`, `minimum`, `where`, and `interp` for a measured table). The
+compiler traces it into an expression the engine runs, differentiates it for
+the Jacobian, and reads its secant into `R`. NumPy functions and Python `if`
+do not trace; use `where`.
+
+Some laws are natural the other way round: a pump curve gives the pressure
+rise as a function of the flow, turbulent friction is `dp = K Q |Q|`. Such an
+element must sit in series with something that sets its flow (an inertance,
+an inductor, a spring, a flow source, or another element of its kind); the
+compiler then reads the pressure off the flow instead of inverting the law.
+`Pipe(friction=)`, `Orifice` and `Pump` carry both forms, so they work either
+way. A law of your own goes in as `ResistorBranch(inverse=...)`; see
+[Adding components](../developer/components.md).
+
+## Heat from losses
+
+`Losses(r0, r1, ...)` in {mod}`otwin.components.thermal` collects the power
+dissipated by the listed components and delivers it as heat flow into its
+`port`. Connect that port to the `ThermalMass` that warms up. Nothing about
+the power has to be written: the compiler already knows `across * through`
+of every resistor, damper and pipe. `Battery(thermal=...)` is built this way.
 
 ## What to do when the compiler refuses
 

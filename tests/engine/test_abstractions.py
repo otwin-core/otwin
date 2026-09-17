@@ -129,3 +129,18 @@ def test_fundamental_components_validate_their_arguments():
         Storage("thermal", 1.0, kind="through")
     with pytest.raises(ValueError, match="kind"):
         Source("electrical", kind="sideways")
+
+
+def test_outputs_of_a_stepped_state_see_the_inputs_of_that_step(backend):
+    R, C = Resistor(2.0, name="R"), Capacitor(1e-3, name="C")
+    V, g = VoltageSource(None, name="V"), Ground(name="g")
+    s = otwin.System(V, R, C, g)
+    s.connect(V.p, R.p).connect(R.n, C.p).connect(C.n, V.n, g.port)
+    model = otwin.compile(s, backend=backend, dt=1e-5)
+    state = model.step(model.initial_state(), {"V": 10.0})
+    assert state.inputs is not None and state.inputs.tolist() == [10.0]
+    out = model.outputs(state)
+    # the resistor sees the 10 V minus the few millivolts on the capacitor
+    assert 40.0 < out["R.power"] < 50.0
+    assert model.outputs(state, {"V": 0.0})["R.power"] < 0.01  # the capacitor alone
+    assert model.initial_state().inputs is None

@@ -150,6 +150,7 @@ the band from a conformal calibration; see [Forecast](guides/forecast.md) and
 
 ## Where next
 
+- [Devices](guides/devices.md): a battery module and a pump line from their data sheets, compiled and stepped.
 - [Modelling](guides/modelling.md): every domain, with the component to use for each physical element.
 - [Grey-box models](guides/greybox.md): add what the physics leaves out, and fit its coefficients from data.
 - [Compilation](concepts/compilation.md): what the compiler does, and how to read a model that surprised you.

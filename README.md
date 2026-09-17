@@ -354,6 +354,86 @@ These interfaces let you inspect what Otwin actually built.
 
 <br>
 
+# From the data sheet to the model
+
+Real work starts from devices, not from springs. A battery module, as its data sheet describes it: capacity, the open-circuit voltage curve, the internal resistance, two polarisation branches, the heat capacity. Then the cooling. Nothing else.
+
+```python
+import otwin
+from otwin.components.battery import Battery
+from otwin.components.electrical import CurrentSource, Ground
+from otwin.components.thermal import Ambient, Convection
+
+cell = Battery(
+    capacity=100.0,                                # Ah
+    ocv=[(0.0, 2.8), (0.05, 3.15), (0.5, 3.3), (0.95, 3.4), (1.0, 3.55)],
+    resistance=1e-3,                               # ohm
+    rc_branches=[(0.5e-3, 20e3), (0.8e-3, 200e3)],  # (ohm, F)
+    thermal=1200.0,                                # J/K
+    soc=0.9,
+    name="cell",
+)
+load = CurrentSource(None, name="load")            # amperes, an input
+cooling = Convection(0.5, name="cooling")          # W/K
+air = Ambient(298.15, name="air")
+gnd = Ground(name="gnd")
+
+module = otwin.System(cell, load, cooling, air, gnd)
+module.connect(cell.p, load.n).connect(load.p, cell.n, gnd.port)
+module.connect(cell.thermal, cooling.a).connect(cooling.b, air.port)
+
+model = otwin.compile(module, dt=10.0)
+
+state = model.initial_state()
+for _ in range(360):                               # one hour at 50 A
+    state = model.step(state, {"load": 50.0})
+
+out = model.outputs(state)
+print(f"soc {out['cell.soc']:.2f}  voltage {out['cell.voltage']:.3f} V  "
+      f"cell {out['cell.temperature'] - 273.15:.1f} °C  heat {out['cell.heat_flow']:.2f} W")
+```
+
+```text
+soc 0.40  voltage 3.152 V  cell 33.8 °C  heat 5.75 W
+```
+
+The model has four states: the charge, two polarisation charges and the heat in the cell. Every voltage, current, power and temperature inside the module is a named output. `with_parameters` ages the cells or clogs the cooling without rebuilding anything; [`examples/battery_that_runs_hot.py`](examples/battery_that_runs_hot.py) uses that to tell the two apart.
+
+A pump line reads the same way. The `>>` operator joins components in series, one-port components (a tank, the outfall) included:
+
+```python
+from otwin.components.hydraulic import Atmosphere, Filter, Pipe, Pump, Tank
+
+line = (
+    Tank(area=5000.0, level=3.0, name="tank")
+    >> Pipe(resistance=5e5, name="suction")
+    >> Pump(shutoff=4e5, max_flow=0.08, name="pump")      # nameplate curve
+    >> Filter(resistance=2e6, name="filter")
+    >> Atmosphere(name="outfall")
+)
+model = otwin.compile(line, dt=1.0)
+
+state = model.initial_state()
+for _ in range(900):
+    state = model.step(state)
+print(f"{model.outputs(state)['pump.flow'] * 3600:.0f} m³/h")
+
+fouled = model.with_parameters({"filter.fouling": 1.0})   # twice the clean resistance
+state = fouled.initial_state()
+for _ in range(900):
+    state = fouled.step(state)
+print(f"{fouled.outputs(state)['pump.flow'] * 3600:.0f} m³/h with a fouled filter")
+```
+
+```text
+235 m³/h
+196 m³/h with a fouled filter
+```
+
+Nobody wrote a pump equation either. The pump is a pressure source at shut-off, a loss that follows the curve and the inertia of the water in it; the compiler reads the operating point off the network.
+
+<br>
+
 # How it works
 
 Otwin treats the physical system as a graph. **Components** define physical behaviour. **Connections** define how components interact. The compiler turns that graph into an executable dynamical model.
@@ -489,10 +569,11 @@ See [COMPONENTS.md](https://github.com/otwin-core/otwin/blob/main/COMPONENTS.md)
 | Electrical | voltage          | current   | `Resistor`, `Capacitor`, `Inductor`, `VoltageSource`, `CurrentSource`, `Ground`           |
 | Mechanical | velocity         | force     | `Mass`, `Spring`, `Damper`, `ForceSource`, `VelocitySource`, `Fixed`                      |
 | Rotational | angular velocity | torque    | `Inertia`, `TorsionSpring`, `RotationalDamper`, `TorqueSource`, `SpeedSource`, `Housing`  |
-| Hydraulic  | pressure         | flow      | `Tank`, `Orifice`, `Pipe`, `FluidInertance`, `FlowSource`, `PressureSource`, `Atmosphere` |
-| Thermal    | temperature      | heat flow | `ThermalMass`, `ThermalResistance`, `Convection`, `HeatSource`, `Ambient`                 |
+| Hydraulic  | pressure         | flow      | `Tank`, `Orifice`, `Pipe`, `FluidInertance`, `FlowSource`, `PressureSource`, `Filter`, `Pump`, `Atmosphere` |
+| Thermal    | temperature      | heat flow | `ThermalMass`, `ThermalResistance`, `Convection`, `HeatSource`, `Losses`, `Ambient`       |
 | Two-ports  |                  |           | `Transformer`, `Gyrator`                                                                  |
-| Composites |                  |           | `DCMotor`, catalogue reference systems                                                    |
+| Devices    |                  |           | `Battery`, `Pump`, `DCMotor`, catalogue reference systems                                 |
+| Fundamental | any             | any       | `Storage`, `Dissipator`, `Source`, `Reference` — the roles every component above plays, with the domain as an argument |
 
 Dissipative elements can use nonlinear constitutive laws:
 
@@ -1234,7 +1315,14 @@ Otwin brings several ideas together in one modeling stack.
 
 # Examples
 
-The examples are designed around engineering questions rather than isolated API demonstrations. Each notebook is intended to show a complete idea and something that can be tested or deliberately broken.
+Two scripts start from a maintenance problem, build the system from its data sheet, and end with a number checked by hand. Neither contains an equation.
+
+| Script                                                                                   | The problem                                                                                   | What decides it                                                      |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [The battery module that runs hot](examples/battery_that_runs_hot.py)                    | A module reads a few degrees more than at commissioning. Aged cells, or a clogged air filter? | The voltage jump when the current reverses: only aged cells move it. |
+| [The pump that asks for more every month](examples/pump_station_that_asks_for_more.py)   | The drive is turned up month after month to hold the flow through a fouling filter.           | The month at which the extra pumping energy has paid for a cleaning. |
+
+The notebooks are designed around engineering questions rather than isolated API demonstrations. Each is intended to show a complete idea and something that can be tested or deliberately broken.
 
 | #  | Notebook                                                                                               | Question                                                          | Data            |
 | -- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- | --------------- |

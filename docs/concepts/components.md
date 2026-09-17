@@ -73,11 +73,14 @@ result, and `simulate(x0=...)` overrides it by name.
 A high-level device is a component built from primitives.
 {class}`~otwin.components.composite.DCMotor` is a `Resistor`, an `Inductor`, a
 `Transformer` from the electrical to the rotational domain, an `Inertia` and a
-`RotationalDamper`, wired internally and exposing `p`, `n` and `shaft`. The
+`RotationalDamper`, wired internally and exposing `p`, `n` and `shaft`.
+{class}`~otwin.components.battery.Battery` and
+{class}`~otwin.components.hydraulic.Pump` are built the same way. The
 compiler flattens composites before it does anything else, so nothing inside
 one is special-cased and its states appear as `motor.armature.flux`,
-`motor.rotor.angular_momentum`. Writing your own is the recommended way to add
-a battery, a pump or a heat exchanger; see [Adding components](../developer/components.md).
+`bat.ocv.charge`, `pump.water.flow_momentum`. Writing your own is the
+recommended way to add a heat exchanger or a converter; see
+[Adding components](../developer/components.md).
 
 ## Systems
 
