@@ -129,6 +129,7 @@ class VoltageSource(_TwoTerminal):
     """Imposes ``v_p - v_n``. With ``voltage=None`` it is an input of the model."""
 
     type_name = "voltage_source"
+    series_ports = ("n", "p")
 
     def __init__(self, voltage: float | None = None, *, name: str | None = None) -> None:
         super().__init__(name)
@@ -152,6 +153,7 @@ class CurrentSource(_TwoTerminal):
     """Delivers a current out of ``p``. With ``current=None`` it is an input."""
 
     type_name = "current_source"
+    series_ports = ("n", "p")
 
     def __init__(self, current: float | None = None, *, name: str | None = None) -> None:
         super().__init__(name)

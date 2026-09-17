@@ -9,6 +9,12 @@ The rule that holds everywhere: a connection shares the *across* variable
 reference have one port; everything else has two, and both must be
 connected.
 
+Two verbs write any system. `>>` joins components in a line, the way the
+drawing reads: `gnd >> V >> R >> L >> C >> gnd`. `connect` joins ports where
+a line is not enough: three things meeting at one point, or a second circuit
+attached to a port. Both appear on this page; `connect(...)` chains, so a
+loop can be one statement.
+
 ## Electrical
 
 `Resistor`, `Capacitor`, `Inductor` have ports `p` and `n`; current is
@@ -21,8 +27,7 @@ from otwin.components.electrical import Resistor, Capacitor, Inductor, VoltageSo
 
 V, R, L, C, g = (VoltageSource(None, name="V"), Resistor(2.0, name="R"),
                  Inductor(0.5, name="L"), Capacitor(1e-3, name="C"), Ground())
-s = otwin.System(V, R, L, C, g)
-s.connect(V.p, R.p).connect(R.n, L.p).connect(L.n, C.p).connect(C.n, V.n, g.port)
+s = g >> V >> R >> L >> C >> g
 
 m = otwin.compile(s)
 print(m.state_names)
@@ -54,9 +59,9 @@ from otwin.components.mechanical import Mass, Spring, Damper, ForceSource, Fixed
 
 mass, spring, damper, wall = Mass(1.0, name="m"), Spring(20.0, name="k"), Damper(0.3, name="c"), Fixed()
 weight = ForceSource(9.81, name="weight")          # a constant force: gravity on a 1 kg mass
-s = otwin.System(mass, spring, damper, weight, wall)
-s.connect(mass.flange, spring.a, damper.a, weight.flange)
-s.connect(spring.b, damper.b, wall.port)
+s = mass >> spring >> wall
+s.connect(mass.flange, damper.a, weight.flange)   # the damper and the weight meet the mass
+s.connect(damper.b, wall.port)
 ```
 
 The spring's state is its extension from the natural length, positive when `a`

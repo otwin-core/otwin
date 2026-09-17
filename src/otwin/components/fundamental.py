@@ -201,6 +201,7 @@ class Source(_TwoPort):
     """
 
     type_name = "source"
+    series_ports = ("n", "p")
 
     def __init__(
         self,
