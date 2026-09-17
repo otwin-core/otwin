@@ -34,28 +34,29 @@ cooling = Convection(0.5, name="cooling")            # W/K to the container air
 air = Ambient(298.15, name="air")
 gnd = Ground(name="gnd")
 
-module = otwin.System(cell, load, cooling, air, gnd)
-module.connect(cell.p, load.n).connect(load.p, cell.n, gnd.port)
-module.connect(cell.thermal, cooling.a).connect(cooling.b, air.port)
+module = gnd >> cell >> load >> gnd                  # the electrical loop, closed on ground
+module.connect(cell.thermal, cooling.a)              # the thermal circuit hangs off the cell
+module.connect(cooling.b, air.port)
 print(module.summary())
 ```
 
 ```text
-system: 5 components, 4 connections, domains ['electrical', 'thermal']
+system: 5 components, 5 connections, domains ['electrical', 'thermal']
+  gnd (Ground) ports: port
   cell (Battery) ports: p, n, thermal
   load (CurrentSource) ports: p, n
   cooling (Convection) ports: a, b; conductance=0.5 W/K
   air (Ambient) ports: port
-  gnd (Ground) ports: port
+  gnd.port = cell.n
   cell.p = load.n
-  load.p = cell.n = gnd.port
+  load.p = gnd.port
   cell.thermal = cooling.a
   cooling.b = air.port
 ```
 
-The current source delivers its current out of `p`, so `load.n` on the
-battery's `p` makes a positive input a discharge. Compile with the time step
-you will run at, then step:
+A chain follows the flow a source pushes out, so `gnd >> cell >> load >> gnd`
+puts the cell's `p` on the load and a positive load current is a discharge.
+Compile with the time step you will run at, then step:
 
 ```python
 model = otwin.compile(module, dt=10.0)
@@ -105,10 +106,11 @@ clogged air filter with the two sensors the module already has.
 
 ## A pump line
 
-The `>>` operator joins components in series. A two-port component (`a, b`;
-`p, n`; `inlet, outlet`) is entered at its first port and left at its
-second; a one-port component (a tank, the atmosphere) joins the node between
-its neighbours. So a line reads left to right:
+A pump line is a line and nothing else, so `>>` is all it takes. A two-port
+component (`a, b`; `p, n`; `inlet, outlet`) is entered at its first port and
+left at its second, a source the other way round, following the flow it
+pushes; a one-port component (a tank, the atmosphere) joins the node between
+its neighbours. So the line reads left to right:
 
 ```python
 from otwin.components.hydraulic import Atmosphere, Filter, Pipe, Pump, Tank

@@ -297,3 +297,38 @@ def test_chain_accepts_one_port_components_at_the_ends_and_in_the_middle():
     ]
     model = otwin.compile(s)
     assert len(model.ir().states) == 2
+
+
+def test_chain_follows_the_flow_a_source_pushes_out(backend):
+    """gnd >> V >> R >> C >> gnd puts V.p on the resistor side, so a positive
+    input charges the capacitor positively; the same loop written with connect
+    gives the same numbers."""
+    V, R, C, g = (
+        VoltageSource(None, name="V"),
+        Resistor(2.0, name="R"),
+        Capacitor(1e-3, name="C"),
+        Ground(name="g"),
+    )
+    chained = g >> V >> R >> C >> g
+    assert [tuple(p.qualified for p in c) for c in chained.connections] == [
+        ("g.port", "V.n"),
+        ("V.p", "R.p"),
+        ("R.n", "C.p"),
+        ("C.n", "g.port"),
+    ]
+    V2, R2, C2, g2 = (
+        VoltageSource(None, name="V"),
+        Resistor(2.0, name="R"),
+        Capacitor(1e-3, name="C"),
+        Ground(name="g"),
+    )
+    explicit = otwin.System(V2, R2, C2, g2)
+    explicit.connect(V2.p, R2.p).connect(R2.n, C2.p).connect(C2.n, V2.n, g2.port)
+    a = otwin.compile(chained, backend=backend).simulate(
+        t_span=(0, 0.01), dt=1e-4, inputs={"V": 10.0}
+    )
+    b = otwin.compile(explicit, backend=backend).simulate(
+        t_span=(0, 0.01), dt=1e-4, inputs={"V": 10.0}
+    )
+    assert a["C.voltage"][-1] > 9.0
+    np.testing.assert_allclose(a["C.voltage"], b["C.voltage"], atol=1e-12)

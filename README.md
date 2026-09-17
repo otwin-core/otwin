@@ -264,6 +264,8 @@ Without the engine package, models can still run through the NumPy reference bac
 
 A mass hanging from a spring and damper under gravity. You describe the physical system. You don't need to write Newton's equation yourself.
 
+Two verbs describe any system, and one rule says which to use. `>>` joins components in a line, the way the drawing reads: `mass >> spring >> ceiling`. `connect` joins ports where a line is not enough: three things meeting at one point, or a second circuit attached to a port. Here the mass hangs from the spring, and the damper and the weight meet the mass at the same point.
+
 ```python
 import otwin
 from otwin.components.mechanical import (
@@ -283,26 +285,9 @@ damper = Damper(c, name="damper")
 weight = ForceSource(m * g0, name="weight")
 ceiling = Fixed(name="ceiling")
 
-system = otwin.System(
-    mass,
-    spring,
-    damper,
-    weight,
-    ceiling,
-)
-
-system.connect(
-    mass.flange,
-    spring.a,
-    damper.a,
-    weight.flange,
-)
-
-system.connect(
-    spring.b,
-    damper.b,
-    ceiling.port,
-)
+system = mass >> spring >> ceiling                 # the line
+system.connect(mass.flange, damper.a, weight.flange)   # the damper and the weight meet the mass
+system.connect(damper.b, ceiling.port)             # the damper's other end
 
 model = otwin.compile(system)
 
@@ -384,9 +369,9 @@ cooling = Convection(0.5, name="cooling")          # W/K
 air = Ambient(298.15, name="air")
 gnd = Ground(name="gnd")
 
-module = otwin.System(cell, load, cooling, air, gnd)
-module.connect(cell.p, load.n).connect(load.p, cell.n, gnd.port)
-module.connect(cell.thermal, cooling.a).connect(cooling.b, air.port)
+module = gnd >> cell >> load >> gnd                # the electrical loop, closed on ground
+module.connect(cell.thermal, cooling.a)            # the thermal circuit hangs off the cell
+module.connect(cooling.b, air.port)
 
 model = otwin.compile(module, dt=10.0)
 
@@ -405,7 +390,7 @@ soc 0.40  voltage 3.152 V  cell 33.8 °C  heat 5.75 W
 
 The model has four states: the charge, two polarisation charges and the heat in the cell. Every voltage, current, power and temperature inside the module is a named output. `with_parameters` ages the cells or clogs the cooling without rebuilding anything; [`examples/battery_that_runs_hot.py`](examples/battery_that_runs_hot.py) uses that to tell the two apart.
 
-A pump line reads the same way. The `>>` operator joins components in series, one-port components (a tank, the outfall) included:
+A pump line is a line and nothing else, so `>>` is all it takes; one-port components (a tank, the outfall) join at the ends:
 
 <div align="center">
 
@@ -667,34 +652,9 @@ fan = RotationalDamper(
 gnd = Ground()
 housing = Housing()
 
-drive = otwin.System(
-    supply,
-    motor,
-    fan,
-    gnd,
-    housing,
-)
-
-drive.connect(
-    supply.p,
-    motor.p,
-)
-
-drive.connect(
-    supply.n,
-    motor.n,
-    gnd.port,
-)
-
-drive.connect(
-    motor.shaft,
-    fan.a,
-)
-
-drive.connect(
-    fan.b,
-    housing.port,
-)
+drive = gnd >> supply >> motor >> gnd        # the electrical loop
+drive.connect(motor.shaft, fan.a)            # the shaft: a second circuit, in another domain
+drive.connect(fan.b, housing.port)
 
 model = otwin.compile(drive)
 

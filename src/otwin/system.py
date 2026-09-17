@@ -215,6 +215,9 @@ def chain(*items: Any, name: str = "system") -> PhysicalSystem:
 
 
 def _series_pair(c: Component) -> tuple[Port, Port]:
+    if c.series_ports is not None:
+        a, b = c.series_ports
+        return c.ports[a], c.ports[b]
     for a, b in (("p", "n"), ("a", "b"), ("inlet", "outlet")):
         if a in c.ports and b in c.ports:
             return c.ports[a], c.ports[b]

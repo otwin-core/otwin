@@ -229,6 +229,7 @@ class FlowSource(Component):
 
     domain = "hydraulic"
     type_name = "flow_source"
+    series_ports = ("b", "a")
 
     def __init__(self, flow: float | None = None, *, name: str | None = None) -> None:
         super().__init__(name)
@@ -255,6 +256,7 @@ class PressureSource(Component):
 
     domain = "hydraulic"
     type_name = "pressure_source"
+    series_ports = ("b", "a")
 
     def __init__(self, pressure: float | None = None, *, name: str | None = None) -> None:
         super().__init__(name)
