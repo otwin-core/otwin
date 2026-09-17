@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question
+    url: https://github.com/otwin-core/otwin/discussions/categories/questions
+    about: How do I model this? Why does the compiler refuse my system? Ask here.
+  - name: Idea or design discussion
+    url: https://github.com/otwin-core/otwin/discussions/categories/ideas-architecture
+    about: A component that should exist, a change to how systems are written, a direction for the roadmap.
+  - name: Show what you built
+    url: https://github.com/otwin-core/otwin/discussions/categories/show-and-tell
+    about: A system, a plant, a result. Screenshots welcome.
