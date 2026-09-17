@@ -4,7 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "The OTwin dynamics engine: compiled physical models, integrators, state."
+description = "The Otwin physics engine: compiled dynamical models of engineering systems, integrators, energy bookkeeping."
+readme = "README.md"
+documentation = "https://docs.rs/otwin-core"
+homepage = "https://github.com/otwin-core/otwin"
+keywords = ["physics-engine", "simulation", "port-hamiltonian", "digital-twin", "ode"]
+categories = ["science", "simulation", "mathematics"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

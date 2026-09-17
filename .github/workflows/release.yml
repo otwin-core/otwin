@@ -10,7 +10,8 @@
 #   tag -> tests -> build + attest -> install the built wheels in a clean
 #   environment and import -> PyPI (environment `pypi`, may require
 #   approval) -> install & import from PyPI -> GitHub release with the
-#   artifacts and the changelog.
+#   artifacts and the changelog -> otwin-core to crates.io (environment
+#   `crates-io`).
 #
 # Nothing reaches pypi.org until the same bytes installed and imported.
 name: Release
@@ -315,3 +316,41 @@ jobs:
       - run: |
           V="${GITHUB_REF_NAME#v}"
           python -c "import otwin; assert otwin.__version__ == '$V'; print('pip install otwin ->', otwin.__version__)"
+
+  # The engine crate on crates.io, so a Rust program can run a compiled Otwin
+  # model without Python. Same version as the wheels (the workspace version
+  # is the package version; a test holds them together). Authentication is
+  # crates.io Trusted Publishing: no token in the repository, a short-lived
+  # one minted for this workflow in the `crates-io` environment. The first
+  # release of the crate is published by hand, because crates.io can only
+  # trust a publisher for a crate that already exists.
+  publish-crate:
+    name: Publish otwin-core to crates.io
+    needs: smoke
+    runs-on: ubuntu-latest
+    environment:
+      name: crates-io
+      url: https://crates.io/crates/otwin-core
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Skip if this version is already on crates.io
+        id: exists
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          if curl -sf -A "otwin-release" "https://crates.io/api/v1/crates/otwin-core/$V" >/dev/null; then
+            echo "otwin-core $V is already published"; echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+        if: steps.exists.outputs.skip == 'false'
+        id: auth
+      - name: cargo publish
+        if: steps.exists.outputs.skip == 'false'
+        run: cargo publish -p otwin-core --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
