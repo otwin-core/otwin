@@ -1,12 +1,8 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_wm.png" width="35%">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_header.png" width="100%">
 
 # The open-source physics engine for engineering systems
-
-### You describe the system and Otwin compiles the physics.
-
-Build physical systems from components and connections. Compile them into executable dynamics. Connect them to measurements. Calibrate what you do not know. Validate what you predict.
 
 </div>
 
@@ -289,9 +285,9 @@ damper = Damper(0.3, name="damper")
 weight = ForceSource(1.0 * 9.81, name="weight")
 ceiling = Fixed(name="ceiling")
 
-system = mass >> spring >> ceiling                 # the line
+system = mass >> spring >> ceiling                     # the line
 system.connect(mass.flange, damper.a, weight.flange)   # the damper and the weight meet the mass
-system.connect(damper.b, ceiling.port)             # the damper's other end
+system.connect(damper.b, ceiling.port)                 # the damper's other end
 
 model = otwin.compile(system)
 
@@ -302,7 +298,7 @@ run = model.simulate(
 
 q = run["spring.extension"]
 
-print(f"Static equilibrium q* = m g / k = {m*g0/k:.3f} m")
+print(f"Static equilibrium q* = m g / k = {weight.force} m")
 print(f"Lowest point reached: q = {q.max():.3f} m")
 print(f"Final position: q = {q[-1]:.3f} m")
 
@@ -331,16 +327,13 @@ Nobody wrote Newton's law.
 
 The physical structure was described through components and connections, and the compiler derived the executable dynamics.
 
-The compiled model also carries the energy structure of the system.
+The compiled model also carries the energy structure of the system. These interfaces let you inspect what Otwin actually built.
 
 ```python
 model.summary()
 model.structure()
 model.ir()
 ```
-
-These interfaces let you inspect what Otwin actually built.
-
 <br>
 
 # From the data sheet to the model
@@ -360,17 +353,17 @@ from otwin.components.electrical import CurrentSource, Ground
 from otwin.components.thermal import Ambient, Convection
 
 cell = Battery(
-    capacity=100.0,                                # Ah
-    ocv=[(0.0, 2.8), (0.05, 3.15), (0.5, 3.3), (0.95, 3.4), (1.0, 3.55)],
-    resistance=1e-3,                               # ohm
-    rc_branches=[(0.5e-3, 20e3), (0.8e-3, 200e3)],  # (ohm, F)
-    thermal=1200.0,                                # J/K
+    capacity=100.0,                                                          # Ah
+    ocv=[(0.0, 2.8), (0.05, 3.15), (0.5, 3.3), (0.95, 3.4), (1.0, 3.55)],    # open-circuit voltage (LFP cell)
+    resistance=1e-3,                                                         # ohm
+    rc_branches=[(0.5e-3, 20e3), (0.8e-3, 200e3)],                           # (ohm, F)
+    thermal=1200.0,                                                          # J/K
     soc=0.9,
     name="cell",
 )
 load = CurrentSource(None, name="load")            # amperes, an input
 cooling = Convection(0.5, name="cooling")          # W/K
-air = Ambient(298.15, name="air")
+air = Ambient(298.15, name="air")                  # Kelvin
 gnd = Ground(name="gnd")
 
 system = gnd >> cell >> load >> gnd                # the electrical loop, closed on ground
@@ -400,6 +393,7 @@ A pump line is a line and nothing else, so `>>` is all it takes; one-port compon
 
 <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Pump_line.png" height="200">
 
+</div>
 
 ```python
 from otwin.components.hydraulic import Atmosphere, Filter, Pipe, Pump, Tank
@@ -430,7 +424,7 @@ print(f"{fouled.outputs(state)['pump.flow'] * 3600:.0f} m³/h with a fouled filt
 196 m³/h with a fouled filter
 ```
 
-Nobody wrote a pump equation either. The pump is a pressure source at shut-off, a loss that follows the curve and the inertia of the water in it; the compiler reads the operating point off the network.
+Nobody wrote a pump equation either. The pump is a pressure source at shut-off, a loss that follows the curve and the inertia of the water in it. The compiler reads the operating point off the network.
 
 <br>
 
@@ -467,7 +461,7 @@ Every connection is a physical node.
 * The **across** variable is shared at the node (voltage, velocity, pressure, temperature). 
 * The **through** variable balances at the node (current, force, fluid flow, heat flow)
 
-Storage elements define how energy is stored. Dissipative elements define losses. Sources provide inputs. Two-ports connect different physical domains. The resulting dynamics are expressed internally in port-Hamiltonian form:
+The storage elements define how energy is stored. The dissipative elements define losses and the sources provide inputs. Finally, Two-ports connect different physical domains. The resulting dynamics are expressed internally in port-Hamiltonian form (PHS):
 
 $$
 \dot{x} = \big(J(x)-R(x)\big)\nabla H(x) + G(x)u $$
@@ -712,7 +706,7 @@ are generated as model outputs alongside the states.
 
 # Control laws
 
-Some engineering relationships are not constant inputs. A converter may operate at constant power. A valve may depend on pressure. A thermostat may depend on temperature. A controller may depend on the current state. Otwin lets you express these relationships using the model's own quantities.
+Some engineering relationships are not constant inputs. A converter may operate at constant power, a valve may depend on pressure, a thermostat may depend on temperature, or a controller may depend on the current state. Otwin lets you express these relationships using the model's own quantities.
 
 ```python
 import otwin
@@ -720,13 +714,13 @@ import otwin
 from otwin.expr import maximum
 from otwin.components.catalogue import water_tank
 
-tank = otwin.compile(
+model = otwin.compile(
     water_tank(level=2.0)
 )
 
-level = tank.symbol("tank.level")
+level = model.symbol("tank.level")
 
-run = tank.simulate(
+run = model.simulate(
     t=range(0, 601),
     inputs={
         "inlet": maximum(
@@ -995,29 +989,33 @@ flowchart TD
 
 The model can therefore move through a lifecycle:
 
+<div align="center">
+
 ```text
 physical knowledge
-        ↓
+↓
 physical model
-        ↓
+↓
 compiled dynamics
-        ↓
+↓
 measurements
-        ↓
+↓
 state estimation
-        ↓
+↓
 parameter calibration
-        ↓
+↓
 physics + data
-        ↓
+↓
 forecast
-        ↓
+↓
 uncertainty
-        ↓
+↓
 validation
-        ↓
+↓
 Digital Twin
 ```
+
+</div>
 
 The goal is not merely to produce a number, is to produce a number **with evidence about why the number should be trusted**.
 

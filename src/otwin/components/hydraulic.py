@@ -303,14 +303,14 @@ class Filter(Component):
         self.add_port("a")
         self.add_port("b")
         self.R = self.add_parameter("resistance", resistance, "Pa s/m^3")
-        self.fouling = self.add_parameter(
+        self.phi = self.add_parameter(
             "fouling", fouling, "", "extra resistance as a fraction of clean", False, True
         )
 
     def branches(self) -> list[Branch]:
         return [
             ResistorBranch(
-                self, self.a, self.b, law=lambda dp: dp / (self.R * (1 + self.fouling))
+                self, self.a, self.b, law=lambda dp: dp / (self.R * (1 + self.phi))
             )
         ]
 

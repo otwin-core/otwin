@@ -144,3 +144,19 @@ def test_outputs_of_a_stepped_state_see_the_inputs_of_that_step(backend):
     assert 40.0 < out["R.power"] < 50.0
     assert model.outputs(state, {"V": 0.0})["R.power"] < 0.01  # the capacitor alone
     assert model.initial_state().inputs is None
+
+
+def test_parameters_read_back_by_their_own_name():
+    """The number given at construction is the number you read back, so a
+    hand check uses exactly what the model uses."""
+    from otwin.components.battery import Battery
+    from otwin.components.hydraulic import Filter
+
+    spring, mass = Spring(20.0, name="k"), Mass(1.5, name="m")
+    assert spring.stiffness == 20.0 and mass.mass == 1.5
+    assert Resistor(2.0).resistance == 2.0 and Filter(1e6, fouling=0.5).fouling == 0.5
+    assert Battery(capacity=100.0, ocv=[(0.0, 3.0), (1.0, 4.0)]).capacity == 100.0
+    # the short symbols used inside laws are untouched
+    assert not isinstance(spring.k, float)
+    with pytest.raises(AttributeError):
+        _ = spring.length
