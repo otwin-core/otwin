@@ -1,0 +1,28 @@
+title: "[Idea] "
+labels: ["idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas and design questions live here; agreed, concrete work becomes an issue.
+        The test for any proposal: does it let an engineer build a system without
+        writing its equations, or build one that today cannot be built?
+  - type: textarea
+    id: problem
+    attributes:
+      label: The system or situation this comes from
+      description: The plant, the machine, the maintenance problem. Real cases first.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would change or add
+      description: Code as you would like to write it is the clearest form.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens today
+      description: The workaround, the compiler message, or what cannot be expressed.
