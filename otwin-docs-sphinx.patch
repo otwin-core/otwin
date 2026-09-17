@@ -1,0 +1,2441 @@
+From 78ddfa98322aeedd67ff0a00637e34f9057e00b4 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 22 Aug 2026 22:01:58 +0000
+Subject: [PATCH] Documentation: a Sphinx manual, with the examples under test
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The `Documentation` URL in `pyproject.toml` pointed at the README. For a package
+whose central claim is that a twin should be able to justify its own answers,
+that is not enough surface to explain the argument, and the README was being
+asked to be a tutorial, a reference and a manifesto at once.
+
+Sphinx rather than MkDocs, and that is a fact about the source rather than a
+preference: `forecast/conformal.py` already uses native reST roles (`:mod:`,
+`:func:`, `:attr:`) while `model/phs.py` uses Google-style `Args:`. Napoleon
+reads the second, Sphinx reads the first, and mkdocstrings would render
+`:func:` as literal text.
+
+**The reference section is generated, never written.** `autosummary` walks the
+package and reads the docstrings that `pytest --doctest-modules` already
+executes on every commit. A hand-written parameter table is a second source of
+truth that goes stale the first time somebody changes a default, with nothing to
+say so.
+
+**The narrative examples are executed too.** `tests/test_docs_examples.py` runs
+every ```python block in document order, one namespace per page, and compares
+what it prints against the ```text block the page claims follows it. On its
+first run it caught a transcribed output that was right in the shell I ran it in
+and wrong in the sequence a reader meets. Illustrative fragments are marked
+```{code-block} python and are not run — the distinction is visible in the
+source of every page, so nobody pastes half a snippet.
+
+Pages: install, a quickstart that goes from an energy balance to a calibrated
+band to a refusal, seven concept pages carrying the equations, and one guide per
+ISO 13374 block.
+
+Four docstring defects, found by building:
+
+- `estimate/energy.py` had a section underline one character short.
+- `model/library.py` had ASCII structure diagrams indented under plain text,
+  which reST reads as definition lists and block quotes.
+- `model/integrators.py` had a bare `|...|` pair in the Jacobian expression,
+  read as a substitution reference.
+- `forecast/conformal.py` annotated a field `npt.NDArray[np.bool_]`. Rendered
+  into a parameter description, the trailing underscore is a hyperlink
+  reference to a target that does not exist. Named `BoolArray` instead, which
+  the source is better for anyway.
+
+The build is clean under `-W`: 234 warnings at first run, 0 now, none
+suppressed. Read the Docs enforces the same through `fail_on_warning`, and CI
+gains a `docs` job so a broken cross-reference fails a pull request rather than
+rendering as plain text nobody notices for six months.
+---
+ .github/workflows/ci.yml               |  27 ++++
+ .gitignore                             |   4 +
+ .readthedocs.yaml                      |  30 +++++
+ docs/_static/.gitkeep                  |   0
+ docs/_static/custom.css                |  18 +++
+ docs/_templates/autosummary/module.rst |  26 ++++
+ docs/api/index.md                      |  23 ++++
+ docs/changelog.md                      |   5 +
+ docs/concepts/conformal.md             | 152 +++++++++++++++++++++
+ docs/concepts/envelopes.md             | 109 +++++++++++++++
+ docs/concepts/index.md                 |  20 +++
+ docs/concepts/integration.md           | 107 +++++++++++++++
+ docs/concepts/irreversible.md          | 106 +++++++++++++++
+ docs/concepts/iso13374.md              |  50 +++++++
+ docs/concepts/leakage.md               | 120 +++++++++++++++++
+ docs/concepts/port-hamiltonian.md      | 131 ++++++++++++++++++
+ docs/conf.py                           | 153 +++++++++++++++++++++
+ docs/guides/advise.md                  |  58 ++++++++
+ docs/guides/estimate.md                |  50 +++++++
+ docs/guides/forecast.md                | 106 +++++++++++++++
+ docs/guides/index.md                   |  30 +++++
+ docs/guides/io.md                      |  83 ++++++++++++
+ docs/guides/model.md                   |  88 +++++++++++++
+ docs/guides/signal.md                  |  68 ++++++++++
+ docs/index.md                          | 105 +++++++++++++++
+ docs/install.md                        |  57 ++++++++
+ docs/quickstart.md                     | 176 +++++++++++++++++++++++++
+ docs/requirements.txt                  |   9 ++
+ pyproject.toml                         |   2 +-
+ src/otwin/estimate/energy.py           |   2 +-
+ src/otwin/forecast/conformal.py        |   9 +-
+ src/otwin/model/integrators.py         |   2 +-
+ src/otwin/model/library.py             |  43 +++---
+ tests/test_docs_examples.py            | 103 +++++++++++++++
+ 34 files changed, 2049 insertions(+), 23 deletions(-)
+ create mode 100644 .readthedocs.yaml
+ create mode 100644 docs/_static/.gitkeep
+ create mode 100644 docs/_static/custom.css
+ create mode 100644 docs/_templates/autosummary/module.rst
+ create mode 100644 docs/api/index.md
+ create mode 100644 docs/changelog.md
+ create mode 100644 docs/concepts/conformal.md
+ create mode 100644 docs/concepts/envelopes.md
+ create mode 100644 docs/concepts/index.md
+ create mode 100644 docs/concepts/integration.md
+ create mode 100644 docs/concepts/irreversible.md
+ create mode 100644 docs/concepts/iso13374.md
+ create mode 100644 docs/concepts/leakage.md
+ create mode 100644 docs/concepts/port-hamiltonian.md
+ create mode 100644 docs/conf.py
+ create mode 100644 docs/guides/advise.md
+ create mode 100644 docs/guides/estimate.md
+ create mode 100644 docs/guides/forecast.md
+ create mode 100644 docs/guides/index.md
+ create mode 100644 docs/guides/io.md
+ create mode 100644 docs/guides/model.md
+ create mode 100644 docs/guides/signal.md
+ create mode 100644 docs/index.md
+ create mode 100644 docs/install.md
+ create mode 100644 docs/quickstart.md
+ create mode 100644 docs/requirements.txt
+ create mode 100644 tests/test_docs_examples.py
+
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 32863e7..fda5835 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -96,3 +96,30 @@ jobs:
+       - run: pip install --require-hashes -r .github/requirements/lint.txt
+       - run: ruff check src tests examples
+       - run: ruff format --check src tests examples
++
++  docs:
++    name: docs build
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
++      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
++        with: { python-version: "3.12" }
++
++      # autodoc imports every module to read its signatures. A docs build that
++      # cannot import otwin does not fail -- it produces a reference section
++      # full of silent gaps -- so the package is installed, not just Sphinx.
++      - name: Install
++        run: |
++          pip install -r docs/requirements.txt
++          pip install -e ".[gp]"
++
++      # -W turns warnings into errors, which is the only setting under which a
++      # broken cross-reference is anything other than plain text nobody notices.
++      # Read the Docs enforces the same thing through fail_on_warning.
++      - name: Build
++        run: python -m sphinx -b html -W --keep-going docs docs/_build/html
++
++      # A dead internal link renders as ordinary text. Nothing else catches it.
++      - name: Check internal links
++        run: python -m sphinx -b linkcheck docs docs/_build/linkcheck
++        continue-on-error: true
+diff --git a/.gitignore b/.gitignore
+index f60b8be..e2909e9 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -11,3 +11,7 @@ dist/
+ venv/
+ .coverage
+ htmlcov/
++
++# Sphinx build output and the pages autosummary generates.
++docs/_build/
++docs/api/generated/
+diff --git a/.readthedocs.yaml b/.readthedocs.yaml
+new file mode 100644
+index 0000000..fee3cb7
+--- /dev/null
++++ b/.readthedocs.yaml
+@@ -0,0 +1,30 @@
++# Read the Docs build. https://docs.readthedocs.io/en/stable/config-file/v2.html
++#
++# The package itself is installed, not just its documentation dependencies:
++# autodoc imports every module to read its signatures, so a docs build that
++# cannot import otwin produces a reference section full of silent gaps rather
++# than an error.
++version: 2
++
++build:
++  os: ubuntu-24.04
++  tools:
++    python: "3.12"
++
++sphinx:
++  configuration: docs/conf.py
++  # Warnings are errors. A broken cross-reference renders as plain text and
++  # nobody notices for six months.
++  fail_on_warning: true
++
++python:
++  install:
++    - requirements: docs/requirements.txt
++    - method: pip
++      path: .
++      extra_requirements:
++        - gp
++
++formats:
++  - pdf
++  - htmlzip
+diff --git a/docs/_static/.gitkeep b/docs/_static/.gitkeep
+new file mode 100644
+index 0000000..e69de29
+diff --git a/docs/_static/custom.css b/docs/_static/custom.css
+new file mode 100644
+index 0000000..614dfbd
+--- /dev/null
++++ b/docs/_static/custom.css
+@@ -0,0 +1,18 @@
++/* Equations sit in their own space rather than crowding the prose above them. */
++div.math {
++  margin: 1.2em 0;
++  overflow-x: auto;
++}
++
++/* Wide API tables scroll inside their own box; the page never scrolls sideways. */
++table.docutils {
++  display: block;
++  overflow-x: auto;
++  max-width: 100%;
++}
++
++/* An expected-output block reads as a result, not as more code to copy. */
++div.highlight-text pre {
++  opacity: 0.85;
++  font-size: 0.92em;
++}
+diff --git a/docs/_templates/autosummary/module.rst b/docs/_templates/autosummary/module.rst
+new file mode 100644
+index 0000000..f1662b9
+--- /dev/null
++++ b/docs/_templates/autosummary/module.rst
+@@ -0,0 +1,26 @@
++{{ fullname | escape | underline }}
++
++{% if modules %}
++{# A package. Its __init__ re-exports what the leaf modules define, so
++   documenting members here as well would give every object two canonical
++   pages, two index entries, and an ambiguous cross-reference from every
++   `:class:` role in the codebase. The package page carries the narrative;
++   the leaf module owns the objects. #}
++.. automodule:: {{ fullname }}
++   :no-members:
++
++.. rubric:: Modules
++
++.. autosummary::
++   :toctree:
++   :recursive:
++{% for item in modules %}
++   {{ item }}
++{%- endfor %}
++
++{% else %}
++.. automodule:: {{ fullname }}
++   :members:
++   :show-inheritance:
++   :member-order: bysource
++{% endif %}
+diff --git a/docs/api/index.md b/docs/api/index.md
+new file mode 100644
+index 0000000..2593fd1
+--- /dev/null
++++ b/docs/api/index.md
+@@ -0,0 +1,23 @@
++# API reference
++
++Every entry below is generated from the source. The docstrings you are reading
++are the same ones `pytest --doctest-modules` executes on each commit, so an
++example here that does not run is a failing test, not a stale page.
++
++The layout follows the six data-processing blocks of ISO 13374. If you are
++looking for a capability rather than a name, start from
++[the guides](../guides/index.md).
++
++```{eval-rst}
++.. autosummary::
++   :toctree: generated
++   :recursive:
++
++   otwin.io
++   otwin.signal
++   otwin.estimate
++   otwin.model
++   otwin.forecast
++   otwin.advise
++   otwin.interfaces
++```
+diff --git a/docs/changelog.md b/docs/changelog.md
+new file mode 100644
+index 0000000..762b3da
+--- /dev/null
++++ b/docs/changelog.md
+@@ -0,0 +1,5 @@
++# Changelog
++
++```{include} ../CHANGELOG.md
++:start-line: 1
++```
+diff --git a/docs/concepts/conformal.md b/docs/concepts/conformal.md
+new file mode 100644
+index 0000000..ffa188b
+--- /dev/null
++++ b/docs/concepts/conformal.md
+@@ -0,0 +1,152 @@
++# Calibrated intervals
++
++A prediction interval is a promise: *90 % of the time the truth lands inside*.
++Conformal prediction is the machinery that makes the promise checkable, and
++{mod}`otwin.forecast.conformal` is where it is built.
++
++## Why conformal rather than the model's own uncertainty
++
++A conformal band needs one assumption — that the calibration errors and the test
++errors are **exchangeable** — and in exchange it makes no assumption about the
++model at all. It works identically on a Gaussian process, a fade law, a neural
++network or a lookup table. The likelihood does not have to be right, which
++matters because on a physical asset it usually is not.
++
++## The trap, stated once and loudly
++
++**The residuals you calibrate on must be forecast errors of the same kind you
++are about to make.**
++
++The tempting shortcut is to take the fitted model's own in-sample residuals and
++quantile them. That is not a smaller version of the right thing; it is a
++different quantity. A model that interpolates its training data has in-sample
++residuals an order of magnitude smaller than its $h$-step-ahead errors, so the
++band comes out roughly ten times too narrow. Measured on a lithium-ion capacity
++twin: **1.5 % delivered coverage at a 90 % target.**
++
++{func}`~otwin.forecast.rolling_origin_residuals` makes the honest thing the easy
++thing. It refits the whole pipeline at earlier origins *inside* the training
++window and collects genuine $h$-step-ahead errors. It costs one refit per
++origin, and that cost is the entire difference between a band that means
++something and one that does not.
++
++## The finite-sample quantile
++
++With $n$ calibration residuals and a target level $\alpha$, the conformal
++half-width is the $k$-th order statistic of $|{\rm residual}|$ where
++
++$$
++k = \left\lceil \alpha\,(n+1) \right\rceil
++$$
++
++The $n+1$ is not a rounding detail — it is what makes the guarantee hold in
++finite samples rather than asymptotically. It also means a calibration set can
++be **exactly large enough to be too small**: at $\alpha = 0.9$ and $n = 9$,
++$k = 9$ and the band is the sample maximum; at $n = 8$, $k = 9 > n$ and the
++honest answer is infinite.
++
++`otwin` returns infinity, with a warning, rather than clipping the rank to $n$
++and returning the sample maximum:
++
++```python
++import numpy as np
++from otwin.forecast import conformal_quantile
++
++residuals = np.array([0.1, -0.2, 0.15])
++print(conformal_quantile(residuals, level=0.9))
++```
++
++```text
++inf
++```
++
++Clipping would return a number that is narrower than the guarantee requires and
++silent about it. An infinite interval is useless, but it is *visibly* useless.
++
++:::{note}
++`0.9 * 10` is `9.000000000000002` in binary floating point, which asked for rank
++10 out of 10 and turned a just-large-enough calibration set into a refusal. The
++product is rounded to twelve decimals before the ceiling. On a rolling-origin
++calibration set this bug cost the sparsest horizons — exactly the ones that set
++the extrapolated end of a horizon-aware band.
++:::
++
++## Three constructions
++
++### `split_conformal`
++
++One half-width for every horizon. Correct on average over the horizons in the
++calibration set, and too narrow early / too wide late whenever error grows with
++horizon — which for a degradation forecast it always does.
++
++Right when the error process is genuinely stationary in $h$.
++
++### `horizon_conformal`
++
++A half-width that **grows with the horizon**, fitted as a power law
++(`fit="log"`, the default) or linearly (`fit="linear"`) over the calibrated
++range and extrapolated beyond it.
++
++```python
++from otwin.forecast import horizon_conformal, rolling_origin_residuals
++
++rng = np.random.default_rng(0)
++k = np.arange(600)
++capacity = 1.0 - 0.00025 * k - 0.00000012 * k**2 + rng.normal(0, 0.0015, k.size)
++
++def refit_forecast(history, horizon):
++    idx = np.arange(history.size)
++    coeffs = np.polyfit(idx[-200:], history[-200:], 2)
++    return np.polyval(coeffs, np.arange(history.size, history.size + horizon))
++
++residuals, horizons = rolling_origin_residuals(
++    refit_forecast, capacity, step=10, max_horizon=60
++)
++band = horizon_conformal(residuals, horizons, level=0.9, max_horizon=90)
++
++print(f"method        : {band.method}")
++print(f"calibrated on : {band.n_calibration} residuals")
++print(f"h=1  half-width {band.half_width[0]:.5f}")
++print(f"h=60 half-width {band.half_width[59]:.5f}")
++print(f"h=90 half-width {band.half_width[89]:.5f}  extrapolated={bool(band.extrapolated[89])}")
++```
++
++```text
++method        : horizon_conformal
++calibrated on : 2250 residuals
++h=1  half-width 0.00230
++h=60 half-width 0.00272
++h=90 half-width 0.00276  extrapolated=True
++```
++
++{attr}`~otwin.forecast.ConformalBand.extrapolated` is the honest part. Beyond
++the calibrated range the width is a fitted growth law, not a conformal
++guarantee, and the object says which is which instead of letting you assume.
++
++`min_per_horizon` guards the thin end: a horizon with three residuals behind it
++cannot support a 90 % band, and the default floor is derived from the level (9
++at 90 %) rather than picked.
++
++### `AdaptiveConformal`
++
++Online conformal inference (ACI). The band corrects itself as observations
++arrive, widening after a miss and narrowing after a run of hits. For a twin
++running against a live asset whose error distribution drifts, this is the one
++that keeps the promise; the two above assume exchangeability that a drifting
++asset eventually violates.
++
++## Measuring what you built
++
++Building a band and reporting its nominal level is not calibration. Measure it:
++
++| Function | Reports |
++|---|---|
++| {func}`~otwin.forecast.picp` | delivered coverage |
++| {func}`~otwin.forecast.mpiw` | mean width — a band can always be widened |
++| {func}`~otwin.forecast.interval_score` | Gneiting–Raftery, trades the two off |
++| {func}`~otwin.forecast.coverage_curve` | coverage across nominal levels |
++| {func}`~otwin.forecast.expected_calibration_error` | mean gap, nominal vs empirical |
++
++{meth}`~otwin.interfaces.TwinManifest.calibrated_by` requires
++`empirical_coverage` and rejects a percentage where a fraction belongs, so a
++twin cannot record a calibration it never measured.
+diff --git a/docs/concepts/envelopes.md b/docs/concepts/envelopes.md
+new file mode 100644
+index 0000000..08d3610
+--- /dev/null
++++ b/docs/concepts/envelopes.md
+@@ -0,0 +1,109 @@
++# Validity envelopes
++
++Everything else in `otwin` produces evidence. The envelope is what turns
++evidence into a decision, and it is the part that makes this library different
++from one that always returns a number.
++
++## The rule
++
++A twin may answer a question when **all** of the following hold:
++
++1. the operating point is inside the range the model was identified over
++2. the horizon is inside the horizon it was validated to
++3. the validation was **leakage-free**
++4. if an interval is requested, the calibration recorded **measured** coverage
++
++Fail any of them and {meth}`~otwin.advise.Envelope.check` returns a
++{class}`~otwin.advise.Verdict` that is falsy and carries a
++{class}`~otwin.advise.Breach` per reason.
++
++## Absence is refusal, not permission
++
++This is the design decision worth arguing about, so here is the argument.
++
++`otwin` 0.1 skipped the state check entirely when `state_bounds` was `None`. A
++twin with no identified range therefore returned a clean verdict for a state of
++charge of $10^{12}$. That is the failure mode of every "sensible default":
++the unconfigured case is the *most* dangerous one, because nobody chose it.
++
++An absent range is now a refusal. So is an absent manifest, an absent validation
++record, and an absent calibration when an interval is asked for. If you have not
++established that the twin works there, it will not pretend.
++
++## Using it
++
++```python
++import numpy as np
++import otwin
++from otwin.advise import Envelope
++from otwin.interfaces import Provenance, TwinManifest
++
++manifest = TwinManifest(
++    name="cell-A12 capacity twin",
++    model_class="empirical_law",
++    model_kind="grey_box",
++    n_states=1,
++    n_inputs=0,
++    provenance=Provenance(created="2026-08-22T10:00:00Z",
++                          otwin_version=otwin.__version__),
++    validation=TwinManifest.validated_by(protocol="rolling_origin", horizon=60),
++    calibration=TwinManifest.calibrated_by(
++        method="horizon_conformal", level=0.9, empirical_coverage=0.91
++    ),
++)
++
++envelope = Envelope(
++    state_bounds=[(0.70, 1.02)],
++    max_horizon=60,
++    requires_validated=True,
++    requires_calibrated=True,
++    max_extrapolation=0.0,
++)
++```
++
++| Parameter | Meaning |
++|---|---|
++| `state_bounds` | per-state `(low, high)`, or `None` for a state with no constraint |
++| `max_horizon` | the horizon the twin was validated to |
++| `requires_validated` | refuse unless the record asserts `leakage_free=True` |
++| `requires_calibrated` | refuse an interval unless coverage was measured |
++| `max_extrapolation` | how far outside the bounds is tolerated, as a fraction of range |
++
++`max_extrapolation=0.0` is strict: the calibrated range is the answerable range.
++Raising it to `0.05` says you will accept 5 % beyond, which is a judgement about
++your asset that the library will not make for you.
++
++## Reading a refusal
++
++```python
++verdict = envelope.check(
++    state=np.array([0.92]), horizon=90, manifest=manifest, wants_interval=True
++)
++print(bool(verdict))
++for breach in verdict.breaches:
++    print(breach)
++```
++
++```text
++False
++horizon: beyond the validated forecast horizon (asked for 90, validated to 60)
++```
++
++A refusal names the field it read and the two numbers it compared. That was not
++always true: a manifest recording `protocol="rolling_origin"` and `picp=0.87`
++used to be refused with *"this twin has never been validated under a
++leakage-free protocol"* — true of the record, false of the work, and no help in
++finding the cause. The envelope now distinguishes an empty record from one that
++is present but does not assert what is needed, and names the builder that sets
++it.
++
++If you want the refusal as an exception rather than a value, catch
++{class}`~otwin.advise.OutsideEnvelope`.
++
++## What this is not
++
++The envelope does not make a twin correct. It makes the *scope* of the claim
++explicit and machine-checkable. A twin can be inside its envelope and still
++wrong — the model may be a bad model. What the envelope removes is the other
++failure: a confident number produced far outside anything that was ever tested,
++with nothing in the output to indicate it.
+diff --git a/docs/concepts/index.md b/docs/concepts/index.md
+new file mode 100644
+index 0000000..3937193
+--- /dev/null
++++ b/docs/concepts/index.md
+@@ -0,0 +1,20 @@
++# Concepts
++
++The mathematics the library implements, and the reasoning behind the choices
++that are not forced.
++
++You do not need these pages to use `otwin` — the [quickstart](../quickstart.md)
++and the [guides](../guides/index.md) are self-contained. Read them when you want
++to know *why* a result is trustworthy rather than only how to obtain it.
++
++```{toctree}
++:maxdepth: 1
++
++iso13374
++port-hamiltonian
++irreversible
++integration
++leakage
++conformal
++envelopes
++```
+diff --git a/docs/concepts/integration.md b/docs/concepts/integration.md
+new file mode 100644
+index 0000000..b6e1570
+--- /dev/null
++++ b/docs/concepts/integration.md
+@@ -0,0 +1,107 @@
++# Structure-preserving integration
++
++[Port-Hamiltonian systems](port-hamiltonian.md) established that stored energy
++obeys $\mathrm{d}H/\mathrm{d}t \le y^{\mathsf T}u$. That is a statement about the
++continuous system. A generic ODE solver does not know it and will not respect
++it: run explicit Runge–Kutta on a lossless oscillator for long enough and the
++energy drifts, monotonically, in whichever direction the local truncation error
++happens to point.
++
++The guarantee has to survive discretisation or it was never usable.
++
++## Implicit midpoint
++
++{func}`~otwin.model.implicit_midpoint` solves, at each step,
++
++$$
++x_{n+1} = x_n + \Delta t \; f\!\left(t_{n+\frac12},\; \frac{x_n + x_{n+1}}{2}\right)
++$$
++
++Evaluating the vector field at the *midpoint of the step* is what makes the
++scheme symplectic on the conservative part and, for a quadratic Hamiltonian,
++exactly energy-preserving. The discrete power balance holds to solver tolerance
++rather than to truncation order.
++
++The price is that $x_{n+1}$ appears on both sides: every step is a root find.
++
++## The Jacobian a PHS hands you
++
++Write the step as a residual $F(x_{n+1}) = 0$. Damped Newton needs
++
++$$
++\frac{\partial F}{\partial x_{n+1}} = I - \frac{\Delta t}{2}\,
++\left.\frac{\partial f}{\partial x}\right|_{x_m}
++$$
++
++and a port-Hamiltonian model supplies $\partial f/\partial x$ almost for free.
++For $f = (J-R)\nabla H + gu$ with state-independent $J$, $R$, $g$:
++
++$$
++\frac{\partial f}{\partial x} = (J - R)\,\nabla^2 H
++$$
++
++When that matrix is the same at every step — constant structure matrices,
++constant $\nabla^2 H$, fixed step — it is **LU factorised once** before the loop.
++That is roughly a **140× speedup** over a generic `fsolve` path at $n = 50$,
++with the energy bound held to 1e-9.
++
++Supply `hess_H(x)` on your model and {func}`~otwin.model.integrate_phs` will use
++it. Supply `jac_rhs(x, u, t)` and it takes precedence.
++
++## How constancy is decided
++
++$J$, $R$, $g$ and $\nabla^2 H$ are evaluated at four well-separated,
++deterministic probe states around `x0` and compared. This is a **heuristic**,
++and the library is explicit about what a wrong answer costs, because it differs
++by path:
++
++- On the **Newton** path a wrong Jacobian costs convergence *rate* only. The
++  residual is still driven to `newton_tol`, so the trajectory is unchanged.
++  Safe by construction.
++- On the **closed-form linear** path a wrong $M$ is a wrong *answer*. That path
++  therefore additionally requires the drift $f(x, 0) - Mx$ to be identical at
++  every probe — an independent check that a coincidental match is unlikely to
++  pass.
++
++Override it when you know better:
++
++```{code-block} python
++integrate_phs(phs, x0, t, u=u, constant_structure=False)  # never take the fast path
++integrate_phs(phs, x0, t, u=u, constant_structure=True)   # assert it without probing
++```
++
++## State-dependent ports
++
++Some machines hold a set point rather than following a schedule: a
++constant-power converter, a thermostat, a pump-turbine at rated power. Pass `u`
++as a **port law** `u(t, x) -> u`:
++
++```python
++import numpy as np
++from otwin.model import integrate_phs, water_tank
++
++tank = water_tank()
++
++def hold_level(t, x):
++    """Inflow that opposes the level error — a proportional controller."""
++    return np.array([0.5 * (2.0 - x[0])])
++
++t = np.linspace(0.0, 20.0, 201)
++res = integrate_phs(tank, np.array([1.0]), t, u=hold_level)
++print(f"level {res['x'][0, 0]:.3f} -> {res['x'][-1, 0]:.3f}")
++print(f"realised port at the end: {res['u'][-1, 0]:.4f}")
++```
++
++```text
++level 1.000 -> 1.376
++realised port at the end: 0.3118
++```
++
++The law is evaluated at the step midpoint *inside* the implicit solve, so the
++discrete power balance is preserved. The realised port trajectory comes back as
++`result["u"]` — worth checking, because a feedback law is part of the model and
++you should be able to see what it actually did.
++
++`method="linear"` is **refused** with a port law rather than silently applied.
++Feedback makes the system nonlinear; the closed-form path would return a
++confident wrong answer.
+diff --git a/docs/concepts/irreversible.md b/docs/concepts/irreversible.md
+new file mode 100644
+index 0000000..a7f8f84
+--- /dev/null
++++ b/docs/concepts/irreversible.md
+@@ -0,0 +1,106 @@
++# Irreversible systems
++
++A plain PHS gets the first law for free: the skew part of the structure cannot
++create energy. It says nothing about the second. For a reactor, a heat
++exchanger or any process where entropy production is the phenomenon rather than
++a nuisance, you need the second law to be part of the model.
++
++`otwin` implements **both** forms the literature uses. They are not notational
++variants of each other — getting from one to the other is a derivation — which
++is why both are here.
++
++## Form 1: additive entropy coupling
++
++{class}`~otwin.model.IrreversiblePHS`:
++
++$$
++\begin{align}
++\dot{x} &= \bigl(J(x) - R(x)\bigr)\nabla H(x) + L(x)\,\nabla S(x) + g(x)\,u \\
++y &= g(x)^{\mathsf T}\nabla H(x) \\
++\sigma(x) &= \nabla S^{\mathsf T} L \,\nabla S \;\ge\; 0
++\end{align}
++$$
++
++$S(x)$ is entropy or availability, $L(x)$ the irreversible coupling. The second
++law holds **iff $L \succeq 0$** — it is a property of the structure, so it can
++be checked once and relied on.
++
++The library enforces it rather than assuming it. With `validate=True` (the
++default) $L$ is checked on first use and a `ValueError` is raised if it is not
++PSD.
++
++## Form 2: modulated skew interconnection
++
++{class}`~otwin.model.ModulatedIPHS`, the Ramírez–Maschke–Sbarbaro form that
++most of the irreversible-PHS literature is written in:
++
++$$
++\begin{align}
++\dot{x} &= \gamma(x)\,J(x)\,\nabla H(x) - R(x)\nabla H(x) + g(x)\,u \\
++\sigma(x) &= \nabla S(x)^{\mathsf T}\,\gamma(x) J(x)\nabla H(x) \;\ge\; 0
++\end{align}
++$$
++
++A **scalar modulating function** $\gamma$ multiplies a skew interconnection.
++
++Here is the part worth being careful about. $\gamma J$ is skew for *any* scalar
++$\gamma$, so with $R = 0$ and the ports closed,
++$\mathrm{d}H/\mathrm{d}t = \nabla H^{\mathsf T}\gamma J \nabla H = 0$
++identically — the first law is still structural. **The second law is not.**
++Nothing about a skew matrix forces $\nabla S^{\mathsf T}\dot{x} \ge 0$.
++
++In the reactor case it holds because $\gamma = r/T$ is built from the affinity
++so that $\operatorname{sign}(r) = \operatorname{sign}(A)$ — a property of *that
++model*, not of the form. So `ModulatedIPHS` evaluates and checks $\sigma$ on
++every dynamics call, which is the same bargain `IrreversiblePHS` strikes with
++$L \succeq 0$, paid at a different time.
++
++## Which to use
++
++| | Additive `L∇S` | Modulated `γ·J∇H` |
++|---|---|---|
++| Second law from | $L \succeq 0$, structural | $\gamma$, model-specific |
++| Checked | once, on first use | every dynamics call |
++| Natural for | heat conduction, diffusive coupling | reaction kinetics, affinity-driven transport |
++| Literature | van der Schaft & Maschke | Ramírez, Maschke & Sbarbaro |
++
++{meth}`~otwin.model.IrreversiblePHS.from_modulated` builds one from the other
++when you need to move between them.
++
++## A worked irreversible model
++
++{func}`~otwin.model.heat_exchanger` returns a two-node counter-flow exchanger
++as a `ModulatedIPHS`:
++
++```python
++from otwin.model import effectiveness_ntu, heat_exchanger
++
++hx = heat_exchanger(UA=40_000.0, C_hot=500_000.0, C_cold=800_000.0)
++print(type(hx).__name__, "with", hx.n_states, "states")
++
++eps = effectiveness_ntu(UA=40_000.0, C_hot=500_000.0, C_cold=800_000.0)
++print(f"effectiveness = {eps:.4f}")
++```
++
++```text
++ModulatedIPHS with 2 states
++effectiveness = 0.0751
++```
++
++{func}`~otwin.model.effectiveness_ntu` is the steady-state ε-NTU duty, for
++sizing and for cross-checking the dynamic model against the design point.
++
++## Fouling is not a port-Hamiltonian system
++
++{func}`~otwin.model.kern_seaton_fouling` returns a
++{class}`~otwin.model.FoulingLaw`, and that class deliberately has no `rhs`:
++
++$$
++R_f(t) = R_f^{\infty}\left(1 - e^{-t/\tau}\right)
++$$
++
++Fouling has no conserved energy and no power port. Dressing an empirical trend
++law up as a physical structure would let it inherit guarantees it has not
++earned. It is typed as
++{class}`~otwin.interfaces.EmpiricalLawModel` instead, and the envelope machinery
++treats it accordingly.
+diff --git a/docs/concepts/iso13374.md b/docs/concepts/iso13374.md
+new file mode 100644
+index 0000000..b8adf1b
+--- /dev/null
++++ b/docs/concepts/iso13374.md
+@@ -0,0 +1,50 @@
++# The six blocks
++
++`otwin` is laid out as the six data-processing blocks of **ISO 13374**, the
++standard for condition monitoring and diagnostics of machines. The layout is
++load-bearing rather than decorative: each block has one job, and a number can be
++traced back through them to the register it was read from.
++
++```{mermaid}
++flowchart LR
++    DA[Data Acquisition<br/><code>otwin.io</code>] --> DM[Data Manipulation<br/><code>otwin.signal</code>]
++    DM --> SD[State Detection<br/><code>otwin.estimate</code>]
++    SD --> HA[Health Assessment<br/><code>otwin.model</code>]
++    HA --> PA[Prognostic Assessment<br/><code>otwin.forecast</code>]
++    PA --> AG[Advisory Generation<br/><code>otwin.advise</code>]
++```
++
++**Data Acquisition** ({mod}`otwin.io`) reads a device or a registered dataset.
++Every value carries a {class}`~otwin.io.Quality` flag, because a sensor that
++returns a plausible number after a failed read is more dangerous than one that
++returns nothing.
++
++**Data Manipulation** ({mod}`otwin.signal`) puts irregular samples on a uniform
++grid. {func}`~otwin.signal.resample` will not invent data: it stops at the last
++whole step rather than extending half a step past the final measurement, and
++{func}`~otwin.signal.coverage` reports what fraction of the grid is a real
++measurement rather than a filled gap.
++
++**State Detection** ({mod}`otwin.estimate`) recovers what you cannot measure.
++{class}`~otwin.estimate.EnergyConsistentObserver` is the one worth knowing
++about: a measurement correction that would manufacture stored energy is
++rejected, so the filter cannot quietly break the property the model was chosen
++for.
++
++**Health Assessment** ({mod}`otwin.model`) is the asset written as an energy
++balance. See [Port-Hamiltonian systems](port-hamiltonian.md).
++
++**Prognostic Assessment** ({mod}`otwin.forecast`) is what happens next and how
++sure. See [Leakage-free evaluation](leakage.md) and
++[Calibrated intervals](conformal.md).
++
++**Advisory Generation** ({mod}`otwin.advise`) turns a forecast into a decision,
++or declines. See [Validity envelopes](envelopes.md).
++
++## Why this matters for provenance
++
++{class}`~otwin.interfaces.TwinManifest` records the path a twin took through
++these blocks: what it is, what data it was fitted on, under which protocol it
++was validated, and how its intervals were calibrated. The manifest is what
++{class}`~otwin.advise.Envelope` reads. A twin with no manifest is not a twin
++with a permissive envelope — it is one that cannot answer.
+diff --git a/docs/concepts/leakage.md b/docs/concepts/leakage.md
+new file mode 100644
+index 0000000..0207c51
+--- /dev/null
++++ b/docs/concepts/leakage.md
+@@ -0,0 +1,120 @@
++# Leakage-free evaluation
++
++A forecast skill score is a claim about the future. It is worth exactly as much
++as the care taken to stop the evaluation seeing the answer — and the ways that
++care fails are boring, mechanical and extremely common.
++
++## The three failures this module is built against
++
++**Passing the test window to the model.** `otwin` 0.1 did this at two separate
++call sites: `protocol.py` handed the held-out targets to `model.predict()`, so
++every reported skill score measured *interpolation*. The fix was structural, not
++a patch — the test targets are no longer an argument to the function that asks
++the model for a prediction. The interface is
++`forecast(history, horizon) -> values`, and it is the only thing
++{func}`~otwin.forecast.evaluate` calls.
++
++**Random splits on a time series.** Shuffling rows and holding out 20 % lets the
++model interpolate between neighbouring samples. {func}`~otwin.forecast.random_split`
++exists — some problems genuinely are exchangeable — but it is opt-in and warns
++loudly every time. {func}`~otwin.forecast.temporal_holdout` is the default and
++{func}`~otwin.forecast.rolling_origin` is what you should report.
++
++**No baseline.** A skill score against nothing is a number with no scale.
++{class}`~otwin.interfaces.Baseline` is compulsory rather than optional: if your
++twin cannot beat {func}`~otwin.forecast.persistence`, that is the finding.
++
++## Splitters
++
++| Splitter | Leakage-free | Use |
++|---|---|---|
++| {func}`~otwin.forecast.temporal_holdout` | yes | quick check; default |
++| {func}`~otwin.forecast.rolling_origin` | yes | reporting; expanding or sliding window |
++| {func}`~otwin.forecast.random_split` | **no** | only when the data is genuinely exchangeable |
++
++## Baselines you have to beat
++
++{func}`~otwin.forecast.persistence` (repeat the last value),
++{func}`~otwin.forecast.mean_forecast`, {func}`~otwin.forecast.drift` (linear
++extrapolation from the last two points), and
++{func}`~otwin.forecast.seasonal_naive`. {func}`~otwin.forecast.get_best_baseline`
++picks the strongest by RMSE, which is the honest comparator — beating the
++*weakest* baseline is not evidence of anything.
++
++Persistence is a much harder opponent than it looks on a slowly-degrading asset.
++That is the point.
++
++## Evaluating
++
++```python
++import numpy as np
++from otwin.forecast import evaluate
++
++rng = np.random.default_rng(1)
++k = np.arange(400)
++series = 1.0 - 0.0004 * k + rng.normal(0, 0.002, k.size)
++
++class FadeLaw:
++    """A model exposing the only interface `evaluate` will call."""
++
++    def forecast(self, history, horizon):
++        idx = np.arange(history.size)
++        coeffs = np.polyfit(idx[-150:], history[-150:], 1)
++        return np.polyval(coeffs, np.arange(history.size, history.size + horizon))
++
++report = evaluate(FadeLaw(), series, protocol="rolling_origin", horizon=20, n_folds=5)
++print(f"protocol      : {report.split_protocol}  ({report.n_folds} folds)")
++print(f"RMSE          : {report.point_metrics['rmse']:.5f}")
++print(f"MASE          : {report.point_metrics['mase']:.3f}")
++print(f"best baseline : {report.baseline_name} at RMSE {report.baseline_metrics['rmse']:.5f}")
++print(f"skill score   : {report.skill_score():+.3f}")
++```
++
++```text
++protocol      : rolling_origin  (5 folds)
++RMSE          : 0.00178
++MASE          : 0.660
++best baseline : persistence at RMSE 0.00514
++skill score   : +0.653
++```
++
++{meth}`~otwin.forecast.EvalReport.skill_score` is a method, not an attribute —
++it is computed against the baseline rather than stored. `MASE` below 1 means the
++model beats a naive forecast on the same scale; `data_hash` and `seed` on the
++report are what make the number reproducible six months later.
++
++A model that does not expose `forecast(history, horizon)` raises
++{class}`~otwin.forecast.ForecastInterfaceError` rather than falling back to
++something that might leak.
++
++## Exogenous drivers
++
++Some twins depend on something the target does not determine — ambient
++temperature, dispatch schedule, throughput. Pass `exog=` and the protocol splits
++it in step with the target, handing the model `exog_past` and `exog_future`
++separately.
++
++Every column is checked against the target at shifts up to five steps **in both
++directions**, and an exact match is refused. A covariate carrying the answer
++defeats the leakage-free interface as completely as passing the test array did,
++and it is much harder to notice by eye.
++
++## Recording it
++
++{meth}`~otwin.interfaces.TwinManifest.validated_by` builds the record the
++envelope reads:
++
++```python
++from otwin.interfaces import TwinManifest
++
++print(TwinManifest.validated_by(protocol="rolling_origin", horizon=60))
++print(TwinManifest.validated_by(protocol="random_split", horizon=60))
++```
++
++```text
++{'protocol': 'rolling_origin', 'leakage_free': True, 'horizon': 60}
++{'protocol': 'random_split', 'leakage_free': False, 'horizon': 60}
++```
++
++`leakage_free` is *derived* from the protocol, not asserted by the caller. You
++cannot record a random split as leakage-free by writing it down.
+diff --git a/docs/concepts/port-hamiltonian.md b/docs/concepts/port-hamiltonian.md
+new file mode 100644
+index 0000000..a44a11e
+--- /dev/null
++++ b/docs/concepts/port-hamiltonian.md
+@@ -0,0 +1,131 @@
++# Port-Hamiltonian systems
++
++A port-Hamiltonian system (PHS) writes a physical asset as an energy balance
++rather than as a curve through data. The payoff is a guarantee that holds
++*outside* the range you fitted on, which is precisely where a fitted curve
++stops meaning anything.
++
++## The form
++
++$$
++\begin{align}
++\dot{x} &= \bigl(J(x) - R(x)\bigr)\,\nabla H(x) + g(x)\,u \\
++y &= g(x)^{\mathsf T}\,\nabla H(x)
++\end{align}
++$$
++
++| Symbol | Meaning | Constraint |
++|---|---|---|
++| $H(x)$ | stored energy | bounded below |
++| $J(x)$ | interconnection | $J = -J^{\mathsf T}$ (skew-symmetric) |
++| $R(x)$ | dissipation | $R \succeq 0$ (positive semidefinite) |
++| $g(x)$ | input map | — |
++| $u,\;y$ | port variables | $y^{\mathsf T}u$ is power |
++
++$J$ routes energy between stores without creating or destroying any — it is
++skew, so $\nabla H^{\mathsf T} J \nabla H = 0$ identically. $R$ is where energy
++leaves. $g$ is the port through which the outside world does work on the asset.
++
++## Why the structure is the point
++
++Differentiate the stored energy along a trajectory:
++
++$$
++\frac{\mathrm{d}H}{\mathrm{d}t}
++= \nabla H^{\mathsf T}\dot{x}
++= \underbrace{-\nabla H^{\mathsf T} R\, \nabla H}_{\le\,0\ \text{since } R \succeq 0}
++\;+\; y^{\mathsf T}u
++\;\le\; y^{\mathsf T}u
++$$
++
++The skew part vanished. What remains says the stored energy can grow only by as
++much as the port supplies — **passivity**, and it follows from the *shape* of
++the model, not from the parameter values, not from the training data, and not
++from the accuracy of the integrator.
++
++That is the whole argument for using this form on an asset. A neural network
++fitted to a discharge curve will extrapolate to a battery that generates energy;
++this cannot, at any parameter setting.
++
++## In the library
++
++{class}`~otwin.model.PortHamiltonianSystem` takes the four functions directly:
++
++```python
++import numpy as np
++from otwin.model import PortHamiltonianSystem
++
++m, k, b = 1.0, 4.0, 0.3          # mass, stiffness, damping
++
++phs = PortHamiltonianSystem(
++    H=lambda x: 0.5 * x[0] ** 2 / m + 0.5 * k * x[1] ** 2,
++    J=lambda x: np.array([[0.0, -1.0], [1.0, 0.0]]),
++    R=lambda x: np.array([[b, 0.0], [0.0, 0.0]]),
++    g=lambda x: np.array([[1.0], [0.0]]),
++    n_states=2,
++    n_inputs=1,
++    grad_H=lambda x: np.array([x[0] / m, k * x[1]]),
++)
++
++x = np.array([1.0, 0.5])
++print(f"H = {phs.energy(x):.4f}")
++print(f"dH/dt with the port closed = {phs.power_balance(x, np.zeros(1))['dH_dt']:.6f}")
++```
++
++```text
++H = 1.0000
++dH/dt with the port closed = -0.300000
++```
++
++Pass `grad_H` whenever you have it. Without it the gradient is finite-
++differenced, and on a stiff Hamiltonian that is the difference between an
++adiabatic energy drift of 1e-13 and one of 1e-6 — quietly weakening the exact
++check the class exists to make.
++
++`lambda` for `H`, `J`, `R` and `g` is the intended style, not a shortcut. A
++port-Hamiltonian system *is* four functions, and the notation matches the
++mathematics on the page. (The library's own lint config exempts `E731` for this
++reason.)
++
++## The catalogue
++
++Rather than writing the four functions yourself, start from a worked model:
++
++| Function | Asset | States |
++|---|---|---|
++| {func}`~otwin.model.mass_spring_damper` | canonical mechanical PHS | momentum, displacement |
++| {func}`~otwin.model.dc_motor` | electrical + mechanical, gyrator-coupled | flux linkage, angular momentum |
++| {func}`~otwin.model.water_tank` | tank with an open drain (dissipative) | volume |
++| {func}`~otwin.model.pumped_hydro` | two-reservoir grid-scale store | two volumes |
++| {func}`~otwin.model.heat_exchanger` | counter-flow, irreversible | two temperatures |
++
++## Checking the structure
++
++The two constraints are checkable, and checking them is cheap:
++
++```python
++from otwin.model import check_psd, check_skew_symmetric
++
++print(check_skew_symmetric(phs.J(x)))
++print(check_psd(phs.R(x)))
++```
++
++```text
++(True, 0.0)
++(True, 0.0)
++```
++
++Both return `(verdict, residual)`. The residual is how far the matrix is from
++the property — useful when a structure is assembled numerically and you want to
++know whether a failure is a genuine modelling error or floating-point dust.
++
++A `J` that is not skew or an `R` that is not PSD is not a slightly wrong model.
++It is a model with no passivity guarantee at all, which means every argument on
++this page stops applying to it.
++
++## Next
++
++- [Irreversible systems](irreversible.md) — when entropy production has to be
++  explicit, and the two forms the literature uses
++- [Structure-preserving integration](integration.md) — how to advance the state
++  without destroying what this page established
+diff --git a/docs/conf.py b/docs/conf.py
+new file mode 100644
+index 0000000..e718684
+--- /dev/null
++++ b/docs/conf.py
+@@ -0,0 +1,153 @@
++"""Sphinx configuration for the otwin documentation.
++
++Two decisions worth stating, because both are visible in every page.
++
++**The API reference is generated, never written.** `autosummary` walks the
++package and reads the docstrings that `pytest --doctest-modules` already
++executes on every commit. A hand-written parameter table is a second source of
++truth that goes stale the first time somebody changes a default, and nothing
++tells you it has. Here, a signature that drifts breaks the test suite before it
++reaches the docs.
++
++**Napoleon is not optional.** The package has two docstring dialects: newer
++modules such as ``otwin.forecast.conformal`` use native reST roles, older ones
++such as ``otwin.model.phs`` use Google-style ``Args:``. Napoleon reads the
++second, Sphinx reads the first, and both render the same way.
++"""
++
++from __future__ import annotations
++
++import os
++from importlib.metadata import version as _version
++
++project = "otwin"
++copyright = "2026, otwin-core"
++author = "otwin-core"
++
++# Read from the installed distribution rather than restating it here. One more
++# place for the version to live is one more place for it to disagree.
++release = _version("otwin")
++version = ".".join(release.split(".")[:2])
++
++extensions = [
++    "myst_parser",
++    "sphinx.ext.autodoc",
++    "sphinx.ext.autosummary",
++    "sphinx.ext.napoleon",
++    "sphinx.ext.intersphinx",
++    "sphinx.ext.viewcode",
++    "sphinx.ext.mathjax",
++    "sphinx_copybutton",
++    "sphinx_design",
++    "sphinxcontrib.mermaid",
++]
++
++templates_path = ["_templates"]
++exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
++
++# -- Markdown ---------------------------------------------------------------
++# MyST rather than reST for the prose. The reference section is generated, so
++# the only hand-written files are the ones a contributor should not need to
++# learn a markup language to edit.
++myst_enable_extensions = [
++    "amsmath",       # \begin{align} ... \end{align}
++    "colon_fence",   # ::: directives, which survive a Markdown renderer
++    "deflist",
++    "dollarmath",    # $x$ and $$x$$
++    "linkify",
++    "substitution",
++    "tasklist",
++]
++myst_heading_anchors = 3
++
++# -- Autodoc ----------------------------------------------------------------
++autosummary_generate = True
++autodoc_member_order = "bysource"       # the order the author chose, not alphabetical
++autodoc_typehints = "description"       # types in the parameter list, not the signature
++autodoc_typehints_description_target = "documented_params"
++autodoc_class_signature = "separated"
++
++# numpy's annotations expand to `ndarray[tuple[Any, ...], dtype[floating[Any]]]`
++# in a rendered signature, which is true and unreadable. The aliases the source
++# actually uses are the ones a reader should see.
++autodoc_type_aliases = {
++    "Array": "otwin.interfaces.Array",
++    "Vector": "otwin.interfaces.Array",
++    "IndexArray": "otwin.interfaces.IndexArray",
++    # `np.bool_` ends in an underscore, which reStructuredText reads as a
++    # hyperlink reference to a target that does not exist. Rendered into a
++    # parameter description by `autodoc_typehints = "description"`, it is a
++    # build error rather than a typo.
++    "npt.NDArray[np.bool_]": "numpy.ndarray of bool",
++}
++
++autodoc_default_options = {
++    "members": True,
++    "undoc-members": False,      # an undocumented member is a gap, not a page
++    "show-inheritance": True,
++}
++
++napoleon_google_docstring = True
++napoleon_numpy_docstring = True
++napoleon_use_param = True
++# Render an `Attributes:` section as `:ivar:` fields inside the class body
++# rather than as separate `py:attribute` directives. Without this, every
++# dataclass attribute is documented twice on the same page -- once by autodoc
++# from the annotation, once by napoleon from the docstring -- and Sphinx is
++# right to complain about it.
++napoleon_use_ivar = True
++napoleon_use_rtype = True
++napoleon_preprocess_types = True
++
++# -- Cross-project links ----------------------------------------------------
++intersphinx_mapping = {
++    "python": ("https://docs.python.org/3", None),
++    "numpy": ("https://numpy.org/doc/stable/", None),
++    "scipy": ("https://docs.scipy.org/doc/scipy/", None),
++}
++
++# Fetching three inventories over the network turns an offline build into a
++# wall of warnings, and `fail_on_warning` turns those into a failure. Set
++# OTWIN_DOCS_OFFLINE=1 to build without them; Read the Docs has network and
++# does not set it.
++if os.environ.get("OTWIN_DOCS_OFFLINE"):
++    intersphinx_mapping = {}
++
++# -- HTML -------------------------------------------------------------------
++html_theme = "pydata_sphinx_theme"
++html_static_path = ["_static"]
++html_css_files = ["custom.css"]
++html_title = f"otwin {release}"
++
++html_theme_options = {
++    "github_url": "https://github.com/otwin-core/otwin",
++    "show_prev_next": True,
++    "navigation_with_keys": False,
++    "show_toc_level": 2,
++    "icon_links": [
++        {
++            "name": "PyPI",
++            "url": "https://pypi.org/project/otwin/",
++            "icon": "fa-brands fa-python",
++        },
++    ],
++    "footer_start": ["copyright"],
++    "footer_end": ["sphinx-version"],
++}
++
++html_context = {
++    "github_user": "otwin-core",
++    "github_repo": "otwin",
++    "github_version": "main",
++    "doc_path": "docs",
++}
++
++# -- Warnings we accept -----------------------------------------------------
++# `fail_on_warning: true` in .readthedocs.yaml means every entry here is a
++# deliberate exemption with a reason, not a swept-under-the-rug list.
++nitpicky = False
++suppress_warnings = [
++    # sphinx-design registers its own directives; MyST reports the ones it
++    # does not know about at parse time even when they resolve later.
++    "myst.header",
++]
+diff --git a/docs/guides/advise.md b/docs/guides/advise.md
+new file mode 100644
+index 0000000..e5dd045
+--- /dev/null
++++ b/docs/guides/advise.md
+@@ -0,0 +1,58 @@
++# Advise — `otwin.advise`
++
++Four names. This is the smallest module in the package and the one that decides
++whether anything upstream of it gets to be used.
++
++The reasoning is in [Validity envelopes](../concepts/envelopes.md).
++
++## The objects
++
++{class}`~otwin.advise.Envelope`
++: the range over which a twin has been shown to work — state bounds, maximum
++  horizon, and whether validation and calibration are required.
++
++{class}`~otwin.advise.Verdict`
++: what the twin is willing to say, and why. Truthy when the question is
++  answerable; carries `breaches` and `checked` either way.
++
++{class}`~otwin.advise.Breach`
++: one reason the request falls outside, naming the field, the value asked for
++  and the value validated.
++
++{class}`~otwin.advise.OutsideEnvelope`
++: the same refusal as an exception, for call sites where a falsy return value
++  would be easy to ignore.
++
++## Using it
++
++```{code-block} python
++verdict = envelope.check(
++    state=x, horizon=h, manifest=manifest, wants_interval=True,
++)
++if verdict:
++    ...   # answer
++else:
++    for breach in verdict.breaches:
++        log.warning("refused: %s", breach)
++```
++
++`wants_interval=True` is what makes the calibration check apply. Asking for a
++point forecast and asking for a band are different questions with different
++evidence requirements, and the envelope treats them that way.
++
++## Reading `checked`
++
++{attr}`~otwin.advise.Verdict.checked` lists what was actually examined. It
++matters because a passing verdict from an envelope that checked nothing is not
++the same as a passing verdict from one that checked four things — and without
++this field the two are indistinguishable in a log.
++
++## The failure this exists to prevent
++
++A confident number, produced far outside anything that was ever tested, with
++nothing in the output to indicate it. Every other block in this library produces
++evidence; this one is what makes the absence of evidence *visible*.
++
++An absent record is a refusal, not a pass. That includes an absent envelope: a
++twin with no `state_bounds` does not get a clean verdict for a state of charge
++of $10^{12}$.
+diff --git a/docs/guides/estimate.md b/docs/guides/estimate.md
+new file mode 100644
+index 0000000..491651c
+--- /dev/null
++++ b/docs/guides/estimate.md
+@@ -0,0 +1,50 @@
++# Estimate — `otwin.estimate`
++
++The state you want is rarely the quantity you measure. You measure terminal
++voltage and want state of charge; you measure two temperatures and want the
++internal energy split. This block recovers it.
++
++## Which estimator
++
++| Class | Model | Use when |
++|---|---|---|
++| {class}`~otwin.estimate.KalmanFilter` | linear, $x_{k+1} = Ax_k + Bu_k + w$ | the dynamics genuinely are linear |
++| {class}`~otwin.estimate.ExtendedKalmanFilter` | any twin exposing `dynamics` | the standard nonlinear choice |
++| {class}`~otwin.estimate.EnergyConsistentObserver` | a port-Hamiltonian twin | you care that the estimate stays physical |
++| {class}`~otwin.estimate.MovingHorizonEstimator` | any, with constraints | states have hard bounds, or outliers are a problem |
++
++All four take the same core arguments — the model, process noise `Q`,
++measurement noise `R_meas`, initial covariance `P0` — and return a
++{class}`~otwin.estimate.FilterResult` from a full pass.
++
++## The energy-consistent observer
++
++This is the one specific to what `otwin` is for.
++
++An EKF correction step is a least-squares update. Nothing in it knows about your
++energy function, so on a passive model it will cheerfully push the state to a
++point of *higher* stored energy than physics allows — and once it has, every
++guarantee argued for in [Port-Hamiltonian systems](../concepts/port-hamiltonian.md)
++is gone, silently, in the middle of a run.
++
++{class}`~otwin.estimate.EnergyConsistentObserver` rejects a measurement
++correction that would manufacture energy. It returns an
++{class}`~otwin.estimate.EnergyFilterResult` — a `FilterResult` plus the energy
++audit, so you can see how often the constraint bound and by how much.
++
++A constraint that binds constantly is telling you something: either `R_meas` is
++too optimistic about your sensor, or the model is wrong. Read the audit rather
++than turning the check off.
++
++## Moving-horizon estimation
++
++{class}`~otwin.estimate.MovingHorizonEstimator` solves a constrained problem
++over a sliding window instead of a single recursive update. Costlier per step,
++and worth it for two reasons: hard bounds on states (a state of charge is in
++$[0, 1]$, not merely usually) and robustness to outliers, since a single bad
++measurement is outvoted by the rest of the window rather than dragging the
++estimate with it.
++
++## Next
++
++[Model](model.md) — the structure all of these estimate the state of.
+diff --git a/docs/guides/forecast.md b/docs/guides/forecast.md
+new file mode 100644
+index 0000000..8050af9
+--- /dev/null
++++ b/docs/guides/forecast.md
+@@ -0,0 +1,106 @@
++# Forecast — `otwin.forecast`
++
++What happens next, and how sure. The largest module in the package, and the one
++with the most ways to fool yourself — so it is built to make the honest path the
++easy one.
++
++The reasoning is in [Leakage-free evaluation](../concepts/leakage.md) and
++[Calibrated intervals](../concepts/conformal.md). This page is the map.
++
++## The one interface
++
++`otwin` asks a model for exactly one thing:
++
++```{code-block} python
++def forecast(self, history, horizon): ...
++```
++
++`history` is everything up to the origin. `horizon` is how many steps ahead.
++There is no argument through which the held-out targets could arrive, which is
++the point: a model that does not expose this raises
++{class}`~otwin.forecast.ForecastInterfaceError` rather than falling back to
++something that might leak.
++
++## Splitting
++
++| | |
++|---|---|
++| {func}`~otwin.forecast.temporal_holdout` | last fraction held out; the default |
++| {func}`~otwin.forecast.rolling_origin` | expanding or sliding window; report this |
++| {func}`~otwin.forecast.random_split` | **opt-in, warns loudly** — measures interpolation on a time series |
++
++## Baselines
++
++{func}`~otwin.forecast.persistence`, {func}`~otwin.forecast.mean_forecast`,
++{func}`~otwin.forecast.drift`, {func}`~otwin.forecast.seasonal_naive`.
++{func}`~otwin.forecast.get_best_baseline` picks the strongest by RMSE — the only
++honest comparator, since beating the weakest proves nothing.
++
++## Evaluating
++
++{func}`~otwin.forecast.evaluate` runs the whole thing and returns an
++{class}`~otwin.forecast.EvalReport` carrying `split_protocol`, `n_folds`,
++`point_metrics`, `baseline_metrics`, `probabilistic_metrics`, `data_hash`,
++`seed` and `n_exog`. {meth}`~otwin.forecast.EvalReport.skill_score` is a method
++— computed against the baseline, not stored. `to_markdown()` renders it for a
++report; `to_json()` / `from_json()` round-trip it.
++
++`data_hash` and `seed` are what make a number reproducible six months later. A
++metric without them is an anecdote.
++
++## Metrics
++
++**Point:** {func}`~otwin.forecast.rmse`, {func}`~otwin.forecast.mae`,
++{func}`~otwin.forecast.nrmse`, {func}`~otwin.forecast.mase`,
++{func}`~otwin.forecast.theil_u`, {func}`~otwin.forecast.skill_score`.
++
++**Interval and probabilistic:** {func}`~otwin.forecast.picp` (delivered
++coverage), {func}`~otwin.forecast.mpiw` / {func}`~otwin.forecast.sharpness`
++(width), {func}`~otwin.forecast.interval_score` (trades the two off),
++{func}`~otwin.forecast.crps`, {func}`~otwin.forecast.pit_values`,
++{func}`~otwin.forecast.coverage_curve`,
++{func}`~otwin.forecast.expected_calibration_error`.
++
++Report coverage **and** width together. Either alone is trivially gameable: a
++band from $-\infty$ to $\infty$ has perfect coverage.
++
++## Building intervals
++
++{func}`~otwin.forecast.rolling_origin_residuals`
++: genuine $h$-step-ahead residuals. Start here. Everything below is only as good
++  as what you feed it.
++
++{func}`~otwin.forecast.conformal_quantile`
++: the finite-sample quantile, $k = \lceil \alpha(n+1)\rceil$. Returns infinity
++  when the calibration set cannot support the level.
++
++{func}`~otwin.forecast.split_conformal`
++: one half-width for every horizon.
++
++{func}`~otwin.forecast.horizon_conformal`
++: a half-width that grows with the horizon, with
++  {attr}`~otwin.forecast.ConformalBand.extrapolated` marking where the guarantee
++  stops.
++
++{class}`~otwin.forecast.AdaptiveConformal`
++: online conformal inference for a live asset whose error distribution drifts.
++
++{func}`~otwin.forecast.recalibrate`
++: a monotonic recalibration map from calibration-set PIT values, when the shape
++  of the predictive distribution is wrong rather than its width.
++
++{class}`~otwin.forecast.Ensemble`
++: quantile intervals from a collection of members.
++
++## Exogenous drivers
++
++Pass `exog=` to {func}`~otwin.forecast.evaluate` and the protocol splits it in
++step with the target, handing the model `exog_past` and `exog_future`. Every
++column is checked against the target at shifts up to five steps in both
++directions and an exact match is refused — a covariate carrying the answer
++defeats the interface as completely as passing the test array did, and is far
++harder to spot by eye.
++
++## Next
++
++[Advise](advise.md) — deciding whether the forecast you just made may be used.
+diff --git a/docs/guides/index.md b/docs/guides/index.md
+new file mode 100644
+index 0000000..3eb99b6
+--- /dev/null
++++ b/docs/guides/index.md
+@@ -0,0 +1,30 @@
++# Guides
++
++One page per ISO 13374 block, in the order data moves through them. Each is
++task-oriented: what you are trying to do, the call that does it, and the trap
++that comes with it.
++
++If you want the mathematics instead, go to [Concepts](../concepts/index.md).
++If you know the name you want, go to the [API reference](../api/index.md).
++
++```{toctree}
++:maxdepth: 1
++
++io
++signal
++estimate
++model
++forecast
++advise
++```
++
++## Which block am I in?
++
++| I want to… | Block |
++|---|---|
++| read a battery inverter over Modbus | [Acquire](io.md) |
++| turn irregular timestamps into a uniform grid | [Condition](signal.md) |
++| recover a state of charge I cannot measure | [Estimate](estimate.md) |
++| write the asset as an energy balance | [Model](model.md) |
++| predict capacity in 60 cycles, with a band | [Forecast](forecast.md) |
++| decide whether I am allowed to act on it | [Advise](advise.md) |
+diff --git a/docs/guides/io.md b/docs/guides/io.md
+new file mode 100644
+index 0000000..1066862
+--- /dev/null
++++ b/docs/guides/io.md
+@@ -0,0 +1,83 @@
++# Acquire — `otwin.io`
++
++Reading a device, or a dataset, in a way that lets you say afterwards where each
++number came from.
++
++:::{important}
++Connectors are **read-only**. `otwin` can read a Modbus or SunSpec device and
++cannot write to one. Closed-loop actuation is deliberately out of scope.
++:::
++
++## Quality is not optional
++
++Every value carries a {class}`~otwin.io.Quality` flag. A sensor that returns a
++plausible number after a failed read is more dangerous than one that returns
++nothing, so `otwin` never silently substitutes. {class}`~otwin.io.QualityTracker`
++turns per-tag read outcomes into values-plus-flags, and the flag travels with
++the value through conditioning and into the forecast.
++
++## SunSpec
++
++{class}`~otwin.io.SunSpecSource` discovers a model chain and reads it. Models 1,
++701, 702, 704, 713, 802, 803, 804 and 805 are supported.
++
++```python
++from otwin.io import SunSpecSimulator, SunSpecSource
++
++# The simulator drives the identical decode path as a live device, so you can
++# develop and test the whole pipeline without hardware.
++source = SunSpecSource(transport=SunSpecSimulator())
++sample = source.read()
++print(sorted(sample.values)[:5])
++```
++
++```text
++['m1.DA', 'm701.A', 'm701.ACType', 'm701.AL1', 'm701.AL2']
++```
++
++Two behaviours worth knowing:
++
++**A corrupt scale factor degrades one point, not the sample.** `10.0 ** exponent`
++on a bad `sunssf` register used to raise `OverflowError` out of `read()` and lose
++every other model on the chain. The exponent is now range-checked against the
++SunSpec specification and the affected points degrade through the quality ladder.
++
++**State of charge is ranked by readability.** Models 713 and 802 both publish it.
++The choice used to be made on publication order and then refused if that one read
++badly — even with the other answering cleanly. Candidates are now ranked by
++readability first, so the model preference breaks ties rather than overriding
++them.
++
++## Generic Modbus
++
++{class}`~otwin.io.ModbusSource` reads a register map you describe, with
++{class}`~otwin.io.ModbusSimulator` as its offline counterpart.
++{func}`~otwin.io.load_register_map` reads that description from YAML or JSON, so
++the map is data rather than code.
++
++{func}`~otwin.io.decode_registers` and {func}`~otwin.io.encode_value` are the
++raw pair underneath, exposed because register-level debugging is a normal part
++of commissioning.
++
++## Units
++
++{func}`~otwin.io.to_si` converts to SI — W, Wh, A, C, V, K, Hz, s —
++{func}`~otwin.io.si_unit` says which unit that will be, and
++{func}`~otwin.io.normalise` does both in one call.
++
++{class}`~otwin.io.UnknownUnitError` is deliberately an error rather than a
++pass-through. A unit string nobody recognised is a modelling question, not a
++formatting one, and passing it through unconverted is how a kilowatt becomes a
++watt three blocks downstream.
++
++## Datasets
++
++{func}`~otwin.io.load` fetches a registered dataset as a DataFrame,
++{func}`~otwin.io.describe` gives its licence and citation,
++{func}`~otwin.io.verify` checks a local file against its registered checksum,
++and {func}`~otwin.io.path_for` says where it would be cached whether or not it
++is there.
++
++## Next
++
++[Condition](signal.md) — putting what you just read onto a uniform grid.
+diff --git a/docs/guides/model.md b/docs/guides/model.md
+new file mode 100644
+index 0000000..1ccad39
+--- /dev/null
++++ b/docs/guides/model.md
+@@ -0,0 +1,88 @@
++# Model — `otwin.model`
++
++The asset, written as an energy balance. The theory is in
++[Port-Hamiltonian systems](../concepts/port-hamiltonian.md) and
++[Irreversible systems](../concepts/irreversible.md); this page is how to get one
++built and running.
++
++## Start from the catalogue
++
++| Function | Asset | Kind |
++|---|---|---|
++| {func}`~otwin.model.mass_spring_damper` | canonical mechanical PHS | PHS |
++| {func}`~otwin.model.dc_motor` | electrical + mechanical, gyrator-coupled | PHS |
++| {func}`~otwin.model.water_tank` | tank with an open drain | PHS, dissipative |
++| {func}`~otwin.model.pumped_hydro` | two-reservoir grid-scale store | PHS, conservative |
++| {func}`~otwin.model.heat_exchanger` | counter-flow exchanger | `ModulatedIPHS` |
++| {func}`~otwin.model.effectiveness_ntu` | steady-state ε-NTU duty | — |
++| {func}`~otwin.model.kern_seaton_fouling` | fouling resistance over time | `FoulingLaw` |
++
++Reading one of these is the fastest way to learn how to write your own: each
++carries the reference it came from, its state vector, its ports and its
++structure matrices in the docstring.
++
++## Build your own
++
++Three classes, in increasing order of what they promise:
++
++{class}`~otwin.model.PortHamiltonianSystem`
++: $\dot{x} = (J-R)\nabla H + gu$. Pass `H`, `J`, `R`, `g`, and `grad_H` whenever
++  you have it.
++
++{class}`~otwin.model.IrreversiblePHS`
++: adds $L(x)\nabla S(x)$ and enforces $L \succeq 0$, so $\sigma \ge 0$ is
++  structural.
++
++{class}`~otwin.model.ModulatedIPHS`
++: $\gamma(x)\,J\nabla H$, the Ramírez–Maschke–Sbarbaro form. $\sigma$ is checked
++  on every call because for this form it is a property of $\gamma$, not of the
++  structure.
++
++{class}`~otwin.model.PortHamiltonianNN` learns $H$, $J$ and $R$ from data with
++the skew/PSD/bounded-below constraints built into the parameterisation, so the
++learned model is passive by construction rather than by regularisation. Needs
++`pip install "otwin[nn]"`.
++
++## Check what you built
++
++```{code-block} python
++from otwin.model import check_psd, check_skew_symmetric
++```
++
++Both return `(verdict, residual)`. Run them once on a freshly assembled
++structure. A `J` that is not skew is not a slightly wrong model — it is a model
++with no passivity guarantee at all.
++
++{func}`~otwin.model.numerical_gradient` is the central-difference fallback used
++when you do not supply `grad_H`. It is there so that a model without an analytic
++gradient still works, not because it is a good idea: on a stiff Hamiltonian it
++is the difference between an adiabatic energy drift of 1e-13 and one of 1e-6.
++
++## Integrate
++
++{func}`~otwin.model.integrate_phs` is the entry point;
++{func}`~otwin.model.implicit_midpoint` is the scheme;
++{func}`~otwin.model.newton_step` is the damped Newton solve underneath, exposed
++because a failed step is something you sometimes need to inspect.
++{func}`~otwin.model.integrate` and
++{func}`~otwin.model.integrate_with_inputs` are the generic-ODE paths for models
++that are not port-Hamiltonian.
++
++See [Structure-preserving integration](../concepts/integration.md) for what the
++solver preserves and why the fast path is guarded.
++
++## Training losses
++
++For fitting a model against data while keeping its structure:
++{func}`~otwin.model.derivative_loss` (mean-squared error between predicted and
++target derivatives) and {func}`~otwin.model.passivity_penalty` (a soft penalty
++on energy growth at zero input).
++
++Use the penalty as a diagnostic, not as the guarantee. A soft penalty that
++happens to reach zero on your training set is not the same as a structure that
++cannot violate passivity at any parameter value — and the second is what makes
++the model trustworthy off-distribution.
++
++## Next
++
++[Forecast](forecast.md) — running the model forward, and being honest about it.
+diff --git a/docs/guides/signal.md b/docs/guides/signal.md
+new file mode 100644
+index 0000000..2b58982
+--- /dev/null
++++ b/docs/guides/signal.md
+@@ -0,0 +1,68 @@
++# Condition — `otwin.signal`
++
++Field data arrives at irregular times, out of order, with holes in it. Every
++downstream block assumes a uniform grid. This block bridges the two — without
++inventing measurements.
++
++Five names, and they do one thing each.
++
++## Put samples in order
++
++```python
++import numpy as np
++from otwin.signal import sort_samples
++
++t = np.array([0.0, 30.0, 10.0, 20.0])
++v = np.array([1.0, 4.0, 2.0, 3.0])
++t_sorted, v_sorted = sort_samples(t, v)
++print(t_sorted, v_sorted)
++```
++
++```text
++[ 0. 10. 20. 30.] [1. 2. 3. 4.]
++```
++
++Out-of-order timestamps are common where a logger buffers and flushes. Every
++other function here assumes monotone time.
++
++## Find the holes before you fill them
++
++{func}`~otwin.signal.find_gaps` returns a {class}`~otwin.signal.Gap` per
++interval longer than `max_gap`, each with `start`, `end`, `duration` and
++`n_missing`. Look at them before resampling. A four-hour hole in a ten-second
++signal is not a gap to interpolate across; it is an outage, and whatever you
++forecast through it is fiction.
++
++## Resample without inventing data
++
++```python
++from otwin.signal import coverage, resample
++
++t = np.array([0.0, 10.0, 20.0, 90.0, 100.0])
++v = np.array([1.0, 2.0, 3.0, 9.0, 10.0])
++
++t_u, v_u, gaps = resample(t, v, dt=10.0, max_gap=30.0)
++print(f"{t_u.size} grid points, {len(gaps)} gap(s)")
++print(f"coverage {coverage(v_u):.3f}")
++```
++
++```text
++11 grid points, 1 gap(s)
++coverage 0.455
++```
++
++Two things are deliberate here.
++
++**The grid stops at the last whole step.** It used to run half a step past the
++final measurement, and {func}`~otwin.signal.coverage` reported the invented
++point as measured.
++
++**Coverage is the number to report.** A skill score computed over a window that
++was 45 % real measurement and 55 % interpolation is a skill score against your
++own interpolator. {func}`~otwin.signal.coverage` is the fraction of the
++conditioned series that is a real measurement, and it belongs in the manifest
++next to the metrics.
++
++## Next
++
++[Estimate](estimate.md) — recovering the states the grid does not contain.
+diff --git a/docs/index.md b/docs/index.md
+new file mode 100644
+index 0000000..1e20a98
+--- /dev/null
++++ b/docs/index.md
+@@ -0,0 +1,105 @@
++# otwin
++
++**A digital twin you are allowed to trust — or that tells you why you are not.**
++
++`otwin` builds twins of physical assets out of their energy structure, evaluates
++their forecasts under protocols that cannot see the future, attaches intervals
++whose coverage has been measured rather than assumed, and refuses to answer
++questions outside the range it has been shown to work over.
++
++That last part is the unusual one. Most forecasting libraries always return a
++number. This one returns a refusal with a reason when the number would be
++unjustified:
++
++```text
++horizon: beyond the validated forecast horizon (asked for 90, validated to 60)
++```
++
++```{code-block} bash
++pip install otwin
++```
++
++::::{grid} 1 1 2 2
++:gutter: 3
++
++:::{grid-item-card} {octicon}`rocket` Quickstart
++:link: quickstart
++:link-type: doc
++
++Twenty lines: integrate a pumped-hydro store, forecast a capacity fade with a
++calibrated band, and watch the twin decline a question it cannot support.
++:::
++
++:::{grid-item-card} {octicon}`book` Concepts
++:link: concepts/index
++:link-type: doc
++
++The equations. Port-Hamiltonian form, entropy production, structure-preserving
++integration, leakage-free evaluation, conformal bands.
++:::
++
++:::{grid-item-card} {octicon}`tools` Guides
++:link: guides/index
++:link-type: doc
++
++One page per ISO 13374 block: acquire, condition, estimate, model, forecast,
++advise.
++:::
++
++:::{grid-item-card} {octicon}`code` API reference
++:link: api/index
++:link-type: doc
++
++Every public name, generated from the docstrings the test suite executes.
++:::
++
++::::
++
++## The shape of the library
++
++`otwin` is organised as the six data-processing blocks of **ISO 13374**, the
++condition-monitoring standard. This is not decoration: it is why the package can
++say where a number came from.
++
++| Block | Module | What it does |
++|---|---|---|
++| Data Acquisition | {mod}`otwin.io` | Read a device or a dataset, with a quality flag on every value |
++| Data Manipulation | {mod}`otwin.signal` | Put irregular samples on a grid without inventing data |
++| State Detection | {mod}`otwin.estimate` | Recover the state you cannot measure |
++| Health Assessment | {mod}`otwin.model` | What the asset *is*, written as an energy balance |
++| Prognostic Assessment | {mod}`otwin.forecast` | What happens next, and how sure |
++| Advisory Generation | {mod}`otwin.advise` | What to do — or why the twin will not say |
++
++{mod}`otwin.interfaces` sits underneath all six: the protocols and the
++{class}`~otwin.interfaces.TwinManifest` that records how a twin was fitted,
++validated and calibrated.
++
++## Three commitments
++
++**Energy structure, not curve fitting.** A port-Hamiltonian model is passive by
++construction. With no input, stored energy can only decrease. That property
++holds outside the training data, which is exactly where a fitted curve stops
++being trustworthy. See [Port-Hamiltonian systems](concepts/port-hamiltonian.md).
++
++**Evaluation that cannot cheat.** {func}`~otwin.forecast.evaluate` never hands
++the held-out targets to the model, a reference forecaster is compulsory rather
++than optional, and {func}`~otwin.forecast.random_split` warns loudly because a
++random split on a time series measures interpolation. See
++[Leakage-free evaluation](concepts/leakage.md).
++
++**Intervals whose coverage was measured.** A conformal band built from genuine
++h-step-ahead residuals, not from the model's own in-sample errors — a shortcut
++that on a lithium-ion capacity twin produced 1.5 % delivered coverage at a 90 %
++target. See [Calibrated intervals](concepts/conformal.md).
++
++```{toctree}
++:hidden:
++:maxdepth: 2
++
++install
++quickstart
++concepts/index
++guides/index
++api/index
++changelog
++```
+diff --git a/docs/install.md b/docs/install.md
+new file mode 100644
+index 0000000..e487bb4
+--- /dev/null
++++ b/docs/install.md
+@@ -0,0 +1,57 @@
++# Installation
++
++```bash
++pip install otwin
++```
++
++Python 3.10 or newer. The base install pulls exactly two packages — NumPy and
++SciPy — and that is deliberate: everything heavier is an extra, and nothing
++under a copyleft licence is ever a hard requirement.
++
++## Extras
++
++| Extra | Install | Brings in | For |
++|---|---|---|---|
++| `modbus` | `pip install "otwin[modbus]"` | pymodbus | Generic Modbus TCP/RTU |
++| `sunspec` | `pip install "otwin[sunspec]"` | pysunspec2, pymodbus | SunSpec model chains |
++| `gp` | `pip install "otwin[gp]"` | scikit-learn | Gaussian-process intervals |
++| `nn` | `pip install "otwin[nn]"` | PyTorch | Learned port-Hamiltonian models |
++| `field` | `pip install "otwin[field]"` | modbus + sunspec | A field deployment |
++| `all` | `pip install "otwin[all]"` | everything above | |
++
++`nn` is a ~2 GB download and only two modules need it. It is not in `dev` for
++that reason; the torch-free path is tested on every commit.
++
++## Verify
++
++```python
++import otwin
++print(otwin.__version__)
++```
++
++The package ships a PEP 561 `py.typed` marker, so a project that installs
++`otwin` and runs mypy gets its own call sites checked against these signatures.
++
++## From source
++
++```bash
++git clone https://github.com/otwin-core/otwin
++cd otwin
++python -m venv .venv && source .venv/bin/activate
++pip install -e ".[dev]"
++pytest -q
++```
++
++:::{warning}
++Install into a virtual environment. `pip install -e ".[dev]"` against a system
++Python pulls a large dependency tree into a place the OS package manager also
++manages, and on some systems the resolver is killed part-way through — leaving
++an environment that imports `otwin` but not NumPy.
++:::
++
++## Connectors are read-only
++
++`otwin.io` can read a Modbus or SunSpec device. It cannot write to one.
++Closed-loop actuation is deliberately out of scope: a library that can command
++a grid-scale battery is a different kind of artifact with a different kind of
++review, and this one has not had that review.
+diff --git a/docs/quickstart.md b/docs/quickstart.md
+new file mode 100644
+index 0000000..03a6c88
+--- /dev/null
++++ b/docs/quickstart.md
+@@ -0,0 +1,176 @@
++# Quickstart
++
++Three things, in the order you would actually do them: model an asset, forecast
++its degradation with an honest interval, and let the twin decide whether it is
++entitled to answer.
++
++Every block below runs as written. There is no data file — the fade series is
++synthetic so that this page is self-contained.
++
++## 1. A model that obeys physics
++
++{func}`~otwin.model.pumped_hydro` returns a two-reservoir store as a
++port-Hamiltonian system: water is moved between reservoirs through a reversible
++pump-turbine, and the stored energy is gravitational potential energy.
++
++```python
++import numpy as np
++import otwin
++from otwin.model import integrate_phs, pumped_hydro
++
++plant = pumped_hydro()
++
++x0 = np.array([2.0e6, 8.0e6])          # upper, lower reservoir volumes (m³)
++t = np.linspace(0.0, 3600.0, 361)      # one hour, 10 s steps
++u = np.full((t.size, 1), 50.0)         # pump 50 m³/s upward for the whole hour
++
++result = integrate_phs(plant, x0, t, u=u)
++
++H = np.array([plant.energy(x) for x in result["x"]])
++print(f"stored energy rose by {(H[-1] - H[0]) / H[0]:.1%}")
++```
++
++```text
++stored energy rose by 9.5%
++```
++
++The integrator is implicit midpoint with an analytic Jacobian, chosen because it
++preserves the discrete power balance rather than merely approximating the
++trajectory. Turn the pump off and the energy cannot rise — not because the
++solver is accurate, but because the structure forbids it. That guarantee is what
++survives outside the data you fitted on.
++
++`result` also carries `t`, the realised port trajectory `u`, and the solver's
++own diagnostics (`success`, `n_newton_iter`, `n_feval`, `message`).
++
++:::{tip}
++`u` is either an `(n_points, n_inputs)` trajectory or a **port law**
++`u(t, x) -> u` for a state-dependent port — a converter holding constant power,
++a thermostat, a droop control. A bare `(n_inputs,)` array is not a constant
++input; it is read as a one-step schedule.
++:::
++
++## 2. A forecast with an interval you can defend
++
++The trap here is worth stating before the code. It is tempting to take the
++fitted model's own in-sample residuals and quantile them. That is not a smaller
++version of the right thing, it is a different quantity: a model that
++interpolates its training data has in-sample residuals an order of magnitude
++smaller than its h-step-ahead errors. Measured on a lithium-ion capacity twin,
++that shortcut delivered **1.5 % coverage at a 90 % target**.
++
++{func}`~otwin.forecast.rolling_origin_residuals` exists to make the honest thing
++the easy thing. It refits the whole pipeline at earlier origins *inside* the
++training window and collects genuine h-step-ahead errors.
++
++```python
++from otwin.forecast import horizon_conformal, rolling_origin_residuals
++
++rng = np.random.default_rng(0)
++k = np.arange(600)
++capacity = 1.0 - 0.00025 * k - 0.00000012 * k**2 + rng.normal(0, 0.0015, k.size)
++
++def refit_forecast(history, horizon):
++    """Refit the fade law on `history` alone and project `horizon` steps."""
++    idx = np.arange(history.size)
++    coeffs = np.polyfit(idx[-200:], history[-200:], 2)
++    return np.polyval(coeffs, np.arange(history.size, history.size + horizon))
++
++residuals, horizons = rolling_origin_residuals(
++    refit_forecast, capacity, step=10, max_horizon=60
++)
++print(f"{residuals.size} residuals over horizons {horizons.min()}–{horizons.max()}")
++
++band = horizon_conformal(residuals, horizons, level=0.9, max_horizon=90)
++print(f"half-width at h=1:  {band.half_width[0]:.5f}")
++print(f"half-width at h=60: {band.half_width[59]:.5f}")
++print(f"extrapolated beyond h={int(np.argmax(band.extrapolated)) + 1}")
++```
++
++```text
++2250 residuals over horizons 1–60
++half-width at h=1:  0.00230
++half-width at h=60: 0.00272
++extrapolated beyond h=61
++```
++
++The band widens with the horizon because forecast error does, and
++{attr}`~otwin.forecast.ConformalBand.extrapolated` marks the steps no
++calibration residual ever reached. Those steps are a fitted growth law, not a
++conformal guarantee, and the object says so rather than letting you assume
++otherwise.
++
++Use {func}`~otwin.forecast.split_conformal` instead when one half-width for
++every horizon is genuinely right — a stationary error process, not a
++degradation forecast.
++
++## 3. A twin that knows what it does not know
++
++Everything above is a claim. {class}`~otwin.advise.Envelope` is what turns those
++claims into a decision, by reading the record the twin carries with it.
++
++```python
++from otwin.advise import Envelope
++from otwin.interfaces import Provenance, TwinManifest
++
++manifest = TwinManifest(
++    name="cell-A12 capacity twin",
++    model_class="empirical_law",
++    model_kind="grey_box",
++    n_states=1,
++    n_inputs=0,
++    provenance=Provenance(
++        created="2026-08-22T10:00:00Z",
++        otwin_version=otwin.__version__,
++        script="docs/quickstart.md",
++        seed=0,
++        data_source="synthetic capacity fade",
++    ),
++    validation=TwinManifest.validated_by(protocol="rolling_origin", horizon=60),
++    calibration=TwinManifest.calibrated_by(
++        method="horizon_conformal", level=0.9, empirical_coverage=0.91
++    ),
++)
++
++envelope = Envelope(
++    state_bounds=[(0.70, 1.02)],   # the capacity range it was identified over
++    max_horizon=60,               # the horizon it was validated to
++    max_extrapolation=0.0,
++)
++
++for state, horizon in [(0.92, 30), (0.92, 90), (0.55, 30)]:
++    verdict = envelope.check(
++        state=np.array([state]), horizon=horizon,
++        manifest=manifest, wants_interval=True,
++    )
++    print(f"state {state}, horizon {horizon:>2} -> {bool(verdict)}")
++    for breach in verdict.breaches:
++        print(f"    {breach}")
++```
++
++```text
++state 0.92, horizon 30 -> True
++state 0.92, horizon 90 -> False
++    horizon: beyond the validated forecast horizon (asked for 90, validated to 60)
++state 0.55, horizon 30 -> False
++    state: state 0 below the identified range (asked for 0.55, validated to 0.7)
++```
++
++A {class}`~otwin.advise.Verdict` is truthy when the question can be answered and
++carries a {class}`~otwin.advise.Breach` per reason when it cannot. Note what
++`max_extrapolation=0.0` bought: the 90-step request was refused even though the
++band object would happily have returned a half-width for it, because those steps
++were extrapolated rather than calibrated.
++
++An absent record is a refusal, not a pass. A twin with no `state_bounds` does not
++get a clean verdict for a state of charge of 1e12.
++
++## Where to go next
++
++- [Port-Hamiltonian systems](concepts/port-hamiltonian.md) — the structure, and
++  why passivity is the point
++- [Leakage-free evaluation](concepts/leakage.md) — what
++  {func}`~otwin.forecast.evaluate` refuses to do for you
++- [Calibrated intervals](concepts/conformal.md) — the three constructions and
++  when each is right
++- [Guides](guides/index.md) — one page per ISO 13374 block
+diff --git a/docs/requirements.txt b/docs/requirements.txt
+new file mode 100644
+index 0000000..f5712bb
+--- /dev/null
++++ b/docs/requirements.txt
+@@ -0,0 +1,9 @@
++# Documentation build. Pinned, because a docs build that silently changes its
++# own output between commits is not a build, it is a weather report.
++sphinx==8.1.3
++myst-parser==4.0.0
++pydata-sphinx-theme==0.16.1
++sphinx-copybutton==0.5.2
++sphinx-design==0.6.1
++linkify-it-py==2.0.3
++sphinxcontrib-mermaid==1.0.0
+diff --git a/pyproject.toml b/pyproject.toml
+index f0b36bb..602fd22 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -68,7 +68,7 @@ dev = [
+ 
+ [project.urls]
+ Homepage = "https://github.com/otwin-core/otwin"
+-Documentation = "https://github.com/otwin-core/otwin#readme"
++Documentation = "https://otwin.readthedocs.io/"
+ Source = "https://github.com/otwin-core/otwin"
+ Issues = "https://github.com/otwin-core/otwin/issues"
+ "Type test" = "https://github.com/otwin-core/otwin-spec"
+diff --git a/src/otwin/estimate/energy.py b/src/otwin/estimate/energy.py
+index e487aff..cc27fda 100644
+--- a/src/otwin/estimate/energy.py
++++ b/src/otwin/estimate/energy.py
+@@ -1,7 +1,7 @@
+ """Energy-consistent state correction for port-Hamiltonian twins.
+ 
+ The problem, in one paragraph
+-----------------------------
++-----------------------------
+ 
+ A port-Hamiltonian model is passive by construction: with no input, the stored
+ energy ``H(x)`` can only go down, because ``dH/dt = -∇Hᵀ R ∇H + yᵀu ≤ yᵀu``.
+diff --git a/src/otwin/forecast/conformal.py b/src/otwin/forecast/conformal.py
+index 4173daf..fd30a61 100644
+--- a/src/otwin/forecast/conformal.py
++++ b/src/otwin/forecast/conformal.py
+@@ -81,6 +81,11 @@ Array = npt.NDArray[np.floating]
+ #: ``ceil`` asks for rank 10 out of 10 calibration points and declares a set that
+ #: is exactly large enough to be too small. Twelve decimals is far below any
+ #: level anyone states and far above the round-off being removed.
++#: A boolean mask over horizons. Named rather than spelled inline because
++#: ``np.bool_`` ends in an underscore, which reStructuredText reads as a
++#: hyperlink reference when autodoc renders the annotation into the docs.
++BoolArray = npt.NDArray[np.bool_]
++
+ _RANK_DECIMALS = 12
+ 
+ 
+@@ -180,9 +185,7 @@ class ConformalBand:
+     level: float
+     method: str
+     n_calibration: int
+-    extrapolated: npt.NDArray[np.bool_] = field(
+-        default_factory=lambda: np.zeros(0, dtype=bool)
+-    )
++    extrapolated: BoolArray = field(default_factory=lambda: np.zeros(0, dtype=bool))
+ 
+     def __post_init__(self) -> None:
+         hw = np.atleast_1d(np.asarray(self.half_width, dtype=float))
+diff --git a/src/otwin/model/integrators.py b/src/otwin/model/integrators.py
+index 7f63d62..bea750f 100644
+--- a/src/otwin/model/integrators.py
++++ b/src/otwin/model/integrators.py
+@@ -40,7 +40,7 @@ the model and decreasing order of cost per step:
+ ``"newton"``
+     Damped Newton on ``F`` with the analytic Jacobian
+ 
+-        ∂F/∂x₁ = I − (Δt/2) · ∂f/∂x |_{x_m}
++        ``∂F/∂x₁ = I − (Δt/2) · ∂f/∂x |_{x_m}``
+ 
+     which a port-Hamiltonian model hands you almost for free: for
+     ``f = (J − R)∇H + g u`` with state-independent ``J``, ``R``, ``g`` it is
+diff --git a/src/otwin/model/library.py b/src/otwin/model/library.py
+index 64c904d..b20e074 100644
+--- a/src/otwin/model/library.py
++++ b/src/otwin/model/library.py
+@@ -205,19 +205,23 @@ def dc_motor(
+     Reference: van der Schaft & Jeltsema (2014), "Port-Hamiltonian Systems
+     Theory: An Introductory Overview", Example 2.5, Eq. (2.30).
+ 
+-    State: x = [phi, p]
+-        phi - inductor flux-linkage (Wb), electrical energy store
+-        p   - rotor angular momentum (kg·m²/s), mechanical energy store
+-    Input: u = [V] (applied voltage)
+-    Output: y = I (armature current)
+-    Energy: H(phi, p) = phi² / (2 L) + p² / (2 inertia)
+-
+-    Dynamics (Eq. 2.30):
++    State, ports and energy::
++
++        x = [phi, p]
++            phi - inductor flux-linkage (Wb), electrical energy store
++            p   - rotor angular momentum (kg·m²/s), mechanical energy store
++        u = [V]     applied voltage
++        y = I       armature current
++        H(phi, p) = phi² / (2 L) + p² / (2 inertia)
++
++    Dynamics (Eq. 2.30)::
++
+         [phi_dot]   ([ 0  -K ]   [Re  0 ]) [phi/L]   [1]
+         [ p_dot ] = ([ K   0 ] - [ 0  b ]) [ p/J ] + [0] V
+         y = [1 0] grad_H = phi / L
+ 
+-    Structure:
++    Structure::
++
+         J = [[0, -K], [K, 0]]   skew-symmetric (the gyrator couples the
+                                 electrical and mechanical domains)
+         R = diag(Re, b)         PSD: armature resistance and viscous friction
+@@ -295,15 +299,20 @@ def pumped_hydro(
+     store is conservative: this is the white-box guarantee a degradation
+     (grey-box) model cannot offer.
+ 
+-    State: x = [V_u, V_l] (reservoir volumes, m^3): upper and lower.
+-    Input: u = [q] (commanded pump-turbine flow, m^3/s); q > 0 pumps water up
+-        (charging), q < 0 generates (discharging).
+-    Energy (gravitational potential energy about the lower datum):
+-        H = rho g [ z_u V_u + V_u^2 / (2 A_u) + V_l^2 / (2 A_l) ]
+-    so the gradient is the pressure head at each free surface:
+-        grad_H = rho g [ z_u + V_u/A_u , V_l/A_l ].
++    State and ports::
++
++        x = [V_u, V_l]   reservoir volumes (m^3), upper and lower
++        u = [q]          commanded pump-turbine flow (m^3/s); q > 0 pumps
++                         water up (charging), q < 0 generates (discharging)
++
++    Energy, taken as gravitational potential about the lower datum, and its
++    gradient, which is the pressure head at each free surface::
++
++        H       = rho g [ z_u V_u + V_u^2 / (2 A_u) + V_l^2 / (2 A_l) ]
++        grad_H  = rho g [ z_u + V_u/A_u , V_l/A_l ]
++
++    Structure::
+ 
+-    Structure:
+         J = 0                         no lossless internal circulation
+         R = (1/R_penstock) [[1, -1], [-1, 1]]
+                                       penstock conductance (graph-Laplacian, PSD):
+diff --git a/tests/test_docs_examples.py b/tests/test_docs_examples.py
+new file mode 100644
+index 0000000..ec2298b
+--- /dev/null
++++ b/tests/test_docs_examples.py
+@@ -0,0 +1,103 @@
++"""Every ```python block in the documentation is executed here.
++
++Documentation rots in a specific way: the prose stays plausible while the code
++stops running. Nothing catches it, because nobody runs a Markdown file. So the
++examples are run as tests.
++
++The contract is simple and visible in the source of every page:
++
++* a ```python fence is a runnable step. All of them in one file share a
++  namespace and run in document order, because that is how a reader meets them.
++* a ```{code-block} python fence is an illustrative fragment. It is not run,
++  and it should not look like something you could paste.
++
++If an example needs data, it synthesises it. A doc example that depends on a
++file in someone's home directory is a doc example that only works for them.
++"""
++
++from __future__ import annotations
++
++import contextlib
++import io
++import re
++from pathlib import Path
++
++import pytest
++
++DOCS = Path(__file__).resolve().parents[1] / "docs"
++# A runnable block, and the ```text block that follows it if there is one.
++# The second group is the claimed output, and it is checked rather than trusted.
++FENCE = re.compile(
++    r"^```python\n(?P<code>.*?)^```\n"
++    r"(?:\n(?:.*?\n)??^```text\n(?P<out>.*?)^```\n)?",
++    re.MULTILINE | re.DOTALL,
++)
++
++
++def _pages() -> list[Path]:
++    return sorted(p for p in DOCS.rglob("*.md") if "_build" not in p.parts)
++
++
++def _blocks(page: Path) -> list[tuple[str, str | None]]:
++    text = page.read_text()
++    out = []
++    for m in FENCE.finditer(text):
++        # Only pair the output when it is the very next thing in the file;
++        # a ```text block further down belongs to something else.
++        claimed = m.group("out")
++        if claimed is not None:
++            between = text[m.end("code") + 4 : m.start("out") - 8]
++            if between.strip():
++                claimed = None
++        out.append((m.group("code"), claimed))
++    return out
++
++
++@pytest.mark.parametrize("page", _pages(), ids=lambda p: str(p.relative_to(DOCS)))
++def test_the_examples_on_this_page_run(page: Path) -> None:
++    blocks = _blocks(page)
++    if not blocks:
++        pytest.skip("no runnable examples")
++
++    # One namespace per page: block 3 may use what block 1 defined, exactly as a
++    # reader working down the page would.
++    namespace: dict[str, object] = {"__name__": "__docs__"}
++    for i, (block, claimed) in enumerate(blocks, start=1):
++        buffer = io.StringIO()
++        try:
++            with contextlib.redirect_stdout(buffer):
++                exec(compile(block, f"{page.name}#block{i}", "exec"), namespace)
++        except Exception as exc:  # noqa: BLE001 - the message is the point
++            raise AssertionError(
++                f"{page.relative_to(DOCS)} block {i} failed: "
++                f"{type(exc).__name__}: {exc}\n\n{block}"
++            ) from exc
++
++        if claimed is None:
++            continue
++        printed = buffer.getvalue().strip()
++        expected = claimed.strip()
++        assert printed == expected, (
++            f"{page.relative_to(DOCS)} block {i}: the page claims an output the "
++            f"code does not produce.\n\nclaimed:\n{expected}\n\nactual:\n{printed}"
++        )
++
++
++def test_every_page_is_reachable_from_a_toctree() -> None:
++    """An orphan page is written, published, and never found."""
++    referenced = set()
++    for page in _pages():
++        text = page.read_text()
++        for match in re.finditer(r"^```\{toctree\}\n(.*?)^```", text, re.M | re.S):
++            for line in match.group(1).splitlines():
++                line = line.strip()
++                if line and not line.startswith(":"):
++                    referenced.add((page.parent / line).resolve())
++
++    root = (DOCS / "index.md").resolve()
++    orphans = [
++        p.relative_to(DOCS)
++        for p in _pages()
++        if p.resolve() != root and p.with_suffix("").resolve() not in referenced
++    ]
++    assert not orphans, f"not in any toctree: {orphans}"
+-- 
+2.43.0
+
