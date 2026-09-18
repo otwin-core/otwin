@@ -446,7 +446,7 @@ class Component:
         """``a >> b``: a series chain. Installed by :mod:`otwin.system`, which
         owns :func:`~otwin.system.chain`; components never import the system
         module, so there is no import cycle."""
-        raise TypeError("import otwin before chaining components with >>")
+        return NotImplemented
 
 
 class ComponentQuantities:
