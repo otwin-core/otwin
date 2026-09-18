@@ -199,6 +199,17 @@ A mass hanging from a spring and damper under gravity. You describe the physical
 
 Two verbs describe any **system**, and one rule says which to use. `>>` joins components in a line, the way the drawing reads: `mass >> spring >> ceiling`. `connect` joins ports where a line is not enough: three things meeting at one point, or a second circuit attached to a port. Here the mass hangs from the spring, and the damper and the weight meet the mass at the same point.
 
+<br>
+
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Spring.png" height="200">
+
+</div>
+
+<br>
+
+
 ```python
 import otwin
 from otwin.components.mechanical import (
@@ -239,11 +250,7 @@ print(
 )
 ```
 
-<div align="center">
-
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Spring.png" height="200">
-
-</div>
+<br>
 
 Output:
 
@@ -254,11 +261,9 @@ Final position: q = 0.477 m
 Largest energy violation: 0.0e+00 J
 ```
 
-Nobody wrote Newton's law.
+Nobody wrote Newton's law. The physical structure was described through components and connections, and the compiler derived the executable dynamics. The compiled model also carries the energy structure of the system. 
 
-The physical structure was described through components and connections, and the compiler derived the executable dynamics.
-
-The compiled model also carries the energy structure of the system. These interfaces let you inspect what Otwin actually built.
+These interfaces let you inspect what Otwin actually built.
 
 ```python
 model.summary()
@@ -273,7 +278,7 @@ Real work starts from devices, not from springs. A battery module, as its data s
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Battery.png" height="260">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Battery.png" height="230">
 
 </div>
 
@@ -322,9 +327,11 @@ A pump line is a line and nothing else, so `>>` is all it takes; one-port compon
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Pump_line.png" height="200">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Pump_line.png" height="150">
 
 </div>
+
+<br>
 
 ```python
 from otwin.components.hydraulic import Atmosphere, Filter, Pipe, Pump, Tank
@@ -368,6 +375,8 @@ Otwin treats the physical system as a graph. **Components** define physical beha
 <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/how_it_works.svg" alt="how it works" width="240">
 
 </div>
+
+<br>
 
 Every connection is a physical node. 
 
@@ -483,9 +492,13 @@ For example, a supply, a DC motor and a fan on its shaft:
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Motor_drive.png" height="180">
+<br>
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/Motor_drive.png" height="140">
 
 </div>
+
+<br>
 
 ```python
 import otwin
