@@ -3,7 +3,7 @@
 Four names. This is the smallest module in the package and the one that decides
 whether anything upstream of it gets to be used.
 
-The reasoning is in [Validity envelopes](../concepts/envelopes.md).
+The reasoning is in [Validity envelopes](envelopes.md).
 
 ## The objects
 
@@ -38,7 +38,7 @@ else:
 
 `requires_identified=True` on the envelope adds a fifth check: every estimated
 parameter must be recorded as identified, or the refusal names the one that is
-not. See [Identifiability](../concepts/identifiability.md).
+not. See [Identifiability](identifiability.md).
 
 `wants_interval=True` is what makes the calibration check apply. Asking for a
 point forecast and asking for a band are different questions with different

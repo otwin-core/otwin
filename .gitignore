@@ -14,7 +14,7 @@ htmlcov/
 
 # Sphinx build output and the pages autosummary generates.
 docs/_build/
-docs/api/generated/
+docs/reference/generated/
 
 # Rust
 target/

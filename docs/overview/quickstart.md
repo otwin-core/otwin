@@ -49,8 +49,8 @@ The compiler found two energy stores, the armature inductance and the rotor,
 and made them the states. The source left at `None` became the model's one
 input. `model.summary()` prints all of it with units; `model.structure()` gives
 the matrices of the port-Hamiltonian form the compiler derived, if you want to
-see them. See [Components](concepts/components.md) and
-[Compilation](concepts/compilation.md) for what happened in between.
+see them. See [Components](../modeling/components.md) and
+[Compilation](../physics/compilation.md) for what happened in between.
 
 ## 2. Run it
 
@@ -81,7 +81,7 @@ dampers remove. Not approximately, and not because the tolerance is tight.
 `inputs` takes a number, an array over the grid, a function of time, or a
 feedback law. For a law that reads the state, write it as an expression over
 `model.symbol(...)` and the compiler folds it into the model so the solver
-evaluates it at every stage. See [Simulation](guides/simulate.md).
+evaluates it at every stage. See [Simulation](../modeling/simulate.md).
 :::
 
 ## 3. Estimate the state from a noisy sensor
@@ -114,7 +114,7 @@ speed error: sensor 2.04 rad/s, filtered 0.80 rad/s
 ```
 
 The filter also recovers the armature current, which nobody measured. See
-[Estimate](guides/estimate.md) for the bounded and the energy-consistent
+[Estimate](../digital-twins/estimate.md) for the bounded and the energy-consistent
 estimators.
 
 ## 4. Let the twin decide what it may answer
@@ -148,13 +148,13 @@ This is a refusal, not a failure. The twin has not been shown to answer this que
 
 The `validated_by` record here is stated, not computed, so that the page stays
 self-contained. In practice it comes from {func}`~otwin.forecast.evaluate`, and
-the band from a conformal calibration; see [Forecast](guides/forecast.md) and
-[Advise](guides/advise.md).
+the band from a conformal calibration; see [Forecast](../digital-twins/forecast.md) and
+[Advise](../digital-twins/advise.md).
 
 ## Where next
 
-- [Devices](guides/devices.md): a battery module and a pump line from their data sheets, compiled and stepped.
-- [Modelling](guides/modelling.md): every domain, with the component to use for each physical element.
-- [Grey-box models](guides/greybox.md): add what the physics leaves out, and fit its coefficients from data.
-- [Compilation](concepts/compilation.md): what the compiler does, and how to read a model that surprised you.
-- [The advanced API](guides/model.md): writing `H`, `J`, `R`, `g` yourself when no component fits.
+- [Devices](../modeling/devices.md): a battery module and a pump line from their data sheets, compiled and stepped.
+- [Domains](../modeling/domains.md): every domain, with the component to use for each physical element.
+- [Grey-box models](../digital-twins/hybrid.md): add what the physics leaves out, and fit its coefficients from data.
+- [Compilation](../physics/compilation.md): what the compiler does, and how to read a model that surprised you.
+- [Writing models by hand](../physics/advanced-api.md): write `H`, `J`, `R`, `g` yourself when no component fits.

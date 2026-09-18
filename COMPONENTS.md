@@ -351,7 +351,7 @@ flowchart LR
     P --> Pa & Pb & Pc
 ```
  
-The compiler flattens a composite before anything else and names the parts `motor.armature`, `bat.ocv`, `pump.water`, so their currents, speeds, flows and powers are ordinary outputs. `Battery` and `Pump` are described in [the devices guide](docs/guides/devices.md).
+The compiler flattens a composite before anything else and names the parts `motor.armature`, `bat.ocv`, `pump.water`, so their currents, speeds, flows and powers are ordinary outputs. `Battery` and `Pump` are described in [the devices guide](docs/modeling/devices.md).
  
 ### Catalogue of ready-made systems included in Otwin
  
