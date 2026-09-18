@@ -180,5 +180,5 @@ the whole story of
 No state equation, no pump curve inversion, no heat balance. The compiler
 found the states (the charge stores and the water momentum), pinned the
 pressures and voltages through them, read the flows off the laws, and wrote
-`dx/dt`. `model.ir()` shows the result, and [Compilation](../concepts/compilation.md)
+`dx/dt`. `model.ir()` shows the result, and [Compilation](../physics/compilation.md)
 explains how it got there; neither is needed to use the model.

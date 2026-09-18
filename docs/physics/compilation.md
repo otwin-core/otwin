@@ -1,9 +1,51 @@
 # Compilation
 
-What the engine computes from what you described. You do not need this page to
-use otwin. Read it when a model surprises you, or when you want to know why
-the energy balance is a property of the model rather than a hope about the
-solver.
+`otwin.compile(system)` is not a convenience wrapper around a solver. It is the
+part of Otwin that does the work an engineer would otherwise do by hand: read the
+drawing, decide what the states are, apply the conservation law at every junction,
+eliminate the unknowns and write the equations of motion.
+
+This page is what happens in that call. You do not need it to use Otwin. Read it
+when a model surprises you, or when you want to know why the energy balance is a
+property of the model rather than a hope about the solver.
+
+## From a drawing to equations
+
+Take the smallest system that has all the ingredients. A mass hangs from a spring,
+a damper acts on the mass, gravity pulls on it.
+
+```{code-block} python
+system = mass >> spring >> ceiling
+system.connect(mass.flange, damper.a, weight.flange)
+system.connect(damper.b, ceiling.port)
+```
+
+The compiler reads five things off that, in order.
+
+**The states.** Two components store energy: the spring, which stores it in its
+extension, and the mass, which stores it in its momentum. Nothing else does. The
+state vector is therefore `[spring.extension, mass.momentum]`, and you did not
+choose it.
+
+**The energy.** Each store brings its own energy function, and the total is
+$H = p^2/2m + kq^2/2$.
+
+**The nodes.** The mass, one end of the spring, the damper and the weight meet at
+one node, so they share a velocity. The other end of the spring, the other end of
+the damper and the ceiling meet at a second node, whose velocity is zero because the
+ceiling is the reference.
+
+**The conservation equation.** At the first node the forces sum to zero. The spring
+pulls with $kq$, the damper with $c\,p/m$, gravity pushes with the weight, and what
+is left changes the momentum of the mass.
+
+**The equations.** With the velocity of the mass being $p/m$ and the extension rate
+of the spring being that same velocity,
+
+$$\dot q = \frac{p}{m}, \qquad \dot p = F - kq - c\,\frac{p}{m} .$$
+
+Nobody wrote Newton's second law. It came out of one conservation equation and three
+constitutive relations. Everything below is that procedure, in general.
 
 ## The pipeline
 
@@ -136,3 +178,12 @@ input:force - (param:spring.stiffness * state:spring.extension + param:damper.da
 The right-hand side reads as the equation a person would write:
 $\dot p = F - kq - c\,p/m$. Parameters are symbolic, which is what makes
 `set_parameters` and `fit_parameters` possible without recompiling.
+
+## Where to look next
+
+[Model validity](validity.md) is what a compiled model promises and how to check it
+kept the promise. [Physical semantics](physical-semantics.md) is the meaning of the
+constructions the compiler reads. [Connections](../modeling/connections.md) is the
+drawing side of the refusal table above, with the fix for each case stated in terms
+of what to draw instead. [Compiler development](../developer/compiler.md) is the
+stage-by-stage map of the source for anyone changing it.

@@ -22,7 +22,7 @@ A compiled {class}`otwin.Model` is the model they expect: it has `rhs` and
 `measurements=` to `otwin.compile`) so that `observe` returns what your sensor
 reads; without it, `observe` returns the port outputs. `model.energy` is the
 `H` the energy-consistent observer audits against. The
-[quickstart](../quickstart.md) runs an EKF on a compiled drive.
+[quickstart](../overview/quickstart.md) runs an EKF on a compiled drive.
 
 ## The energy-consistent observer
 
@@ -31,7 +31,7 @@ This is the one specific to what `otwin` is for.
 An EKF correction step is a least-squares update. Nothing in it knows about your
 energy function, so on a passive model it will cheerfully push the state to a
 point of *higher* stored energy than physics allows — and once it has, every
-guarantee argued for in [Port-Hamiltonian systems](../concepts/port-hamiltonian.md)
+guarantee argued for in [Port-Hamiltonian systems](../physics/port-hamiltonian.md)
 is gone, silently, in the middle of a run.
 
 {class}`~otwin.estimate.EnergyConsistentObserver` rejects a measurement
@@ -70,9 +70,9 @@ rep.verdicts               # {"c1": True, "c2": False} -> TwinManifest.identifie
 Three checks: collinearity of the design columns, record span against a fitted
 time constant (`span=`, `time_constants=`), and stability under a bootstrap over
 `groups` — units, not rows. The reasoning, and the case each check exists for,
-is in [Identifiability](../concepts/identifiability.md). The verdicts feed the
+is in [Identifiability](identifiability.md). The verdicts feed the
 manifest, and {class}`~otwin.advise.Envelope` can refuse on them.
 
 ## Next
 
-[Model](model.md) — the structure all of these estimate the state of.
+[Model](../physics/advanced-api.md) — the structure all of these estimate the state of.

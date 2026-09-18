@@ -4,8 +4,8 @@ What happens next, and how sure. The largest module in the package, and the one
 with the most ways to fool yourself — so it is built to make the right path the
 easy one.
 
-The reasoning is in [Leakage-free evaluation](../concepts/leakage.md) and
-[Calibrated intervals](../concepts/conformal.md). This page is the map.
+The reasoning is in [Leakage-free evaluation](validation.md) and
+[Calibrated intervals](uncertainty.md). This page is the map.
 
 ## The one interface
 
