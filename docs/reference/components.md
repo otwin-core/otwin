@@ -17,8 +17,8 @@ The one rule behind every table: at a node, the across variable
 (voltage, velocity, pressure, temperature) is shared and the through
 variables (current, force, flow, heat flow) sum to zero. A component
 is a set of relations between those two on its ports; the compiler
-does the rest. [Components, ports and systems](../concepts/components.md)
-explains the vocabulary; [Modelling](../guides/modelling.md) shows the
+does the rest. [Components, ports and systems](../modeling/components.md)
+explains the vocabulary; [Domains](../modeling/domains.md) shows the
 components in use.
 
 ## Index

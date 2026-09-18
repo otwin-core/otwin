@@ -8,7 +8,7 @@ one, which CI checks.
 The reference is ordered by what you are doing, not by file. Each task names
 the functions and classes it needs and links to the module page that
 documents them in full. If you are looking for a capability rather than a
-name, the [guides](../guides/index.md) go task by task with running code.
+name, [Modeling](../modeling/index.md) and [Digital twins](../digital-twins/index.md) go task by task with running code.
 
 ## Describe
 
@@ -21,7 +21,7 @@ Components, ports and connections: what exists and what touches what.
   {mod}`~otwin.components.twoport`, {mod}`~otwin.components.composite`,
   {mod}`~otwin.components.battery`, and {mod}`~otwin.components.fundamental`
   for a domain the library does not name. The
-  [Component reference](../reference/components.md) lists each one with its
+  [Component reference](components.md) lists each one with its
   ports, parameters, states and outputs.
 - {mod}`otwin.components.base`: {class}`~otwin.components.base.Component`,
   {class}`~otwin.components.base.Composite`, {class}`~otwin.components.base.Port`,

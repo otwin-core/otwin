@@ -5,7 +5,7 @@ Since otwin 1.0 the port-Hamiltonian form is **one of the internal
 representations used by the engine**. The compiler writes $H$, $J$, $R$ and
 $G$ from the components you connect; you read them through `model.ir()` and
 `model.structure()` and you write them yourself only in the
-[advanced API](../guides/model.md). This page explains the form itself and why
+[layer below the component library](advanced-api.md). This page explains the form itself and why
 it is the one the compiler targets.
 :::
 

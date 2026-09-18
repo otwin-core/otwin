@@ -80,4 +80,4 @@ is there.
 
 ## Next
 
-[Condition](signal.md) — putting what you just read onto a uniform grid.
+[Condition](condition.md) — putting what you just read onto a uniform grid.

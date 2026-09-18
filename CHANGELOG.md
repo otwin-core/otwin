@@ -33,6 +33,14 @@ version in anything you depend on.
 - The API reference is ordered by task (describe, compile, simulate, read
   the asset, fit, estimate, forecast, validate) ahead of the per-module
   listing.
+- The documentation is reorganised into seven sections: overview, modeling,
+  physics and semantics, digital twins, specification, reference and
+  developer. `docs/index.md` is a landing page; the long introduction moved
+  to `docs/overview/index.md`. New pages: architecture, design principles,
+  connections, physical semantics, model validity, the twin manifest, the
+  specification, conformance, compatibility and versioning, and the example
+  index. Pages moved rather than changed keep their text; every internal
+  link was updated, including the two the component reference generates.
 
 ## [2.0.1] — 2026-09-17
 

@@ -1,4 +1,7 @@
-# Architecture
+# Internals
+
+Where the code lives and what each layer is responsible for. The same structure
+without the file names is in [Architecture](../overview/architecture.md).
 
 Two layers. The **framework** describes systems and does everything a twin
 needs around a model. The **engine** compiles and executes them. The boundary

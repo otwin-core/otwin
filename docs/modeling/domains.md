@@ -1,4 +1,4 @@
-# Modelling with components
+# Domains
 
 One page per domain: what each physical element is called, how it connects,
 and what the compiler makes of it. Every block runs as written.
@@ -44,7 +44,7 @@ The states are the flux of the inductor and the charge of the capacitor; the
 voltages and currents of every element are outputs (`R.current`, `C.voltage`,
 `V.power`, ...). A `Resistor(law=lambda v: ...)` is a nonlinear element such
 as a diode, as long as its across variable is pinned by a storage or a source;
-see [Compilation](../concepts/compilation.md) for the rule.
+see [Compilation](../physics/compilation.md) for the rule.
 
 ## Mechanical, translation and rotation
 
@@ -101,7 +101,7 @@ temperature after 10 min: 30.0 degC (steady state 10.0 degC above ambient)
 The representation line is the compiler telling you that temperature times
 heat flow is not a power, so the energy audit on this model is a stability
 statement rather than a first-law one. The heat balance itself is exact. See
-[Compilation](../concepts/compilation.md#thermal-models).
+[Compilation](../physics/compilation.md#thermal-models).
 
 ## Hydraulic
 
@@ -187,7 +187,7 @@ of every resistor, damper and pipe. `Battery(thermal=...)` is built this way.
 ## What to do when the compiler refuses
 
 The message names the components. The table in
-[Compilation](../concepts/compilation.md#what-the-compiler-refuses) lists each
+[Compilation](../physics/compilation.md#what-the-compiler-refuses) lists each
 refusal and the fix. The common ones: a loose port on a two-port
 component, two storages of the same kind in parallel, a nonlinear element on a
 node nothing pins.

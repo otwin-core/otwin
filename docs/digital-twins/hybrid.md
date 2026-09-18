@@ -74,7 +74,7 @@ print(short.identifiability.verdicts)
 ```
 
 Record the verdicts in the manifest and the envelope refuses to extrapolate
-through the undetermined one. See [Identifiability](../concepts/identifiability.md).
+through the undetermined one. See [Identifiability](identifiability.md).
 
 ## Learn the residual
 
@@ -122,7 +122,7 @@ the price of a residual you could not write down.
 (`simulate`, `step`, `rhs`, `observe`, `energy`), and
 `CustomDynamics.from_phs(...)` does the same for a hand-written
 {class}`~otwin.model.PortHamiltonianSystem`. It is the escape hatch; see
-[The advanced API](model.md).
+[Writing models by hand](../physics/advanced-api.md).
 
 ## Which one
 
