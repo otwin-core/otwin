@@ -43,7 +43,7 @@
 
 [Digital Twins](#from-model-to-digital-twin) ·
 [Estimation](#state-estimation) ·
-[Uncertainty](#uncertainty) ·
+[Uncertainty](#uncertainty-calculation) ·
 [Validation](#validation) ·
 [Examples](#examples) ·
 [Roadmap](#roadmap) ·
@@ -59,22 +59,22 @@
 
 You describe a physical system as components, parameters and connections — the same way an engineer would draw it. Otwin compiles that description into a structured dynamical model and executes it in a high-performance Rust runtime. On top of that physics engine, Otwin provides the tools needed to connect the model to a real asset:
 
-* state estimation;
-* parameter calibration;
-* hybrid physics + data models;
-* forecasting;
-* uncertainty quantification;
-* out-of-sample validation;
-* validity envelopes;
-* Digital Twin operation.
+- [x] state estimation
+- [x] parameter calibration
+- [x] hybrid physics + data models
+- [x] forecasting
+- [x] uncertainty quantification
+- [x] out-of-sample validation
+- [x] validity envelopes
+- [x] Digital Twin operation
+
+<br>
 
 <div align="center">
 
 <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/diagrams/otwin_pipeline.svg" alt="otwin pipeline" width="900">
 
 </div>
-
-#### A simulation tells you what a model does. A Digital Twin tells you what a particular asset is doing — and what the model has earned the right to predict
 
 <br>
 
@@ -115,24 +115,27 @@ This leads to a simple principle: **Do not throw away known physics just because
 
 Otwin is Python-first, but the architecture is intentionally larger than a Python package. The long-term idea is to separate:
 
+<div align="center">
+
 ```text
 WHAT A PHYSICAL MODEL MEANS
-            │
-            ▼
-     OTWIN SPECIFICATION
-            │
-            ▼
-     CONFORMANCE TESTS
-            │
-      ┌─────┼─────┐
-      │     │     │
-   Python  Julia* MATLAB*
-      │     │     │
-      └─────┼─────┘
-            │
-            ▼
+│
+▼
+OTWIN SPECIFICATION
+│
+▼
+CONFORMANCE TESTS
+│
+┌─────┼─────┐
+│     │     │
+Python  Julia* MATLAB*
+│     │     │
+└─────┼─────┘
+│
+▼
     CONFORMANT IMPLEMENTATIONS
 ```
+</div>
 
 A physics model should not be considered correct simply because one implementation produces plausible numbers. It should be possible to define what the model means, define physical properties that must hold, provide known reference answers, and test independent implementations against the same specification.
 
@@ -209,7 +212,6 @@ Two verbs describe any **system**, and one rule says which to use. `>>` joins co
 
 <br>
 
-
 ```python
 import otwin
 from otwin.components.mechanical import (
@@ -274,7 +276,9 @@ model.ir()
 
 # From the data sheet to the model
 
-Real work starts from devices, not from springs. A battery module, as its data sheet describes it: capacity, the open-circuit voltage curve, the internal resistance, two polarisation branches, the heat capacity. Then the cooling. Nothing else.
+### Example 1. Battery module
+
+A battery module, as its data sheet describes it: capacity, the open-circuit voltage curve, the internal resistance, two polarisation branches, the heat capacity. Then the cooling. 
 
 <div align="center">
 
@@ -323,7 +327,11 @@ soc 0.40  voltage 3.152 V  cell 33.8 °C  heat 5.75 W
 
 The model has four states: the charge, two polarisation charges and the heat in the cell. Every voltage, current, power and temperature inside the module is a named output. `with_parameters` ages the cells or clogs the cooling without rebuilding anything; [`examples/battery_that_runs_hot.py`](examples/battery_that_runs_hot.py) uses that to tell the two apart.
 
-A pump line is a line and nothing else, so `>>` is all it takes; one-port components (a tank, the outfall) join at the ends:
+<br>
+
+### Example 2. Pump line
+
+A pump line is a line, so `>>` is all we need. One-port components (a tank, the outfall) join at the ends:
 
 <div align="center">
 
@@ -666,7 +674,7 @@ This means you can start from physical knowledge and progressively incorporate m
 
 <br>
 
-# Estimate the missing physics
+# Estimate the unknown physics
 
 Suppose an oscillator has quadratic drag that the original model does not include. The physical structure is still useful. Add a residual term and estimate its coefficient from measurements:
 
@@ -854,7 +862,7 @@ For example, a bounded state should not become `1.05` simply because a noisy sen
 
 <br>
 
-# Uncertainty
+# Uncertainty calculation
 
 An uncertainty interval should mean something measurable. If a model reports a 90% prediction interval, its coverage should be evaluated against out-of-sample observations. Otwin calibrates uncertainty from rolling-origin forecast errors rather than simply using in-sample residuals.
 
