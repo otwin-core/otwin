@@ -45,11 +45,26 @@ compressors, PV strings. Priorities are set by what people ask for in
 Discussions; the four most useful contributions are listed in
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
+On the grid side, the first step is a synchronous area in hertz and megawatts:
+system inertia, primary control and fast frequency response as components, so
+a frequency twin reads the way a grid engineer draws it. Buses and lines come
+after.
+
 ### 5. Identification
 
 Fitting the parameters a data sheet does not give, from measurements, with
 identifiability as a first-class result: `fit_parameters` on any compiled
 model, and a clear answer when the data cannot determine a parameter.
+
+Next in this phase:
+
+- **How far off a parameter may be.** Every fitted value comes with an
+  interval, and that interval can be carried through the model to the outputs
+  you care about.
+- **Following a parameter as data arrives.** Refit window by window and keep
+  the history, for parameters that drift, such as fouling or grid inertia.
+- **Ageing laws.** Fade, fouling growth and wear as empirical laws inside
+  Otwin, fitted and checked like any other model.
 
 ### 6. Learned residuals
 
@@ -62,6 +77,17 @@ to a compiled model without touching its energy bookkeeping.
 Measurements in, state estimation, forecasts with measured coverage,
 validation, validity envelopes and refusal, on the compiled model of a real
 asset, running continuously.
+
+Next in this phase:
+
+- **A record of what the twin knew.** One row per time step with the
+  measurement, the estimate, the forecast and its range, the evidence behind
+  the range and the decision, ready for any screen or report.
+- **A decision rule.** When the unfavourable edge of the range crosses a
+  limit with enough notice, say when to act. When the evidence is too thin,
+  say that instead.
+- **Fleets.** Calibrate on many units of the same equipment and test on a
+  batch the twin never saw.
 
 ## In parallel
 
