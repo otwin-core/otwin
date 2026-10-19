@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_header.png" width="100%">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/brand/otwin-github-header-1a.png" width="100%">
 
 # Digital twins of engineering equipment, with forecasts you can check
 
