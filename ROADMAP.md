@@ -45,11 +45,6 @@ compressors, PV strings. Priorities are set by what people ask for in
 Discussions; the four most useful contributions are listed in
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
-On the grid side, the first step is a synchronous area in hertz and megawatts:
-system inertia, primary control and fast frequency response as components, so
-a frequency twin reads the way a grid engineer draws it. Buses and lines come
-after.
-
 ### 5. Identification
 
 Fitting the parameters a data sheet does not give, from measurements, with
@@ -88,6 +83,32 @@ Next in this phase:
   say that instead.
 - **Fleets.** Calibrate on many units of the same equipment and test on a
   batch the twin never saw.
+
+### 8. Working with the tools engineers already use
+
+Most industrial models already exist. They were built in Modelica tools such as
+Dymola, OpenModelica or Wolfram SystemModeler, often with commercial libraries
+for batteries, power plants, hydraulics or vehicles, and they represent years
+of work. Those tools answer the question "how do I simulate this equipment?".
+They do not answer "does my forecast hold what it promises?" or "when do I
+act?". Otwin should answer those two questions for the models engineers
+already have, and not ask anyone to rebuild them.
+
+FMI is the open standard these tools use to exchange models, and an FMU is the
+file it produces. This phase brings those models into Otwin.
+
+**Bring their models in: FMU import.** Load an FMU exported from any FMI 3.0 or
+2.0 tool and use it like an Otwin model: fit its parameters to measurements,
+calibrate a forecast range on data it never saw, audit whether that range
+holds, and apply a decision rule. Otwin cannot see inside an FMU, so it will
+say so: an imported model carries no energy guarantee, and the twin's record
+states it plainly. Done when a Reference FMU from the Modelica Association is
+fitted, forecast and audited in a runnable example.
+
+What this phase does not try to do: replace a Modelica tool, translate its
+libraries into Otwin, or compete with its components. A model that already
+exists elsewhere is imported, not rewritten. Otwin is the layer on top that
+turns a model into a twin that can be checked.
 
 ## In parallel
 
