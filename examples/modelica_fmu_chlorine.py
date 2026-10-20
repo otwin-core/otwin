@@ -11,6 +11,7 @@ example runs anywhere. Run it from this folder after:
 
 import numpy as np
 from fmpy import extract, simulate_fmu
+
 from otwin.forecast import horizon_conformal, picp, rolling_origin_residuals
 
 FMU = extract("Dahlquist.fmu")  # dx/dt = -k x, exported by a Modelica tool

@@ -42,6 +42,7 @@ unzip -j Reference-FMUs-0.0.39.zip 3.0/Dahlquist.fmu
 ```python
 import numpy as np
 from fmpy import extract, simulate_fmu
+
 from otwin.forecast import horizon_conformal, picp, rolling_origin_residuals
 
 FMU = extract("Dahlquist.fmu")  # dx/dt = -k x, exported by a Modelica tool
@@ -146,6 +147,7 @@ And in Python:
 ```python
 import numpy as np
 from juliacall import Main as jl
+
 from otwin.forecast import evaluate
 
 jl.include("tank.jl")  # the ModelingToolkit model of the storage tank

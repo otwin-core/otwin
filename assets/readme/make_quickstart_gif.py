@@ -7,11 +7,12 @@ prints: q(t), the static equilibrium, and the energy account.
 from pathlib import Path
 
 import numpy as np
-import otwin
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.patches import Ellipse, FancyArrowPatch, Polygon
-from otwin.components.mechanical import Damper, Fixed, ForceSource, Mass, Spring
 from style import GREY, INK, LIGHT, RED, plt
+
+import otwin
+from otwin.components.mechanical import Damper, Fixed, ForceSource, Mass, Spring
 
 HERE = Path(__file__).resolve().parent
 
