@@ -2,22 +2,32 @@
 
 <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/brand/otwin-github-header-1a.png" width="100%" alt="otwin: open digital twins of real equipment">
 
-[![License](https://img.shields.io/github/license/otwin-core/otwin?color=EC3013\&cacheSeconds=86400)](https://github.com/otwin-core/otwin/blob/main/LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/otwin?color=EC3013\&cacheSeconds=3600)](https://pypi.org/project/otwin/)
-[![crates.io](https://img.shields.io/crates/v/otwin-core?color=EC3013&logo=rust&label=crates.io)](https://crates.io/crates/otwin-core)
-[![Python](https://img.shields.io/github/actions/workflow/status/otwin-core/otwin/ci.yml?branch=main\&label=python\&logo=github)](https://github.com/otwin-core/otwin/actions/workflows/ci.yml)
+<br>
+
+<br>
+
+[![License](https://img.shields.io/github/license/otwin-core/otwin?color=0000FF\&cacheSeconds=86400)](https://github.com/otwin-core/otwin/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/otwin?color=4169E1\&cacheSeconds=3600)](https://pypi.org/project/otwin/)
+[![crates.io](https://img.shields.io/crates/v/otwin-core?color=1E90FF&logo=rust&label=crates.io)](https://crates.io/crates/otwin-core)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/otwin-core/otwin/badge)](https://scorecard.dev/viewer/?uri=github.com/otwin-core/otwin)
 [![REUSE status](https://api.reuse.software/badge/github.com/otwin-core/otwin)](https://api.reuse.software/info/github.com/otwin-core/otwin)
 
+
+#### Otwin tells you whether a model of a real machine can be trusted, and turns its forecasts into decisions. Bring the model from Modelica, from Julia, or build it with Otwin's own components.
+
 </div>
 
-**Otwin tells you whether a model of a real machine can be trusted, and turns its forecasts into decisions.** Bring the model from Modelica, from Julia, or build it with Otwin's own components.
+<br>
 
 ```bash
 pip install "otwin[engine]"
 ```
 
+<br>
+
 <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/readme/otwin-what-it-adds.png" width="100%" alt="Models from Modelica, Julia or Otwin go into Otwin with the machine's own measurements. Otwin answers four questions: how wrong has the model been, is it better than a trivial guess, does its 90 % range hold 90 %, and when should someone act.">
+
+<br>
 
 # Why Otwin, if Modelica and Julia already exist?
 
@@ -201,9 +211,13 @@ Full scripts: [`examples/julia_mtk_tank.py`](examples/julia_mtk_tank.py) and [`e
 
 </details>
 
-# Build a model from parts
+<br>
+
+# Build a model from components
 
 <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/readme/otwin-quickstart.gif" width="100%" alt="A mass hangs from a spring and a damper. It bounces and settles at the equilibrium the compiler derived, while the energy supplied by gravity always equals the energy stored plus the energy turned into heat.">
+
+<br>
 
 When there is no model yet, you can build one in Otwin. You say what exists and what touches what: `>>` joins parts in a line, the way the drawing reads, and `connect` joins ports where a line is not enough. Otwin writes the equations, runs them in a Rust engine, and keeps an energy account you can check at every step.
 
@@ -240,7 +254,9 @@ Largest energy violation: 0.0e+00 J
 
 `model.summary()` shows what the compiler built: states, parameters and units. The components cover electrical, mechanical, rotational, hydraulic and thermal systems, with devices such as `Battery`, `Pump`, `Filter` and `DCMotor`: see [COMPONENTS.md](COMPONENTS.md).
 
-# Three twins, three decisions
+<br>
+
+# Examples
 
 <img src="https://raw.githubusercontent.com/otwin-core/.github/main/profile/assets/gifs/otwin-battery-twin.gif" width="100%" alt="A battery cell on a cycler. The twin follows its capacity cycle by cycle, forecasts it with a 90 % range, and asks for a replacement before the cell reaches end of life.">
 
@@ -254,8 +270,9 @@ Largest energy violation: 0.0e+00 J
 
 <sub>**Pump and filter press.** The line is built and simulated with Otwin's hydraulic parts. The twin estimates how fouled the filter cloths are from a pressure sensor with 2 % noise, and shows when cleaning costs less than the extra energy the pump uses. The cleaning month counts hydraulic energy only. With the losses of the pump and its motor, the electricity bill brings it forward. Simulated plant. [Script](https://github.com/otwin-core/.github/blob/main/profile/assets/gifs/pump_twin.py)</sub>
 
-# More
+<br>
 
+# Additional Information
 <details>
 <summary><b>What is in the library</b></summary>
 
@@ -307,6 +324,8 @@ The images on this page are drawn by the scripts in [`assets/readme`](assets/rea
 
 </details>
 
+<br>
+
 # The Otwin project
 
 | Repository | What it is |
@@ -317,4 +336,12 @@ The images on this page are drawn by the scripts in [`assets/readme`](assets/rea
 
 Where the project is going, and what it builds on: [ROADMAP.md](ROADMAP.md). Questions and ideas go to [Discussions](https://github.com/otwin-core/otwin/discussions), bugs and agreed work to [Issues](https://github.com/otwin-core/otwin/issues). A new component, a reference case or an example is the easiest way to contribute: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Each repository includes a `CITATION.cff`. Otwin is released under the [Apache License 2.0](LICENSE).
+<br>
+
+<br>
+
+<div align="center">
+
+<sub> Each repository includes a `CITATION.cff`. Otwin is released under the [Apache License 2.0](LICENSE). Copyright Javier Marín, 2026</sub>
+
+</div>
