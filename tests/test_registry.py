@@ -100,19 +100,22 @@ def test_missing_file_explains_where_to_get_it(tmp_path, monkeypatch):
     assert "OTWIN_DATA_DIR" in msg
 
 
-def test_no_data_files_are_committed():
-    """The whole point of the dataset registry.
+def test_committed_data_is_registered_and_verified():
+    """Every data file in this repository is registered and matches its checksum.
 
-    A CSV committed here would defeat it, and ``git rm`` would not undo it --
-    the blob stays in history forever.
+    Data files are allowed in one place only, ``examples/data/``, so that the
+    example notebooks run in one click. Each one must be an entry of
+    ``DATASETS`` (``<name>.csv`` for the entry ``<name>``) and must hash to the
+    checksum registered there. A file anywhere else, or one that is not
+    registered, or one whose bytes have changed, fails here. ``git rm`` would not
+    undo a stray commit -- the blob stays in history forever -- so this catches it
+    before the merge.
 
     Ask git, not the filesystem. An earlier version of this test walked
     ``root.rglob("*")`` and excluded ``.git`` and ``tests`` by name, which meant
     it failed the moment anyone put a virtualenv in the repository -- scikit-learn
-    ships ``iris.csv``, and site-packages is not "committed" by any reading. The
-    exclusion list would have had to grow forever (``.venv``, ``venv``, ``build``,
-    ``dist``, ``node_modules``, ...) and would still have been answering the wrong
-    question. ``git ls-files`` answers the question the test name asks.
+    ships ``iris.csv``, and site-packages is not "committed" by any reading.
+    ``git ls-files`` answers the question the test name asks.
     """
     root = Path(__file__).resolve().parent.parent
     try:
@@ -127,13 +130,22 @@ def test_no_data_files_are_committed():
         pytest.skip("not a git worktree (installed from an sdist?)")
 
     data_suffixes = {".csv", ".zip", ".parquet", ".h5", ".hdf5", ".npy", ".npz", ".mat"}
-    offenders = [
-        f
+    data = [
+        Path(f)
         for f in tracked
         if f and Path(f).suffix.lower() in data_suffixes and not f.startswith("tests/")
     ]
-    assert not offenders, (
-        f"data files must not be committed: {offenders}. Register them in "
-        f"DATASETS with a URL and a checksum instead; the point of the registry "
-        f"is that the bytes never enter this repository's history."
+    misplaced = [
+        str(f)
+        for f in data
+        if f.parent != Path("examples/data")
+        or f.suffix != ".csv"
+        or f.stem not in DATASETS
+    ]
+    assert not misplaced, (
+        f"data files outside examples/data/, or not registered in DATASETS: "
+        f"{misplaced}. Register the dataset with a URL and a checksum, and commit "
+        f"the file only if its licence allows redistribution."
     )
+    for f in data:
+        verify(f.stem, root / f)

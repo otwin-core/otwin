@@ -113,7 +113,7 @@ def load(name: str, path: str | Path | None = None, verify_checksum: bool = True
         raise FileNotFoundError(
             f"{name} is not cached at {p}.\n\n"
             f"Download it from:\n  {d.url}\n\n"
-            f"then place the extracted CSV at that path, or pass path=... "
+            f"and save it at that path, or pass path=... "
             f"explicitly. Set OTWIN_DATA_DIR to change the cache location.\n\n"
             f"Licence: {d.license}\nCite as: {d.citation}"
         )
