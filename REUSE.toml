@@ -1,7 +1,8 @@
 # REUSE (reuse.software) licensing metadata. Every file in the repository is
 # Apache-2.0, copyright the Otwin authors, so one aggregate annotation covers
-# the tree; the license text itself lives in LICENSES/. `reuse lint` checks
-# this in CI.
+# the tree; the license text itself lives in LICENSES/. The one exception is
+# the NASA data in examples/data/, a US Government work in the public domain,
+# annotated below. `reuse lint` checks this in CI.
 version = 1
 SPDX-PackageName = "otwin"
 SPDX-PackageSupplier = "Javier Marin"
@@ -12,3 +13,9 @@ path = "**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Javier Marin"
 SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "examples/data/nasa_battery_discharge.csv"
+precedence = "override"
+SPDX-FileCopyrightText = "NASA Ames Research Center"
+SPDX-License-Identifier = "LicenseRef-USGov-PublicDomain"

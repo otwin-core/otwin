@@ -12,6 +12,16 @@ version in anything you depend on.
 
 ### Added
 
+- The NASA battery data the example notebooks use ships in
+  `examples/data/nasa_battery_discharge.csv`, with its source, licence and
+  checksum in `examples/data/README.md`. Notebooks 03, 04 and 05 read it from
+  the repository, or download it from GitHub in Colab, so they run in one
+  click. Before, they asked for a file that was published nowhere. The sdist
+  does not include it.
+- Two worked examples that check a model built elsewhere:
+  `examples/modelica_fmu_chlorine.py` (a Modelica model as an FMU, through
+  FMPy) and `examples/julia_mtk_tank.py` (a ModelingToolkit model, through
+  juliacall).
 - `otwin-core` is published on crates.io, so a Rust program can run a
   compiled Otwin model without Python. The release workflow publishes it
   with the wheels (crates.io Trusted Publishing, environment `crates-io`);
@@ -26,6 +36,10 @@ version in anything you depend on.
 
 ### Changed
 
+- `otwin.io.load("nasa_battery_discharge")` now points to the CSV in this
+  repository. It used to point to NASA's 210 MB archive of `.mat` files, which
+  contains no CSV to extract.
+- The example notebooks are saved with every output, produced by otwin 2.0.1.
 - The documentation overview (`docs/index.md`) is a continuous introduction
   to what Otwin is, what it is not, the elements of a model, the compiler,
   the model, the twin layer and the three worked systems, aligned with the
