@@ -118,6 +118,7 @@ def test_committed_data_is_registered_and_verified():
     ``git ls-files`` answers the question the test name asks.
     """
     root = Path(__file__).resolve().parent.parent
+    tracked: list[str] = []
     try:
         tracked = subprocess.run(
             ["git", "ls-files", "-z"],
