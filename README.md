@@ -29,15 +29,15 @@ pip install "otwin[engine]"
 
 <br>
 
-# Why Otwin, if Modelica and Julia already exist?
+# Why Otwin
 
-Modelica, ModelingToolkit and Dyad are where engineering models are built, and they do it well. Otwin does not replace them. It answers the questions that come after, once a model is connected to one real machine: how wrong has it been on data it never saw, is it better than a trivial forecast, does its 90 % range really hold 90 % of the time, and when should someone act. The two examples below take a model from each of those worlds and check it.
+Otwin does not replace current engineering models. It answers the questions that come after, once a model is connected to one real machine: how wrong has it been on data it never saw, is it better than a trivial forecast, does its 90 % range really hold 90 % of the time, and when should someone act. The two examples below take a model from each of those worlds and check it.
 
 <br>
 
 <img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/readme/otwin-modelica-chlorine.png" width="100%" alt="Chlorine in a storage tank over a day. The Modelica model alone predicts a minimum of 0.30 mg/L. Otwin's 90 % range reaches down to 0.20 mg/L. The tank actually reached 0.22 mg/L.">
 
-The Modelica model, run as it is, says the chlorine stays well above the limit. Otwin measured how wrong it had been over twenty days and turned that into a range that held 91 % of the time on ten days it never saw. The tank went closer to the limit than the model said, and stayed inside the range.
+In this example, a Modelica model says the chlorine stays well above the limit. Otwin measured how wrong it had been over twenty days and turned that into a range that held 91 % of the time on ten days it never saw. The tank went closer to the limit than the model said, and stayed inside the range.
 
 <details>
 <summary><b>The code</b> · <code>pip install "otwin[engine]" fmpy</code> · runs in about two seconds</summary>
