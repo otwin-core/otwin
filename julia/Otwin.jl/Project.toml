@@ -1,0 +1,27 @@
+name = "Otwin"
+uuid = "d8a12f9a-d1ca-4deb-9e42-5850b10d84f1"
+authors = ["Javier Marin"]
+version = "0.1.0"
+
+[deps]
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+
+[weakdeps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+
+[extensions]
+OtwinDataFramesExt = "DataFrames"
+
+[compat]
+DataFrames = "1"
+Printf = "1"
+PythonCall = "0.9.37"
+julia = "1.10"
+
+[extras]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test", "DataFrames"]

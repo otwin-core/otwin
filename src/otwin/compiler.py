@@ -41,6 +41,7 @@ from .components.base import (
     Ground,
     HeatBranch,
     Port,
+    RateBranch,
     ResistorBranch,
     SourceBranch,
     StorageBranch,
@@ -56,6 +57,7 @@ from .ir import (
     OutputVar,
     ParamVar,
     PhysicalSystemIR,
+    RateGroup,
     StateVar,
 )
 from .system import System
@@ -168,6 +170,7 @@ def compile_system(
     ctx.inverse_map = _inverse_map(ctx, structural=False)
     _solve_unknowns(ctx, unknown_eqs)
     rhs_exec, port_out_exec, quantities = _assemble(ctx, structural=False)
+    rate_groups = _rate_groups(ctx)  # executable form, before the structural pass
     rhs_struct, port_out_struct, _ = _assemble(ctx, structural=True)
     J, R, G, D = _extract_structure(ctx, rhs_struct, port_out_struct)
     effort_map = dict(zip(ctx.effort_syms, ctx.grad_H, strict=True))
@@ -208,6 +211,13 @@ def compile_system(
         representation=ctx.representation,
         physical=physical,
         metadata={"n_nodes": len(ctx.nodes) - 1},
+        rate_groups=[
+            RateGroup(
+                g.component,
+                [(i, j, fin(e.substitute(effort_map))) for i, j, e in g.flows],
+            )
+            for g in rate_groups
+        ],
     )
     if check:
         _check_structure(ir)
@@ -364,7 +374,7 @@ def _collect_branches(ctx: _Ctx) -> None:
             if b.a.domain != "any" and b.a.domain not in DOMAINS:
                 raise CompileError(f"{c.name}: unknown domain {b.a.domain!r}")
             ctx.branches.append(b)
-            if isinstance(b, HeatBranch):
+            if isinstance(b, (HeatBranch, RateBranch)):
                 ctx.representation = "pseudo-port-hamiltonian"
             if isinstance(b, StorageBranch):
                 if b.kind not in ("across", "through"):
@@ -672,6 +682,14 @@ def _through_nonpin(ctx: _Ctx, b: Branch, structural: bool, side: int = 1) -> Ex
     if isinstance(b, TwoPortBranch):
         i1, i2 = ctx.twoport_currents[b]
         return i1 if side == 1 else i2
+    if isinstance(b, RateBranch):
+        rate = _rate(ctx, b)
+        if structural:
+            # frozen, like heat generation: a stated rate is not part of J or R
+            sym = ex.symbol("param", f"__rate.{len(ctx.secants)}.{b.component.name}")
+            ctx.secants[sym] = rate
+            return sym
+        return rate
     if isinstance(b, HeatBranch):
         power = _heat_power(ctx, b)
         if structural:
@@ -682,6 +700,46 @@ def _through_nonpin(ctx: _Ctx, b: Branch, structural: bool, side: int = 1) -> Ex
             return sym
         return -power
     raise CompileError(f"unknown branch type {type(b).__name__}")
+
+
+def _rate(ctx: _Ctx, b: RateBranch) -> Expr:
+    """The through variable of a rate branch: its law applied to the across
+    variables at every port of its component."""
+    potentials = {}
+    for name, port in b.component.ports.items():
+        v = ctx.potentials[_node(ctx, port)]
+        potentials[name] = v.substitute(ctx.inverse_map) if ctx.inverse_map else v
+    try:
+        return ex.as_expr(b.rate(potentials))
+    except TypeError as exc:
+        raise CompileError(
+            f"{b.component.name}: the rate law must be built from the port "
+            "concentrations with otwin.expr arithmetic and return one expression"
+        ) from exc
+
+
+def _rate_groups(ctx: _Ctx) -> list[RateGroup]:
+    """The rate branches of each component as flows between states.
+
+    A node pinned by an across storage against the reference is that
+    storage's state; any other node end is ``None``. Called with the
+    executable inverse map in place, so the rates are the ones integrated.
+    """
+    state_of_node: dict[_Node, int] = {}
+    for i, b in enumerate(ctx.storage_branches):
+        if b.kind == "across" and b.b is None:
+            state_of_node[_node(ctx, b.a)] = i
+    groups: dict[Component, list[tuple[int | None, int | None, Expr]]] = {}
+    for b in ctx.branches:
+        if isinstance(b, RateBranch):
+            groups.setdefault(b.component, []).append(
+                (
+                    state_of_node.get(_node(ctx, b.a)),
+                    state_of_node.get(_node(ctx, b.b)),
+                    _rate(ctx, b),
+                )
+            )
+    return [RateGroup(c.name, flows) for c, flows in groups.items()]
 
 
 def _heat_power(ctx: _Ctx, b: HeatBranch) -> Expr:
@@ -978,6 +1036,10 @@ def _outputs(
         if isinstance(b, HeatBranch):
             # the heat delivered into the thermal port, positive when warming
             put(f"{label}.heat_flow", "W", -q.through[label])
+            continue
+        if isinstance(b, RateBranch):
+            unit = dom.through_unit if dom is not None else ""
+            put(f"{label}.rate", unit, q.through[label])
             continue
         if dom is not None:
             put(f"{label}.{dom.across}", dom.across_unit, q.across[label])

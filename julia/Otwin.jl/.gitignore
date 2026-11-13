@@ -1,0 +1,4 @@
+# Manifests are resolved where the package is used, not committed.
+Manifest.toml
+# The Python environment CondaPkg creates on first use.
+.CondaPkg/

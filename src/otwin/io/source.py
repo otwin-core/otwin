@@ -20,8 +20,12 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, TypeAlias, runtime_checkable
+
+import numpy as np
+import numpy.typing as npt
 
 __all__ = [
     "Quality",
@@ -37,6 +41,7 @@ __all__ = [
     "si_unit",
     "normalise",
     "KNOWN_UNITS",
+    "samples_to_arrays",
 ]
 
 #: Per-tag data quality. ``"good"`` = read this cycle; ``"stale"`` = last known
@@ -418,3 +423,51 @@ class QualityTracker:
         """Drop all retained values. The next failed read yields ``"bad"``."""
         self._last_good.clear()
         self._last_good_at.clear()
+
+
+# --------------------------------------------------------------------------
+# Series
+# --------------------------------------------------------------------------
+
+
+def samples_to_arrays(
+    samples: Sequence[Sample],
+    names: Sequence[str] | None = None,
+    *,
+    accept: Sequence[str] = ("good",),
+) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating], list[str]]:
+    """Stack Samples from any source into the arrays :mod:`otwin.signal` takes.
+
+    Args:
+        samples: Samples from any source, in any order.
+        names: Which tags, in which column order. Defaults to the tags of the
+            first sample, sorted.
+        accept: Quality flags whose values are kept. Every other value
+            becomes NaN. The default keeps only ``"good"``: a ``"stale"`` value
+            is an old value repeated, and treating it as a measurement is
+            inventing data. :func:`otwin.signal.resample` treats the NaN as a
+            gap.
+
+    Returns:
+        ``(t, Y, names)``: timestamps of shape ``(n,)``, values of shape
+        ``(n, len(names))``, and the column names.
+
+    Example:
+        >>> s = [Sample(1.0, {"p": 5.0}, {"p": "good"}, "x"),
+        ...      Sample(2.0, {"p": 5.0}, {"p": "stale"}, "x")]
+        >>> t, Y, names = samples_to_arrays(s)
+        >>> t.tolist(), Y[:, 0].tolist(), names
+        ([1.0, 2.0], [5.0, nan], ['p'])
+    """
+    if not samples:
+        cols = list(names or [])
+        return np.zeros(0), np.zeros((0, len(cols))), cols
+    cols = list(names) if names is not None else sorted(samples[0].values)
+    t = np.array([s.timestamp for s in samples], dtype=float)
+    Y = np.full((len(samples), len(cols)), np.nan)
+    keep = set(accept)
+    for i, s in enumerate(samples):
+        for j, name in enumerate(cols):
+            if name in s.values and s.quality.get(name) in keep:
+                Y[i, j] = s.values[name]
+    return t, Y, cols

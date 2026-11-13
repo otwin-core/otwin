@@ -1,0 +1,15 @@
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
+Otwin = "d8a12f9a-d1ca-4deb-9e42-5850b10d84f1"
+
+# Otwin.jl from this checkout, so `Pkg.instantiate()` works without a manifest.
+[sources]
+Otwin = {path = ".."}
+
+[compat]
+DataFrames = "1"
+ModelingToolkit = "11"
+OrdinaryDiffEq = "7"
+julia = "1.11"

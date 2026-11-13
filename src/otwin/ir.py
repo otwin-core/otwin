@@ -40,6 +40,7 @@ __all__ = [
     "BranchRecord",
     "PhysicalSystemIR",
     "PHSIR",
+    "RateGroup",
 ]
 
 IR_VERSION = "1"
@@ -153,6 +154,33 @@ class PhysicalSystemIR:
 
 
 @dataclass
+class RateGroup:
+    """The one-way flows of one component, for the positivity-preserving solver.
+
+    ``flows`` lists ``(from_state, to_state, rate)``: the through variable
+    ``rate`` leaves the state ``from_state`` and enters ``to_state`` (either
+    may be ``None`` for the reference or a node that is not a state). A
+    reaction's flows share one rate law up to stoichiometry; scaling them by
+    one common factor keeps the stoichiometry, and so the mass balance, exact.
+    """
+
+    component: str
+    flows: list[tuple[int | None, int | None, Expr]]
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-ready form with the rate expressions serialised."""
+        return {
+            "component": self.component,
+            "flows": [[i, j, e.to_json()] for i, j, e in self.flows],
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> RateGroup:
+        """Rebuild from :meth:`to_dict`."""
+        return cls(d["component"], [(i, j, ex.from_json(e)) for i, j, e in d["flows"]])
+
+
+@dataclass
 class PHSIR:
     """The port-Hamiltonian form with symbolic entries. Executed by the runtime."""
 
@@ -175,6 +203,9 @@ class PHSIR:
     representation: str = "port-hamiltonian"
     physical: PhysicalSystemIR | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    #: One-way flows by component, read by the ``patankar`` solver. Empty for a
+    #: model with no rate branches.
+    rate_groups: list[RateGroup] = field(default_factory=list)
 
     # ---------------------------------------------------------------- shape
     @property
@@ -281,6 +312,8 @@ class PHSIR:
             "jacobian": mat(self.jacobian) if self.jacobian is not None else None,
             "metadata": self.metadata,
         }
+        if self.rate_groups:
+            d["rate_groups"] = [g.to_dict() for g in self.rate_groups]
         if self.physical is not None:
             d["physical"] = self.physical.to_dict()
         return d
@@ -332,6 +365,7 @@ class PHSIR:
             representation=d.get("representation", "port-hamiltonian"),
             physical=phys,
             metadata=d.get("metadata", {}),
+            rate_groups=[RateGroup.from_dict(g) for g in d.get("rate_groups", [])],
         )
 
     @classmethod

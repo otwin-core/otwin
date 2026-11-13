@@ -4,8 +4,9 @@ Reading a device, or a dataset, in a way that lets you say afterwards where each
 number came from.
 
 :::{important}
-Connectors are **read-only**. `otwin` can read a Modbus or SunSpec device and
-cannot write to one. Closed-loop actuation is deliberately out of scope.
+Connectors are **read-only**. `otwin` can read a Modbus, SunSpec or OPC UA
+device and cannot write to one. Closed-loop actuation is deliberately out of
+scope.
 :::
 
 ## Quality is not optional
@@ -58,6 +59,65 @@ the map is data rather than code.
 {func}`~otwin.io.decode_registers` and {func}`~otwin.io.encode_value` are the
 raw pair underneath, exposed because register-level debugging is a normal part
 of commissioning.
+
+## OPC UA
+
+{class}`~otwin.io.OpcUaSource` reads a stated list of OPC UA nodes as named
+channels. It produces the same {class}`~otwin.io.Sample` objects as the Modbus
+sources, so {mod}`otwin.signal` and {mod}`otwin.estimate` take them unchanged.
+It needs `pip install "otwin[opcua]"`, which installs asyncua
+(LGPL-3.0-or-later). The configuration objects work without it.
+
+```{code-block} python
+from otwin.io import OpcUaChannel, OpcUaSecurity, OpcUaSource, samples_to_arrays
+
+security = OpcUaSecurity(
+    certificate="pki/own/certs/otwin.der",     # create_self_signed_certificate() makes one
+    private_key="pki/own/private/otwin.pem",
+    trust="pki/trusted",                       # the server's certificate, or its CA and CRL
+    username="operator", password=password,    # optional
+)
+channels = [
+    OpcUaChannel("p_out", "nsu=urn:plant;s=Pump.Power", "kW"),
+    OpcUaChannel("fill", "nsu=urn:plant;s=Tank.Fill", "percent"),
+]
+with OpcUaSource("opc.tcp://plc.example:4840/", channels, security=security) as src:
+    print(src.browse())                        # find the nodes to map
+    samples = [src.read() for _ in range(60)]  # or mode="subscribe", then src.drain()
+    record = src.acquisition()                 # for TwinManifest(acquisition=...)
+t, Y, names = samples_to_arrays(samples)       # what otwin.signal takes
+```
+
+**It never writes.**
+- There is no write or method-call entry point.
+- A configuration that asks to write (`access: read_write`, `writable`,
+  `setpoints`, `commands`, ...) raises {class}`~otwin.io.ReadOnlyViolation`
+  before connecting.
+- Every request passes an allow-list of read-only OPC UA services, so a Write
+  or a Call cannot leave the process, even from code that reaches into the
+  underlying client.
+
+**It is secured by default**, following OPC UA Parts 2, 4, 6 and 7:
+- **Policy and mode.** `Basic256Sha256` with `SignAndEncrypt` is the default;
+  the two `Aes` policies are also accepted. The deprecated `Basic128Rsa15` and
+  `Basic256` are refused. Policy `None` needs {meth}`~otwin.io.OpcUaSecurity.insecure`,
+  and then it warns and is recorded as such.
+- **Server certificate.** It is validated before any credential is sent:
+  trust list or CA chain, validity, ApplicationUri, host name, key usage,
+  RSA key size, SHA-256 or stronger, and revocation through the CA's CRL. It is
+  then pinned for the session.
+- **Passwords.** A password is never sent readable.
+- **Nothing secret is recorded.** Credentials are refused in endpoint URLs and
+  in configuration files (name an environment variable instead), and the
+  manifest never contains them.
+
+**Units are checked against the server.** If a node has an EngineeringUnits
+property (Part 8) that contradicts the channel's unit, the connection is
+refused. A kW tag read as W is off by a factor of 1000 and still looks
+plausible.
+
+**It refuses nodes it cannot map.** A node that is not a readable numeric
+scalar is refused at connection time. It is not read as NaN for ever.
 
 ## Units
 

@@ -99,6 +99,39 @@ directions**, and an exact match is refused. A covariate carrying the answer
 defeats the leakage-free interface as completely as passing the test array did,
 and it is much harder to notice by eye.
 
+## Across units
+
+A twin calibrated on some units of a fleet is used on units it has never seen.
+{func}`~otwin.forecast.transfer.transfer_validation` measures that directly.
+It holds out each unit in turn and calls your `fit` on the remaining units
+only. It then forecasts the held-out unit from rolling origins along its own
+series and records every contrast: unit, origin, horizon, signed error, and
+whether the range covered the observation.
+
+```{code-block} python
+from otwin.forecast import transfer_validation
+
+def fit(calibration_units):            # {unit id: series}, never the held-out one
+    ...                                # fit the model and calibrate its range
+    return forecaster                  # forecaster(history, horizon) -> (pred, lower, upper)
+
+tv = transfer_validation(fleet, fit, horizon_levels=[0, 6, 12, 24], level=0.9)
+tv.overall_coverage, tv.tranche_coverage, tv.median_bias
+tv.audit.to_html()                     # the coverage report, by horizon tranche
+tv.contrasts.audit(level=0.9)          # the same contrasts, re-audited any other way
+```
+
+No unit contributes to its own calibration. The mapping passed to `fit` is
+checked on every fold, with a check that `python -O` does not strip.
+{attr}`~otwin.forecast.transfer.TransferValidation.calibration_units` records
+which units calibrated each one. Units given twice are rejected: the same
+array, overlapping views of one array, or equal data. The forecaster does see
+the held-out unit's own past up to each origin, because that is how the twin
+will run on a new unit. Nothing stops `fit` from reading the whole fleet
+through a closure, so pass it only what it is given.
+
+Units run one after another. `fit` is called once per unit.
+
 ## Recording it
 
 {meth}`~otwin.interfaces.TwinManifest.validated_by` builds the record the
