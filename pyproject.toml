@@ -114,7 +114,9 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "src"]
+# apps/home is Otwin Home, which ships separately from the otwin package; its
+# tests need only NumPy and run with the rest of the suite.
+testpaths = ["tests", "src", "apps/home"]
 addopts = "--doctest-modules -q"
 filterwarnings = ["error::DeprecationWarning"]
 

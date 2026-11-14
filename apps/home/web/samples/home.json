@@ -1,0 +1,18 @@
+{
+  "province": "madrid",
+  "home_type": "flat",
+  "size": "m",
+  "built": "1980_2006",
+  "heating": "heat_pump",
+  "cooling": "no",
+  "thermostat": "20",
+  "night": "lower",
+  "people": "2",
+  "water": "electric",
+  "appliances": [
+    "dishwasher",
+    "washing_machine",
+    "oven",
+    "tv"
+  ]
+}

@@ -1,0 +1,10 @@
+entity_id,state,last_changed
+sensor.washer_energy,10.000,2025-10-26T08:00:00.000Z
+sensor.washer_energy,10.250,2025-10-26T08:30:00.000Z
+sensor.washer_energy,unavailable,2025-10-26T08:40:00.000Z
+sensor.washer_energy,10.700,2025-10-26T09:01:40.000Z
+sensor.washer_energy,0.150,2025-10-26T09:23:20.000Z
+sensor.washer_energy,0.400,2025-10-26T10:00:00.000Z
+sensor.bedroom_temperature,19.5,2025-10-26T08:00:00.000Z
+sensor.bedroom_temperature,19.8,2025-10-26T08:15:00.000Z
+sensor.bedroom_temperature,20.4,2025-10-26T09:06:40.000Z

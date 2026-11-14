@@ -1,0 +1,6 @@
+# Otwin Home follows the repository's ruff settings; its own packages
+# (ingest, and the tests' fixtures) are first-party for import sorting.
+extend = "../../pyproject.toml"
+
+[lint.isort]
+known-first-party = ["ingest", "components", "calibration", "scenarios", "survey", "fixtures"]

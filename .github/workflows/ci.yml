@@ -136,8 +136,8 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with: { python-version: "3.12" }
       - run: pip install --require-hashes -r .github/requirements/lint.txt
-      - run: ruff check src tests examples assets
-      - run: ruff format --check src tests examples assets
+      - run: ruff check src tests examples assets apps
+      - run: ruff format --check src tests examples assets apps
       # The README diagrams are SVGs rendered from assets/diagrams/*.mmd, so
       # they show on PyPI too. Each SVG carries the hash of its source; a
       # stale one means someone edited the .mmd without re-rendering.

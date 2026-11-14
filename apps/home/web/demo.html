@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- The offline demonstration: the sample month calibrated and five
+     what-ifs answered, with timings. Works from file:// with the network
+     off (verify_offline.py proves it) and from any static server. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Otwin Home — demo</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top"><div class="brand">Otwin Home · demo</div>
+    <div class="engine" id="engine">Starting the engine …</div></header>
+  <main>
+    <h1>The twin, end to end, in this page</h1>
+    <p class="lead">A sample January is calibrated and five what-ifs are answered,
+      all inside your browser. For your own home, use <a href="index.html">the wizard</a>.</p>
+    <div id="out"></div>
+  </main>
+  <script src="client.js"></script>
+  <script>
+    "use strict";
+    (async () => {
+      const engine = document.getElementById("engine");
+      const out = document.getElementById("out");
+      try {
+        const info = await OtwinHome.start((s) => (engine.textContent = `Engine: ${s}`));
+        engine.textContent = "Calibrating the sample month …";
+        const result = await OtwinHome.call("run_example", {});
+        const t = Object.assign({ parse_decode_ms: 0 }, info.timings, result.timings);
+        t.total_ms = Math.round(performance.now());
+        engine.textContent = `Done, in this browser (${info.mode})`;
+        const add = (tag, text, cls) => {
+          const n = document.createElement(tag);
+          n.textContent = text;
+          if (cls) n.className = cls;
+          out.append(n);
+          return n;
+        };
+        add("p", result.calibration.verdict, `verdict ${result.calibration.verdict === "good" ? "good" : "usable"}`);
+        add("p", result.calibration.headline, "headline");
+        const ul = document.createElement("ul");
+        for (const f of result.calibration.findings.concat(result.scenarios.map((s) => s.sentence))) {
+          const li = document.createElement("li");
+          li.textContent = f;
+          ul.append(li);
+        }
+        out.append(ul);
+        add("p", Object.entries(t).map(([k, v]) => `${k} ${v}`).join(" · "), "small");
+        add("p", result.versions, "small");
+        window.__OTWIN_RESULT = { ok: true, timings: t, result };
+      } catch (e) {
+        engine.textContent = "failed";
+        const pre = document.createElement("pre");
+        pre.textContent = String(e && e.stack ? e.stack : e);
+        out.append(pre);
+        window.__OTWIN_RESULT = { ok: false, error: String(e) };
+      }
+    })();
+  </script>
+</body>
+</html>
