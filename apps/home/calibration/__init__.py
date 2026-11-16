@@ -23,16 +23,23 @@ and demonstrations.
 from __future__ import annotations
 
 from .calibrate import MIN_FULL_POWER_HOURS, START_OFFSET_K, Calibration, calibrate
-from .data import MAX_MISSING_FRACTION, MIN_DAYS, HourlyData, NotEnoughData
+from .data import MAX_MISSING_FRACTION, MIN_DAYS, GasBill, HourlyData, NotEnoughData
 from .fit import HourlyMeter, calibration_parameters, fit_hourly
 from .report import GOOD, NOT_ENOUGH_DATA, USABLE, VERDICTS, Finding
-from .synthetic import synthetic_month, winter_weather
+from .synthetic import (
+    SyntheticRecord,
+    synthetic_meters,
+    synthetic_month,
+    synthetic_record,
+    winter_weather,
+)
 
 __all__ = [
     "calibrate",
     "Calibration",
     "Finding",
     "HourlyData",
+    "GasBill",
     "NotEnoughData",
     "MIN_DAYS",
     "MAX_MISSING_FRACTION",
@@ -46,5 +53,8 @@ __all__ = [
     "START_OFFSET_K",
     "MIN_FULL_POWER_HOURS",
     "synthetic_month",
+    "synthetic_meters",
+    "synthetic_record",
+    "SyntheticRecord",
     "winter_weather",
 ]

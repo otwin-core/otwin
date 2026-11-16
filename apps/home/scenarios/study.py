@@ -296,7 +296,13 @@ class ScenarioStudy:
     def from_calibration(
         cls, calibration, data, tariff: Tariff, **kwargs
     ) -> ScenarioStudy:
-        """The study of a calibrated twin over the month it was calibrated on."""
+        """The study of a calibrated twin over the month it was calibrated on.
+
+        A record of several periods is studied over its last period: a study
+        runs one continuous stretch of time (``data.period(k)`` for another).
+        """
+        if data.periods:
+            data = data.period(len(data.spans) - 1)
         return cls(
             calibration.twin,
             start=data.start,
@@ -341,7 +347,9 @@ class ScenarioStudy:
         prefix = self.spinup_weeks * week
         n = prefix + self.hours
         t = np.arange(n * sub + 1) * (3600.0 / sub)
-        start = self.start - timedelta(hours=prefix)
+        start = self.start.astimezone(timezone.utc) - timedelta(
+            hours=prefix
+        )  # elapsed, not wall-clock
 
         def with_prefix(hourly: np.ndarray) -> np.ndarray:
             return np.concatenate([np.tile(hourly[:week], self.spinup_weeks), hourly])

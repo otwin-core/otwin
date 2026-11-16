@@ -15,6 +15,10 @@ A :class:`ThermalZone` is a composite, built from the primitives the way
         └──────────────────────[Ventilation]───────────────────────┘
 
 This is the lumped model behind ISO 52016-1 and the ISO 13790 5R1C method.
+With ``sky=`` the envelope does not face the outdoor air directly but a
+:class:`~components.exchanges.SkyRadiation` step that many kelvin below it,
+which adds the envelope's radiation loss to the night sky (ISO 13790
+§11.4.6); ventilation still exchanges with the air itself.
 Gains and machines connect at the ``air`` node; the ``outside`` port goes to
 an :class:`~components.boundaries.Outdoors`.
 """
@@ -25,7 +29,7 @@ from otwin.components.base import ComponentQuantities, Composite
 from otwin.expr import Expr
 
 from .boundaries import ZERO_CELSIUS
-from .exchanges import Envelope, InteriorSurface, Ventilation
+from .exchanges import Envelope, InteriorSurface, SkyRadiation, Ventilation
 from .stores import BuildingFabric, RoomAir
 
 __all__ = ["ThermalZone"]
@@ -44,6 +48,8 @@ class ThermalZone(Composite):
         fabric_coupling: :class:`InteriorSurface` conductance, W/K.
         temperature: initial indoor temperature, K (also the fabric's).
         fabric_temperature: initial fabric temperature, if different.
+        sky: the envelope's radiation to the sky, as a temperature step in K
+            (:func:`~components.exchanges.sky_depression`); ``None`` for none.
 
     Ports:
         ``air``: the indoor air node, where gains and machines connect.
@@ -51,8 +57,10 @@ class ThermalZone(Composite):
 
     Outputs:
         ``<name>.temperature`` (K), ``<name>.heat_loss`` (W to the outside,
-        envelope and ventilation together) and, in the 2R2C form,
-        ``<name>.fabric_temperature`` (K).
+        envelope and ventilation together, radiation included), in the 2R2C
+        form ``<name>.fabric_temperature`` (K), and with ``sky``
+        ``<name>.radiation_loss`` (W: the part of the envelope's loss that is
+        radiation to the sky).
     """
 
     type_name = "thermal_zone"
@@ -68,6 +76,7 @@ class ThermalZone(Composite):
         fabric_coupling: float | None = None,
         temperature: float = ZERO_CELSIUS + 20.0,
         fabric_temperature: float | None = None,
+        sky: float | None = None,
         name: str = "zone",
     ) -> None:
         super().__init__(name)
@@ -98,7 +107,14 @@ class ThermalZone(Composite):
             if fabric_temperature is not None:
                 raise ValueError(f"{self.name}: fabric_temperature needs the 2R2C form")
             self.connect(air.port, envelope.a)
-        outside = [envelope.b]
+        self.sky = sky
+        if sky is not None:
+            step = SkyRadiation(sky)
+            self.add(step)
+            self.connect(envelope.b, step.b)
+            outside = [step.a]
+        else:
+            outside = [envelope.b]
         if ventilation is not None:
             vent = Ventilation(ventilation)
             self.add(vent)
@@ -108,7 +124,7 @@ class ThermalZone(Composite):
         if len(outside) > 1:
             self.connect(*outside)
         self.expose("air", air.port)
-        self.expose("outside", envelope.b)
+        self.expose("outside", outside[0])
 
     def extra_outputs(self, q: ComponentQuantities) -> dict[str, tuple[str, Expr]]:
         """``temperature`` and ``heat_loss``, plus ``fabric_temperature`` in 2R2C."""
@@ -122,4 +138,7 @@ class ThermalZone(Composite):
         }
         if self.two_node:
             out["fabric_temperature"] = ("K", q.across[f"{n}.fabric"])
+        if self.sky is not None:
+            ua = q.params[f"{n}.envelope.conductance"]
+            out["radiation_loss"] = ("W", ua * q.across[f"{n}.sky"])
         return out

@@ -30,7 +30,7 @@ The verdicts and sentences are in :mod:`calibration.report`.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 import numpy as np
@@ -47,7 +47,11 @@ from components import (
 
 from .data import HourlyData, NotEnoughData
 from .fit import (
-    SUBSTEPS,
+    ELECTRICITY_SIGMA_KWH,
+    GAS_BILL_SIGMA,
+    INDOOR_SIGMA_K,
+    OFFSET_BASE_K,
+    THERMOMETER_OFFSET,
     HourlyMeter,
     ParameterRole,
     calibration_parameters,
@@ -56,6 +60,8 @@ from .fit import (
 )
 from .report import (
     ASHRAE_CV_RMSE,
+    ASHRAE_MONTHLY_CV_RMSE,
+    ASHRAE_MONTHLY_NMBE,
     ASHRAE_NMBE,
     GOOD,
     NOT_ENOUGH_DATA,
@@ -109,6 +115,12 @@ class Calibration:
     predicted_bills_kwh: np.ndarray = field(default_factory=lambda: np.zeros(0))
     worst_bill_error: float = float("nan")
     given: dict[str, float] = field(default_factory=dict)
+    #: The indoor temperature, °C, hour by hour: the thermometer's (NaN where
+    #: it read nothing) and the twin's own thermometer's.
+    measured_indoor_c: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    predicted_indoor_c: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    #: Typical hourly mismatch of the indoor temperature, K (RMSE).
+    indoor_error: float = float("nan")
 
     def finding(self, key: str) -> Finding:
         """The finding about ``key`` (a model parameter or derived quantity)."""
@@ -139,7 +151,9 @@ def _machine_kind(m: SpaceMachine) -> str:
     return "heating"
 
 
-def _covariance(J: np.ndarray, r: np.ndarray, floor: np.ndarray | None = None) -> np.ndarray:
+def _covariance(
+    J: np.ndarray, r: np.ndarray, floor: np.ndarray | None = None
+) -> np.ndarray:
     """Sandwich covariance of the fitted parameters; inf where undetermined.
 
     ``floor`` is a per-row minimum residual: with a handful of gas bills the
@@ -154,17 +168,33 @@ def _covariance(J: np.ndarray, r: np.ndarray, floor: np.ndarray | None = None) -
     active = norms > 1e-9 * max(float(norms.max(initial=0.0)), 1e-300)
     if not active.any() or n <= k:
         return cov
-    Ja = J[:, active]
+    # Columns are scaled to unit length first: parameters differ by orders of
+    # magnitude (a heat capacity of 1e7 J/K, a thermometer offset of 0.1 K),
+    # and unscaled the normal matrix looks singular when it is not. The
+    # covariance is the same either way; only the arithmetic is safer.
+    scale = norms[active]
+    Ja = J[:, active] / scale
     try:
         A = np.linalg.inv(Ja.T @ Ja)
     except np.linalg.LinAlgError:
         return cov
     if not np.all(np.isfinite(A)) or np.linalg.cond(Ja.T @ Ja) > 1e14:
         return cov
-    ca = A @ (Ja.T * r**2) @ Ja @ A * n / (n - k)
+    ca = A @ (Ja.T * r**2) @ Ja @ A * n / (n - k) / np.outer(scale, scale)
     idx = np.flatnonzero(active)
     cov[np.ix_(idx, idx)] = ca
     return cov
+
+
+def _persistence(r: np.ndarray) -> float:
+    """How much to inflate residuals that persist from row to row: the square
+    root of (1 + ρ) / (1 − ρ), ρ their lag-one autocorrelation (0 to 0.95)."""
+    if r.size < 3 or not np.any(r):
+        return 1.0
+    c = r - r.mean()
+    rho = float(np.dot(c[1:], c[:-1]) / max(np.dot(c, c), 1e-300))
+    rho = min(max(rho, 0.0), 0.95)
+    return float(np.sqrt((1.0 + rho) / (1.0 - rho)))
 
 
 def _unstable(fit: FitResult, name: str) -> bool:
@@ -221,8 +251,14 @@ def calibrate(
     """
     obs = data.observed
     has_elec = int(obs.sum()) >= 7 * 24
+    ind = data.indoor_observed
+    has_indoor = int(ind.sum()) >= 7 * 24
     roles = calibration_parameters(
-        twin, gas_bills=bool(data.gas_bills), electricity=has_elec, given=given
+        twin,
+        gas_bills=bool(data.gas_bills),
+        electricity=has_elec,
+        indoor=has_indoor,
+        given=given,
     )
     fitted = [r for r in roles if r.observable]
     if not fitted:
@@ -253,26 +289,49 @@ def calibrate(
     )
     theta = np.array([fit.values[n] for n in names])
 
-    # the rows that carry information: observed hours, then each bill's last hour
+    # the rows that carry information: observed hours, each bill's last hour,
+    # the hours the thermometer read (stacked in that order by fit_hourly)
     n_h = data.hours
     bills = data.gas_bills
     w_e, w_g = _weights(data)
+    w_i = 1.0 / INDOOR_SIGMA_K
+    with_indoor = data.indoor_c is not None
     e_rows = np.flatnonzero(obs)
     g_rows = n_h + np.array([b.end - 1 for b in bills], dtype=int)
-    rows = np.concatenate([e_rows, g_rows]) if bills else e_rows
+    i_rows = n_h * (2 if bills else 1) + np.flatnonzero(ind)
+    rows = np.concatenate(
+        [e_rows] + ([g_rows] if bills else []) + ([i_rows] if with_indoor else [])
+    )
     J = fit.sensitivities[rows]
-    r = fit.residuals[rows]
-    floor = np.concatenate([
-        np.zeros(e_rows.size),
-        w_g * GAS_BILL_SIGMA * np.array([b.kwh for b in bills]),
-    ]) if bills else None
+    r = fit.residuals[rows].copy()
+    # Hourly residuals persist from one hour to the next (the sun on the
+    # thermometer, a door left open, an evening the twin does not know), so
+    # an hour is not an independent observation. Each hourly stream counts
+    # for what its effective sample size is worth: AR(1), (1 + ρ) / (1 − ρ).
+    n_e = e_rows.size
+    r[:n_e] *= _persistence(r[:n_e])
+    if with_indoor:
+        r[r.size - i_rows.size :] *= _persistence(r[r.size - i_rows.size :])
+    floor = (
+        np.concatenate(
+            [
+                np.zeros(e_rows.size),
+                w_g * GAS_BILL_SIGMA * np.array([b.kwh for b in bills]),
+            ]
+            + ([np.zeros(i_rows.size)] if with_indoor else [])
+        )
+        if bills
+        else None
+    )
     cov = _covariance(J, r, floor)
 
     def weighted(m: HourlyMeter) -> np.ndarray:
-        elec, gas = m.meters()
+        elec, gas, indoor = m.readings()
         parts = [w_e * elec[obs]]
         if bills:
             parts.append(w_g * m.bill_totals(gas))
+        if with_indoor:
+            parts.append(w_i * indoor[ind])
         return np.concatenate(parts)
 
     # the unknown start: how far would each value move from ±3 K?
@@ -298,8 +357,13 @@ def calibrate(
 
     uncertainty = {n: rel(i) for i, n in enumerate(names)}
 
-    elec_all, gas_all = meter.meters()
+    elec_all, gas_all, indoor_all = meter.readings(indoor=True)
     measured = np.where(obs, data.electricity_kwh, np.nan)
+    indoor_error = float("nan")
+    if with_indoor and ind.any():
+        indoor_error = float(
+            np.sqrt(np.mean((indoor_all[ind] - data.indoor_c[ind]) ** 2))
+        )
     predicted = np.where(obs, elec_all, np.nan)
     cv = nmbe = float("nan")
     if int(obs.sum()) >= 28 * 24 or (obs.any() and not bills):
@@ -316,14 +380,25 @@ def calibrate(
         rel_err = (bill_pred - bill_kwh) / np.maximum(bill_kwh, 1.0)
         worst_bill = float(np.max(np.abs(rel_err)))
         b_nmbe = float((bill_pred.sum() - bill_kwh.sum()) / max(bill_kwh.sum(), 1.0))
-        b_cv = float(np.sqrt(np.mean((bill_pred - bill_kwh) ** 2)) / max(bill_kwh.mean(), 1.0))
+        b_cv = float(
+            np.sqrt(np.mean((bill_pred - bill_kwh) ** 2)) / max(bill_kwh.mean(), 1.0)
+        )
         bills_ok = abs(b_nmbe) <= ASHRAE_MONTHLY_NMBE and (
             len(bills) < 3 or b_cv <= ASHRAE_MONTHLY_CV_RMSE
         )
 
     findings = _findings(twin, meter, fit, roles, names, theta, cov, shifts, uncertainty)
     verdict, headline = _headline(
-        findings, cv, nmbe, elec_ok, len(bills), worst_bill, bills_ok, fit.success, data
+        findings,
+        cv,
+        nmbe,
+        elec_ok,
+        len(bills),
+        worst_bill,
+        bills_ok,
+        fit.success,
+        data,
+        indoor_error,
     )
     calibrated = replace(twin, model=meter.model)
     return Calibration(
@@ -342,6 +417,11 @@ def calibrate(
         predicted_bills_kwh=bill_pred,
         worst_bill_error=worst_bill,
         given={r.name: float(meter.model.parameters[r.name]) for r in roles if r.given},
+        measured_indoor_c=(
+            np.where(ind, data.indoor_c, np.nan) if with_indoor else np.full(n_h, np.nan)
+        ),
+        predicted_indoor_c=indoor_all,
+        indoor_error=indoor_error,
     )
 
 
@@ -373,7 +453,7 @@ def _findings(
     shifts: np.ndarray,
     uncertainty: dict[str, float],
 ) -> list[Finding]:
-    params = meter.model.parameters
+    params = meter.parameters  # the model's, and the thermometer's offset
     index = {n: i for i, n in enumerate(names)}
     zone = twin.zone.name
     ua_name = f"{zone}.envelope.conductance"
@@ -381,8 +461,12 @@ def _findings(
     machines = {c.name: c for c in twin.system.components if isinstance(c, SpaceMachine)}
     out: list[Finding] = []
 
+    bill_only = {r.name for r in roles if r.from_bills}
+
     def judge(name: str, u: float, unseen: str = _NOT_PINNED) -> tuple[str, str]:
-        if _unstable(fit, name):
+        # the stability check resamples hours; a value seen only through a few
+        # bill totals has its uncertainty from the bills' own error instead
+        if name not in bill_only and _unstable(fit, name):
             return NOT_ENOUGH_DATA, _UNSTABLE
         v = verdict_for(u)
         return v, (unseen if v == NOT_ENOUGH_DATA else "")
@@ -404,6 +488,7 @@ def _findings(
                     NOT_ENOUGH_DATA,
                     f"{label}: not measured",
                     role.why_not[0].upper() + role.why_not[1:],
+                    counted=not role.beyond_bills,
                 )
             )
             continue
@@ -485,6 +570,7 @@ def _findings(
             )
 
         elif role.role == "machine":
+            oversized = False
             m = machines[role.component]
             kind = _machine_kind(m)
             what = "cooling" if m.sense == "cool" else "heat"
@@ -492,6 +578,7 @@ def _findings(
                 moved = meter.hourly([f"{m.name}.{m.sense}"])[f"{m.name}.{m.sense}"]
                 if int(np.sum(moved >= _FULL_POWER * value)) < MIN_FULL_POWER_HOURS:
                     v = NOT_ENOUGH_DATA
+                    oversized = True
                     hint = (
                         "A hotter month would show it."
                         if m.sense == "cool"
@@ -500,7 +587,8 @@ def _findings(
                     )
                     reason = (
                         f"Your {kind} never ran at full power this month, so its "
-                        f"full size never showed. {hint}"
+                        f"full size never showed: it is bigger than the month "
+                        f"needed. {hint}"
                     )
             sentence = (
                 f"Size of your {kind}: {value / 1000:.1f} kW of {what} at full power"
@@ -516,6 +604,43 @@ def _findings(
                     v,
                     sentence,
                     reason,
+                    # never needed at full power: the home was kept warm, so
+                    # its size, unseen, did not matter to the month
+                    counted=not oversized,
+                )
+            )
+
+        elif role.role == "sensor":
+            value -= OFFSET_BASE_K  # carried on a base, see calibration.fit
+            i = index[role.name]
+            var = cov[i, i]
+            u_abs = (
+                float(np.hypot(1.96 * np.sqrt(var), shifts[i]))
+                if np.isfinite(var) and var >= 0
+                else float("inf")
+            )
+            v = GOOD if u_abs <= 0.2 else USABLE if u_abs <= 0.5 else NOT_ENOUGH_DATA
+            pm = f" (±{max(u_abs, 0.05):.1f} °C)" if np.isfinite(u_abs) else ""
+            if abs(value) < 0.05:
+                sentence = f"Your thermometer: it reads your home's temperature{pm}"
+            else:
+                where = "warmer" if value > 0 else "cooler"
+                sentence = (
+                    f"Your thermometer: it reads {abs(value):.1f} °C {where} than your "
+                    f"home on average{pm}, from where it hangs or its calibration. "
+                    "The twin allows for it"
+                )
+            out.append(
+                Finding(
+                    role.name,
+                    "Your thermometer",
+                    value,
+                    "°C",
+                    u_abs,
+                    v,
+                    sentence,
+                    "" if v != NOT_ENOUGH_DATA else _NOT_PINNED,
+                    counted=False,  # about the sensor, not the home
                 )
             )
 
@@ -537,19 +662,41 @@ def _headline(
     cv: float,
     nmbe: float,
     fits_hours: bool,
+    n_bills: int,
+    worst_bill: float,
+    fits_bills: bool,
     converged: bool,
     data: HourlyData,
+    indoor_error: float = float("nan"),
 ) -> tuple[str, str]:
-    total = max(abs(100 * nmbe), 0.1)
-    match = (
-        f"a typical hour within {100 * cv:.0f} % and the month's total within "
-        f"{total:.1f} %"
-    )
+    parts = []
+    if np.isfinite(cv):
+        total = max(abs(100 * nmbe), 0.1)
+        parts.append(
+            f"your electricity (a typical hour within {100 * cv:.0f} % and "
+            f"{_total_of(data)} within {total:.1f} %)"
+        )
+    if n_bills:
+        bills = "your gas bill" if n_bills == 1 else f"your {n_bills} gas bills"
+        within = max(100 * worst_bill, 0.1)
+        parts.append(f"{bills} (within {within:.1f} %)")
+    if np.isfinite(indoor_error):
+        parts.append(
+            f"your indoor temperature (a typical hour within {indoor_error:.1f} °C)"
+        )
+    match = _join(parts) or "your meters"
     if not converged:
         return NOT_ENOUGH_DATA, (
             "Not enough data: the search did not settle on one answer for this month. "
             "Check the electricity and weather cover the same dates, or try a "
             "longer record."
+        )
+    if not fits_bills:
+        return NOT_ENOUGH_DATA, (
+            f"Not enough data: the twin does not yet reproduce your gas bills (the "
+            f"furthest is off by {100 * worst_bill:.0f} %). Check the bills' dates and "
+            "kWh, and that what runs on gas (heating, hot water, cooking) is right in "
+            "step 1."
         )
     if not fits_hours:
         return NOT_ENOUGH_DATA, (
@@ -559,34 +706,63 @@ def _headline(
             "is not in the twin yet: an oven used every day, a car charger, a second "
             "heater. Add it, or measure it with a smart plug."
         )
-    overall = worst(f.verdict for f in findings)
-    poor = [f.label.lower() for f in findings if f.verdict == NOT_ENOUGH_DATA]
-    rough = [f.label.lower() for f in findings if f.verdict == USABLE]
-    known = [f.label.lower() for f in findings if f.verdict == GOOD]
+    counted = [f for f in findings if f.counted]
+    overall = worst(f.verdict for f in counted)
+    poor = [f.label.lower() for f in counted if f.verdict == NOT_ENOUGH_DATA]
+    rough = [f.label.lower() for f in counted if f.verdict == USABLE]
+    known = [f.label.lower() for f in counted if f.verdict == GOOD]
+    beyond = [_the(f.label.lower()) for f in findings if not f.counted and not f.measured]
+    unneeded = [
+        _the(f.label.lower())
+        for f in findings
+        if not f.counted and f.measured and f.key != THERMOMETER_OFFSET
+    ]
+    cannot = f" Bills cannot show {_join(beyond, 'or')}; see below." if beyond else ""
+    if unneeded:
+        cannot += (
+            f" {_join(unneeded).capitalize()} did not show: it was never needed at "
+            "full power, so it is big enough."
+        )
     days = f"{data.days:.0f} days"
     if overall == GOOD:
+        every = "every number it measured" if beyond else "every number below"
         return GOOD, (
-            f"Good: over {days} the twin matches your electricity ({match}), and "
-            "every number below is well determined."
+            f"Good: over {days} the twin matches {match}, and "
+            f"{every} is well determined.{cannot}"
         )
     if overall == USABLE:
         return USABLE, (
-            f"Usable: over {days} the twin matches your electricity ({match}). "
-            f"Known well: {_join(known) or 'nothing yet'}; only roughly: {_join(rough)}."
+            f"Usable: over {days} the twin matches {match}. "
+            f"Known well: {_join(known) or 'nothing yet'}; only roughly: "
+            f"{_join(rough)}.{cannot}"
         )
-    first = next(f for f in findings if f.verdict == NOT_ENOUGH_DATA)
+    first = next(f for f in counted if f.verdict == NOT_ENOUGH_DATA)
     rest = known + rough
     why = first.reason[0].lower() + first.reason[1:] if first.reason else ""
     return NOT_ENOUGH_DATA, (
-        f"Not enough data for {_join(poor)}: {why} The twin does match your "
-        f"electricity ({match})."
+        f"Not enough data for {_join(poor)}: {why} The twin does match "
+        f"{match}."
         + (f" What the month does show: {_join(rest)}." if rest else "")
+        + cannot
     )
 
 
-def _join(items: list[str]) -> str:
+def _total_of(data: HourlyData) -> str:
+    """ "the month's total", or the total over what the record covers."""
+    n = len(data.spans)
+    if n > 1:
+        return f"the total over the {n} periods"
+    return "the month's total" if data.days <= 35 else "the total"
+
+
+def _join(items: list[str], word: str = "and") -> str:
     if not items:
         return ""
     if len(items) == 1:
         return items[0]
-    return ", ".join(items[:-1]) + " and " + items[-1]
+    return ", ".join(items[:-1]) + f" {word} " + items[-1]
+
+
+def _the(label: str) -> str:
+    """ "size of your boiler" -> "the size of your boiler", for inside a sentence."""
+    return f"the {label}" if label.startswith(("size ", "heat stored")) else label

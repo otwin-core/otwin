@@ -15,7 +15,7 @@ readings, temperatures that are plainly in the wrong unit.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -82,6 +82,17 @@ class HourlyData:
         gas_bills: gas bills inside the record (:class:`GasBill`). With bills,
             the record may be a whole year and the hourly electricity may
             cover only part of it: the bills then carry the heating.
+        periods: for a record made of several separate periods (three
+            winter months with gaps between them), the hour index and the
+            start of each period after the first, ``((744, start2), ...)``.
+            The hours are joined end to end; the twin simulates each period
+            on its own, from its own spin-up. Build it with :meth:`join`.
+        indoor_c: the indoor temperature, °C, the hourly mean of what an
+            interior thermometer read; ``NaN`` where it read nothing. It shows
+            how the home warms and cools, which no meter does.
+        check_length: ``False`` for one piece of a longer record: the piece
+            may then be shorter than :data:`MIN_DAYS` (the joined record is
+            checked as a whole). Consistency is checked either way.
 
     Raises:
         NotEnoughData: the record is too short or too incomplete.
@@ -93,6 +104,9 @@ class HourlyData:
     outdoor_c: np.ndarray
     measured: Mapping[str, np.ndarray] = field(default_factory=dict)
     gas_bills: tuple[GasBill, ...] = ()
+    periods: tuple[tuple[int, datetime], ...] = ()
+    indoor_c: np.ndarray | None = None
+    check_length: bool = field(default=True, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if self.start.tzinfo is None:
@@ -116,19 +130,53 @@ class HourlyData:
                 )
             measured[name] = a
         object.__setattr__(self, "measured", measured)
+        if self.indoor_c is not None:
+            ti = np.asarray(self.indoor_c, dtype=float).ravel()
+            if ti.shape != e.shape:
+                raise ValueError(
+                    f"the indoor temperature has {ti.size} hours, not {e.size}"
+                )
+            seen = ti[np.isfinite(ti)]
+            if seen.size and (seen.min() < -10.0 or seen.max() > 45.0):
+                hint = " It looks like kelvin; give °C." if seen.min() > 200 else ""
+                raise ValueError(
+                    f"indoor temperatures from {seen.min():g} to {seen.max():g} °C are "
+                    f"not plausible.{hint}"
+                )
+            object.__setattr__(self, "indoor_c", ti if seen.size else None)
         n = e.size
         need = MIN_DAYS * 24
+        periods = tuple((int(i), when) for i, when in self.periods)
+        object.__setattr__(self, "periods", periods)
+        prev_i, prev_t = 0, self.start.timestamp()
+        for i, when in periods:
+            if when.tzinfo is None or when.minute or when.second or when.microsecond:
+                raise ValueError("each period must start on the hour, timezone-aware")
+            if not prev_i < i < n:
+                raise ValueError(
+                    f"period starts must be inside the record, in order: {i}"
+                )
+            if when.timestamp() < prev_t + 3600 * (i - prev_i):
+                raise ValueError(
+                    f"the period starting {when:%d/%m/%Y} overlaps the one before"
+                )
+            prev_i, prev_t = i, when.timestamp()
         bills = tuple(sorted(self.gas_bills, key=lambda b: b.start))
         object.__setattr__(self, "gas_bills", bills)
         for a, b in zip(bills, bills[1:], strict=False):
             if b.start < a.end:
-                raise ValueError(f"gas bills overlap: {a.label or a.start} and {b.label or b.start}")
+                raise ValueError(
+                    f"gas bills overlap: {a.label or a.start} and {b.label or b.start}"
+                )
+        edges = [0, *[i for i, _ in periods], n]
         for b in bills:
             if not 0 <= b.start < b.end <= n:
                 raise ValueError(f"gas bill {b.label or b.start} lies outside the record")
+            if any(b.start < x < b.end for x in edges[1:-1]):
+                raise ValueError(f"gas bill {b.label or b.start} spans two periods")
             if b.kwh < 0:
                 raise ValueError(f"gas bill {b.label or b.start} has negative energy")
-        if n < need:
+        if self.check_length and n < need:
             raise NotEnoughData(
                 f"Calibration needs at least {MIN_DAYS} days of hourly electricity, "
                 f"about one month; this record covers {_days_and_hours(n)}. "
@@ -145,14 +193,14 @@ class HourlyData:
         missing = ~np.isfinite(e)
         n_missing = int(missing.sum())
         billed_hours = sum(b.end - b.start for b in bills)
-        if bills and billed_hours < need and n - n_missing < need:
+        if self.check_length and bills and billed_hours < need and n - n_missing < need:
             raise NotEnoughData(
                 f"Your gas bills cover {_days_and_hours(billed_hours)} and your hourly "
                 f"electricity {_days_and_hours(n - n_missing)}; calibration needs at least "
                 f"{MIN_DAYS} days of one or the other. Add more bills."
             )
         # With bills, the bills carry the record and electricity may cover part of it.
-        if not bills and n_missing > MAX_MISSING_FRACTION * n:
+        if self.check_length and not bills and n_missing > MAX_MISSING_FRACTION * n:
             first = int(np.flatnonzero(missing)[0])
             raise NotEnoughData(
                 f"{n_missing} of the {n} hours have no electricity reading "
@@ -160,13 +208,13 @@ class HourlyData:
                 f"least {100 * (1 - MAX_MISSING_FRACTION):.0f}% of the hours. The "
                 f"first missing hour starts {self.hour_label(first)}."
             )
-        if not bills and n - n_missing < need:
+        if self.check_length and not bills and n - n_missing < need:
             raise NotEnoughData(
                 f"Only {_days_and_hours(n - n_missing)} of this record have electricity "
                 f"readings; calibration needs at least {MIN_DAYS} days. Download a "
                 "longer period."
             )
-        if not bills and np.all(e[~missing] == 0):
+        if self.check_length and not bills and np.all(e[~missing] == 0):
             raise NotEnoughData(
                 "Every electricity reading is zero; nothing to calibrate."
             )
@@ -203,14 +251,98 @@ class HourlyData:
         return np.arange(self.hours) * 3600.0
 
     @property
+    def indoor_observed(self) -> np.ndarray:
+        """Boolean mask of the hours with an indoor temperature."""
+        if self.indoor_c is None:
+            return np.zeros(self.hours, dtype=bool)
+        return np.isfinite(self.indoor_c)
+
+    @property
     def observed(self) -> np.ndarray:
         """Boolean mask of the hours that have an electricity reading."""
         return np.isfinite(self.electricity_kwh)
 
+    @property
+    def spans(self) -> list[tuple[int, int, datetime]]:
+        """Each period as ``(first hour, end hour, start)``; one for a plain record."""
+        starts = [(0, self.start), *self.periods]
+        ends = [i for i, _ in self.periods] + [self.hours]
+        return [(i, j, when) for (i, when), j in zip(starts, ends, strict=True)]
+
+    def timestamps(self) -> np.ndarray:
+        """The UTC instant (Unix seconds) each hour starts, period by period."""
+        out = np.empty(self.hours, dtype=np.int64)
+        for i, j, when in self.spans:
+            out[i:j] = int(when.timestamp()) + 3600 * np.arange(j - i)
+        return out
+
     def hour_label(self, i: int) -> str:
         """The start of hour ``i``, readable, in the record's own time zone."""
-        when = self.start + timedelta(hours=int(i))
+        # elapsed hours, so a label after a clock change is the real local hour
+        i0, _, when0 = next(sp for sp in reversed(self.spans) if sp[0] <= int(i))
+        when = (when0.astimezone(timezone.utc) + timedelta(hours=int(i) - i0)).astimezone(
+            self.start.tzinfo
+        )
         return f"{when:%d/%m/%Y %H:%M}"
+
+    def period(self, k: int) -> HourlyData:
+        """Period ``k`` alone, as a plain record (its bills, its hours)."""
+        i, j, when = self.spans[k]
+        bills = tuple(
+            replace(b, start=b.start - i, end=b.end - i)
+            for b in self.gas_bills
+            if i <= b.start and b.end <= j
+        )
+        return HourlyData(
+            when,
+            self.electricity_kwh[i:j],
+            self.outdoor_c[i:j],
+            {name: v[i:j] for name, v in self.measured.items()},
+            bills,
+            indoor_c=None if self.indoor_c is None else self.indoor_c[i:j],
+            check_length=False,
+        )
+
+    @classmethod
+    def join(cls, records: list[HourlyData]) -> HourlyData:
+        """Separate periods as one record: their hours end to end, each period
+        simulated on its own. Records must be in time order, not overlapping."""
+        if not records:
+            raise ValueError("give at least one record")
+        records = sorted(records, key=lambda r: r.start.timestamp())
+        if len(records) == 1:
+            return records[0]
+        names = set(records[0].measured)
+        if any(set(r.measured) != names for r in records):
+            raise ValueError("every period must carry the same measured inputs")
+        offsets = np.cumsum([0] + [r.hours for r in records])
+        periods = []
+        bills = []
+        for r, off in zip(records, offsets[:-1], strict=False):
+            if off:
+                periods.append((int(off), r.start))
+            for b in r.gas_bills:
+                bills.append(replace(b, start=b.start + int(off), end=b.end + int(off)))
+            for sub in r.periods:
+                periods.append((sub[0] + int(off), sub[1]))
+        return cls(
+            records[0].start,
+            np.concatenate([r.electricity_kwh for r in records]),
+            np.concatenate([r.outdoor_c for r in records]),
+            {n: np.concatenate([r.measured[n] for r in records]) for n in names},
+            tuple(bills),
+            tuple(sorted(periods)),
+            indoor_c=(
+                None
+                if all(r.indoor_c is None for r in records)
+                else np.concatenate(
+                    [
+                        np.full(r.hours, np.nan) if r.indoor_c is None else r.indoor_c
+                        for r in records
+                    ]
+                )
+            ),
+        )
 
     # ---------------------------------------------------------------- build
     @classmethod
@@ -223,6 +355,8 @@ class HourlyData:
         end: datetime | None = None,
         timezone_name: str = "Europe/Madrid",
         gas=None,
+        indoor=None,
+        check_length: bool = True,
     ) -> HourlyData:
         """Align an :mod:`ingest` electricity series with an outdoor temperature.
 
@@ -230,6 +364,9 @@ class HourlyData:
             electricity: an ``ingest.Series`` of hourly ``electricity_import``,
                 or ``None`` when gas bills carry the record.
             outdoor: an ``ingest.Series`` of ``outdoor_temperature``.
+            indoor: optional ``ingest.Series`` of ``indoor_temperature`` (an
+                interior thermometer): readings are averaged hour by hour, an
+                hour with none is missing.
             gas: optional ``ingest.Series`` of ``gas_energy`` (from the gas
                 bill parser). Bills wholly inside the record become
                 :class:`GasBill` s; bills sticking out of it are left out.
@@ -249,14 +386,22 @@ class HourlyData:
             raise ValueError(f"expected electricity_import, got {electricity.quantity}")
         if outdoor.quantity != "outdoor_temperature":
             raise ValueError(f"expected outdoor_temperature, got {outdoor.quantity}")
+        if indoor is not None and indoor.quantity != "indoor_temperature":
+            raise ValueError(f"expected indoor_temperature, got {indoor.quantity}")
         if gas is not None and gas.quantity != "gas_energy":
             raise ValueError(f"expected gas_energy, got {gas.quantity}")
         if electricity is not None:
             dur = electricity.end - electricity.start
             if dur.size and not np.all(dur == 3600):
-                raise ValueError("electricity must be hourly; aggregate quarter-hours first")
+                raise ValueError(
+                    "electricity must be hourly; aggregate quarter-hours first"
+                )
         spans = [s for s in (electricity, gas) if s is not None and len(s)]
-        t0 = min(int(s.start[0]) for s in spans) if start is None else int(start.timestamp())
+        t0 = (
+            min(int(s.start[0]) for s in spans)
+            if start is None
+            else int(start.timestamp())
+        )
         t1 = max(int(s.end[-1]) for s in spans) if end is None else int(end.timestamp())
         if t0 % 3600 or t1 % 3600:
             raise ValueError("start and end must fall on whole hours")
@@ -270,10 +415,19 @@ class HourlyData:
             kwh[idx[ok]] = electricity.value[ok] / 3.6e6
         bills = []
         if gas is not None:
-            for s_, e_, v, q in zip(gas.start, gas.end, gas.value, gas.quality, strict=True):
+            for s_, e_, v, q in zip(
+                gas.start, gas.end, gas.value, gas.quality, strict=True
+            ):
                 if s_ >= t0 and e_ <= t1:
-                    bills.append(GasBill(int((s_ - t0) // 3600), int((e_ - t0) // 3600),
-                                         float(v) / 3.6e6, bool(q), f"bill {len(bills) + 1}"))
+                    bills.append(
+                        GasBill(
+                            int((s_ - t0) // 3600),
+                            int((e_ - t0) // 3600),
+                            float(v) / 3.6e6,
+                            bool(q),
+                            f"bill {len(bills) + 1}",
+                        )
+                    )
         # outdoor: instants (or hourly means, read at their start) in K
         o_t = outdoor.start.astype(float)
         o_v = outdoor.value - 273.15
@@ -292,4 +446,22 @@ class HourlyData:
             temp[fill] = interp[fill]
         zone_ = ZoneInfo(timezone_name)
         start_dt = datetime.fromtimestamp(t0, timezone.utc).astimezone(zone_)
-        return cls(start_dt, kwh, temp, gas_bills=tuple(bills))
+        indoor_c = None
+        if indoor is not None and len(indoor):
+            # the mean of the readings that fall in each hour
+            bins = (np.asarray(indoor.start, dtype=np.int64) - t0) // 3600
+            ok = (bins >= 0) & (bins < hours.size)
+            sums = np.bincount(
+                bins[ok], weights=indoor.value[ok] - 273.15, minlength=hours.size
+            )
+            counts = np.bincount(bins[ok], minlength=hours.size)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                indoor_c = np.where(counts > 0, sums / counts, np.nan)
+        return cls(
+            start_dt,
+            kwh,
+            temp,
+            gas_bills=tuple(bills),
+            indoor_c=indoor_c,
+            check_length=check_length,
+        )

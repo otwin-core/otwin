@@ -23,3 +23,5 @@ crates/otwin-engine/*.so
 # git patches and bundles exchanged during development
 *.patch
 *.bundle
+apps/home/web/ui/node_modules/
+apps/home/web/ui/dist/

@@ -54,7 +54,7 @@ def test_the_electricity_file_is_recognised_in_plain_words():
     assert out["status"] == "ok"
     assert out["message"] == (
         "Read as hourly electricity from Datadis or your distributor: hourly electricity "
-        "from the grid, 744 readings from 1 Jan 2026 to 31 Jan 2026, 980 kWh."
+        "from the grid, 744 readings from 1 Jan 2026 to 31 Jan 2026, 1,043 kWh."
     )
 
 
@@ -141,6 +141,7 @@ def test_the_wizard_calibrates_the_sample_home():
         "How long your home keeps its warmth",
         "Size of your heat pump",
         "Always-on electricity",
+        "Your thermometer",
     }
     assert "18" in found["How fast your home loses heat"]["sentence"]  # 18x W per °C
     assert "5.1 kW" in found["Size of your heat pump"]["sentence"] or (
@@ -149,9 +150,10 @@ def test_the_wizard_calibrates_the_sample_home():
     assert len(report["daily"]) == 31 and report["period"] == "01/01/2026 to 31/01/2026"
     measured = np.array([d["measured"] for d in report["daily"]])
     twin = np.array([d["twin"] for d in report["daily"]])
-    assert measured.sum() == pytest.approx(980, abs=1)
+    assert measured.sum() == pytest.approx(1043, abs=1)
     assert np.abs(twin - measured).max() < 0.15 * measured.mean()
     assert report["notes"] == []
+    assert report["gas"] is None and report["water"] is None  # all electric, no bills
 
 
 def test_air_conditioning_is_left_out_of_a_winter_fit():
@@ -205,11 +207,374 @@ def test_the_samples_regenerate():
     """Same generator, same files: values may differ only in the last printed
     digit across platforms (libm), never in shape or substance."""
     fresh = make_samples.generate()
-    assert set(fresh) == {
-        p.name for p in SAMPLES.iterdir() if p.suffix in (".csv", ".json")
+    on_disk = {
+        str(p.relative_to(SAMPLES))
+        for p in SAMPLES.rglob("*")
+        if p.suffix in (".csv", ".json")
     }
-    assert fresh["home.json"] == (SAMPLES / "home.json").read_bytes()
-    a = ingest.load(fresh["consumo_horario_enero_2026.csv"])[0]
-    b = ingest.load((SAMPLES / "consumo_horario_enero_2026.csv").read_bytes())[0]
-    np.testing.assert_array_equal(a.start, b.start)
-    np.testing.assert_allclose(a.values_in("kWh"), b.values_in("kWh"), atol=0.0011)
+    assert set(fresh) == on_disk
+    for name in ("home.json", "gas_home/home.json"):
+        assert fresh[name] == (SAMPLES / name).read_bytes()
+    for name in [n for n in fresh if "consumo_horario" in n]:
+        a = ingest.load(fresh[name])[0]
+        b = ingest.load((SAMPLES / name).read_bytes())[0]
+        np.testing.assert_array_equal(a.start, b.start)
+        np.testing.assert_allclose(a.values_in("kWh"), b.values_in("kWh"), atol=0.0011)
+    for name in [n for n in fresh if "factura" in n]:  # whole m³: exact
+        assert fresh[name] == (SAMPLES / name).read_bytes(), name
+
+
+# ---------------------------------------------------------------- gas and water
+
+GAS_HOME = SAMPLES / "gas_home"
+GAS_ANSWERS = json.loads((GAS_HOME / "home.json").read_text())
+#: (sample id, folder, days, gas bill m³, kWh)
+GAS_PERIODS = [
+    ("gas_dec_jan", "15dic-15ene", 31, 267, 2958),
+    ("gas_feb_mar", "15feb-15mar", 28, 192, 2119),
+    ("gas_oct_nov", "15oct-15nov", 31, 150, 1669),
+]
+
+
+def test_every_example_set_is_offered_and_its_files_exist():
+    offered = webmain.sample_sets()["samples"]
+    assert [x["id"] for x in offered] == [
+        "electric",
+        "gas_dec_jan",
+        "gas_feb_mar",
+        "gas_oct_nov",
+        "gas_winter",
+    ]
+    for _, (label, home, names) in webmain.SAMPLE_SETS.items():
+        assert (SAMPLES / home).is_file() and label
+        assert all((SAMPLES / n).is_file() for n in names)
+
+
+@pytest.mark.parametrize("sample, folder, days, m3, kwh", GAS_PERIODS)
+def test_the_gas_samples_cover_three_winter_periods(sample, folder, days, m3, kwh):
+    """Each period's bills are as printed: whole m³, kWh = m³ × Fc × PCS, and
+    the electricity and weather cover the bill's dates exactly."""
+    out = webmain.load_samples(sample)
+    assert out["answers"] == GAS_ANSWERS
+    assert all(f["status"] == "ok" for f in out["files"]), out["files"]
+    gas = ingest.load((GAS_HOME / folder / f"factura_gas_{folder}.csv").read_bytes())
+    vol = next(s for s in gas if s.quantity == "gas_volume")
+    energy = next(s for s in gas if s.quantity == "gas_energy")
+    assert vol.values_in("m3").tolist() == [m3]
+    assert energy.values_in("kWh").tolist() == [kwh]
+    elec = ingest.load(
+        (GAS_HOME / folder / f"consumo_horario_{folder}.csv").read_bytes()
+    )[0]
+    assert int(elec.start[0]) == int(vol.start[0]) and int(elec.end[-1]) == int(
+        vol.end[0]
+    )
+    assert (elec.end[-1] - elec.start[0]) / 86400 == days + (
+        1 / 24 if folder == "15oct-15nov" else 0
+    )
+    st = webmain.data_status(GAS_ANSWERS)
+    assert st["ready"], st["messages"]
+    assert any("Your gas bill will be used too" in m for m in st["messages"])
+    assert any("water bill will be compared" in m for m in st["messages"])
+
+
+def test_the_gas_bill_measures_how_fast_the_home_loses_heat():
+    """The gas home loses 218.4 W per °C; the survey guesses 273. Without the
+    thermometer, its gas bill, fitted with the hourly electricity, finds it;
+    a boiler's size and the home's heat storage cannot show in a bill and are
+    said not to."""
+    webmain.load_samples("gas_dec_jan")
+    webmain.remove_file(
+        next(k for k, e in webmain.SESSION.items() if "termometro" in e.name)
+    )
+    report = webmain.calibrate_home(GAS_ANSWERS)
+    assert report["ok"] and report["verdict"] == "usable", report["headline"]
+    found = {f["label"]: f for f in report["findings"]}
+    loss = found["How fast your home loses heat"]
+    assert loss["verdict"] in ("good", "usable")
+    assert loss["value"] == pytest.approx(218.4, rel=0.05)
+    assert found["Size of your boiler"]["verdict"] == "not enough data"
+    assert "Gas bills show totals over weeks" in found["Size of your boiler"]["reason"]
+    assert "your gas bill (within" in report["headline"]
+    assert "Bills cannot show" in report["headline"]
+
+    gas = report["gas"]
+    assert gas["used_in_fit"]
+    (bill,) = gas["bills"]
+    assert bill["period"] == "15 Dec 2025 to 15 Jan 2026"
+    assert (bill["bill_m3"], bill["bill_kwh"]) == (267, 2958)
+    assert bill["kwh_per_m3"] == pytest.approx(
+        2958 / 267, abs=1e-3
+    )  # the bill's Fc × PCS
+    assert abs(bill["off"]) < 0.02
+    assert bill["twin_m3"] == pytest.approx(bill["twin_kwh"] / (2958 / 267), abs=0.1)
+    assert set(gas["by_use_kwh"]) == {"heating", "hot water", "cooking"}
+    assert gas["sentences"][0] == (
+        "Your gas bill, 15 Dec 2025 to 15 Jan 2026: 267 m³, charged as 2,958 kWh "
+        "(11.08 kWh per m³, the conversion printed on your bill)."
+    )
+    assert "fitted to this bill" in gas["sentences"][1]
+
+    water = report["water"]
+    assert water["m3"] == 11 and water["days"] == 31
+    assert water["litres_per_person_day"] == pytest.approx(11000 / 31 / 3, abs=1)
+    assert "about what a typical Spanish home uses" in water["sentences"][1]
+
+
+def test_the_thermometer_shows_what_bills_cannot():
+    """With the interior thermometer, the same month measures how long the
+    home keeps its warmth (21.1 h: 1.2 × 1.68e7 J/K over 218.4 + 47.25 W/K)
+    and the boiler's size (24 kW), from the night cool-down and the morning
+    warm-up; the thermometer's own offset is found and allowed for."""
+    webmain.load_samples("gas_dec_jan")
+    st = webmain.data_status(GAS_ANSWERS)
+    assert any("interior thermometer will be used" in m for m in st["messages"])
+    report = webmain.calibrate_home(GAS_ANSWERS)
+    assert report["ok"] and report["verdict"] in ("good", "usable"), report["headline"]
+    assert "your indoor temperature (a typical hour within" in report["headline"]
+    found = {f["label"]: f for f in report["findings"]}
+    tau = 1.2 * 1.68e7 / (218.4 + 0.45 * 105) / 3600
+    keeps = found["How long your home keeps its warmth"]
+    assert keeps["verdict"] == "good" and keeps["value"] == pytest.approx(tau, rel=0.05)
+    boiler = found["Size of your boiler"]
+    assert boiler["verdict"] in ("good", "usable")
+    assert abs(boiler["value"] / 24.0 - 1) <= boiler["uncertainty"]
+    assert abs(found["Your thermometer"]["value"]) < 0.5
+    assert report["indoor_error"] < 0.3
+    week = report["periods"][0]["indoor"]
+    assert len(week) == 7 * 24 and week[0]["time"] == "2025-12-15 00:00"
+    night = [p["measured"] for p in week[4:7]]  # 04:00-06:00, deep in the setback
+    day = [p["measured"] for p in week[12:20]]
+    assert max(night) < min(day) - 2  # the night setback shows
+    heating = " ".join(report["heating"])
+    assert "radiates about" in heating and "through its facades" in heating
+    assert "Your thermostat called for heat about" in heating
+    assert 0 < report["periods"][0]["heating_running"] < 1
+
+
+def test_an_example_home_follows_the_thermostat_chosen():
+    """The example's records are made again from the answers: no night
+    setback and 19 °C burns less gas, and the thermometer stays flat, so the
+    home's heat storage no longer shows, and the report says why."""
+    webmain.load_samples("gas_dec_jan")
+    own = webmain.prepare_example(GAS_ANSWERS)
+    assert own["example"] and not own["changed"]  # the files are already these
+    answers = {**GAS_ANSWERS, "thermostat": "19", "night": "same"}
+    st = webmain.data_status(answers)
+    assert any(m.startswith("Example home: when you calibrate") for m in st["messages"])
+    out = webmain.prepare_example(answers)
+    assert out["changed"] and "19 °C by day, 19 °C at night too" in out["message"]
+    assert {f["name"] for f in out["files"]} == {
+        "consumo_horario_15dic-15ene.csv",
+        "factura_gas_15dic-15ene.csv",
+        "termometro_interior_15dic-15ene.csv",
+    }
+    bill = next(f for f in out["files"] if f["name"].startswith("factura_gas"))
+    kwh = int(bill["message"].split("charged as ")[1].split(" kWh")[0].replace(",", ""))
+    assert kwh < 2958 * 0.97  # cooler and no setback... less gas than 21/16
+    thermo = webmain._best_indoor().values_in("degC")
+    assert np.percentile(thermo, 95) - np.percentile(thermo, 5) < 1.5  # flat
+    report = webmain.calibrate_home(answers)
+    found = {f["label"]: f for f in report["findings"]}
+    keeps = found["How long your home keeps its warmth"]
+    assert keeps["verdict"] == "not enough data"
+    assert "night would show it" in keeps["reason"]
+    assert report["example"] is None  # already made by prepare_example
+
+
+def test_the_example_files_are_the_example_for_its_own_answers():
+    """Simulating the example again for its own answers writes exactly the
+    files on disk: one code, survey.example, makes both."""
+    webmain.load_samples("gas_feb_mar")
+    before = {k: e.data for k, e in webmain.SESSION.items()}
+    webmain.EXAMPLE["made_for"] = None  # force it
+    webmain.prepare_example(GAS_ANSWERS)
+    after = {k: e.data for k, e in webmain.SESSION.items()}
+    assert before == after
+
+
+def test_gas_only_for_hot_water_is_compared_not_fitted():
+    """A heat pump heats the home and a gas calentador the water: the gas bill
+    cannot measure the walls, so it is set against the twin, not fitted."""
+    webmain.load_samples("gas_feb_mar")
+    answers = {
+        **GAS_ANSWERS,
+        "heating": "heat_pump",
+        "water": "gas",
+        "cooking": "electric",
+    }
+    st = webmain.data_status(answers)
+    assert st["ready"]
+    assert any("compared with the twin's typical hot water" in m for m in st["messages"])
+    report = webmain.calibrate_home(answers)
+    assert report["ok"]
+    gas = report["gas"]
+    assert not gas["used_in_fit"]
+    assert set(gas["by_use_kwh"]) == {"hot water"}
+    assert any("not used to fit the twin" in t for t in gas["sentences"])
+
+
+def test_a_gas_home_without_its_bill_is_told_what_to_add():
+    read("gas_home/15dic-15ene/consumo_horario_15dic-15ene.csv", "e")
+    read("gas_home/15dic-15ene/open_meteo_15dic-15ene.json", "w")
+    st = webmain.data_status(GAS_ANSWERS)
+    assert st["ready"]
+    assert any(
+        m.startswith("Add your gas bill for the same dates.") for m in st["messages"]
+    )
+    assert any("not about your walls" in m for m in st["messages"])
+
+
+def test_a_bill_outside_the_electricity_is_explained():
+    read("gas_home/15dic-15ene/consumo_horario_15dic-15ene.csv", "e")
+    read("gas_home/15dic-15ene/open_meteo_15dic-15ene.json", "w")
+    read("gas_home/15feb-15mar/factura_gas_15feb-15mar.csv", "g")
+    st = webmain.data_status(GAS_ANSWERS)
+    assert any(
+        "Your gas bill (15 Feb 2026 to 15 Mar 2026) is outside the dates" in m
+        for m in st["messages"]
+    )
+
+
+def test_bills_typed_in_are_checked_like_files():
+    ok = webmain.dispatch(
+        "add_bill",
+        {
+            "file_id": "t1",
+            "kind": "gas",
+            "bill": {
+                "start": "2025-12-15",
+                "end": "2026-01-15",
+                "m3": "252",
+                "fc": "0,95",
+                "pcs": "11,66",
+                "kwh": "2791",
+                "eur": "210,15",
+            },
+        },
+    )
+    assert ok["status"] == "ok"
+    assert ok["name"] == "Gas bill, 15/12/2025 to 15/01/2026 (typed in)"
+    assert ok["message"] == (
+        "Read 1 gas bill: 15 Dec 2025 to 15 Jan 2026, 252 m³ charged as 2,791 kWh."
+    )
+    # no kWh typed: computed from the bill's own Fc and PCS
+    computed = webmain.add_bill(
+        "t2",
+        "gas",
+        {
+            "start": "2025-12-15",
+            "end": "2026-01-15",
+            "m3": "252",
+            "fc": "0.95",
+            "pcs": "11.66",
+        },
+    )
+    assert "charged as 2,791 kWh" in computed["message"]
+    wrong = webmain.add_bill(
+        "t3",
+        "gas",
+        {
+            "start": "2025-12-15",
+            "end": "2026-01-15",
+            "m3": "252",
+            "fc": "0.95",
+            "pcs": "11.66",
+            "kwh": "3000",
+        },
+    )
+    assert wrong["status"] == "error"
+    assert wrong["message"] == (
+        "This bill could not be read. Check the kWh: 3000 kWh but m³ × Fc × PCS = "
+        "252 × 0.95 × 11.66 = 2791.4 kWh"
+    )
+    mj = webmain.add_bill(
+        "t4",
+        "gas",
+        {
+            "start": "2025-12-15",
+            "end": "2026-01-15",
+            "m3": "252",
+            "fc": "0.95",
+            "pcs": "42",
+        },
+    )
+    assert "Check the calorific value (PCS)" in mj["message"] and "MJ/m³" in mj["message"]
+    water = webmain.add_bill(
+        "t5", "water", {"start": "2025-12-15", "end": "2026-01-15", "m3": "11"}
+    )
+    assert water["message"] == "Read 1 water bill: 15 Dec 2025 to 15 Jan 2026, 11 m³."
+    with pytest.raises(ValueError, match="kind must be"):
+        webmain.add_bill("t6", "electricity", {})
+
+
+def test_the_home_summary_reaches_the_page():
+    out = webmain.dispatch("assumptions", {"answers": GAS_ANSWERS})
+    rows = {r["topic"]: r["text"] for r in out["summary"]}
+    assert rows["Hot water"] == "From the gas boiler that heats the home."
+    assert rows["Cooking"] == "On a gas hob, with piped gas."
+    assert out["uses_gas"] is True
+
+
+# ---------------------------------------------------------------- several periods
+
+
+def test_three_winter_periods_are_found_in_the_files():
+    out = webmain.load_samples("gas_winter")
+    assert len(out["files"]) == 15 and all(f["status"] == "ok" for f in out["files"])
+    st = webmain.data_status(GAS_ANSWERS)
+    assert st["ready"] and st["days"] == 90.0
+    assert [(p["label"], p["days"], p["gas_bill"]) for p in st["periods"]] == [
+        ("15 Oct 2025 to 15 Nov 2025", 31.0, True),
+        ("15 Dec 2025 to 15 Jan 2026", 31.0, True),
+        ("15 Feb 2026 to 15 Mar 2026", 28.0, True),
+    ]
+    oct_, dec, feb = (p["mean_c"] for p in st["periods"])
+    assert dec < feb < oct_  # quite different winters
+    assert st["messages"][0].startswith("Ready: 3 periods of hourly electricity")
+    assert "We calibrate on all of them together" in st["messages"][1]
+    assert not any("cover more than" in m for m in st["messages"])
+
+
+def test_all_periods_together_and_each_alone():
+    """The same files, calibrated on all three periods and on each: every run
+    finds the home (218.4 W per °C); together, one twin reproduces all three
+    bills and the answer is the narrowest."""
+    webmain.load_samples("gas_winter")
+    together = webmain.calibrate_home(GAS_ANSWERS, period="all")
+    assert together["ok"] and together["chosen"] == "all"
+    assert [p["label"] for p in together["periods"]] == [
+        "15 Oct 2025 to 15 Nov 2025",
+        "15 Dec 2025 to 15 Jan 2026",
+        "15 Feb 2026 to 15 Mar 2026",
+    ]
+    assert len(together["daily"]) == 90
+    gas = together["gas"]
+    assert [b["bill_kwh"] for b in gas["bills"]] == [1669, 2958, 2119]
+    for p, b in zip(together["periods"], gas["bills"], strict=True):
+        assert p["gas_bill_kwh"] == b["bill_kwh"]
+        assert abs(p["twin_gas_kwh"] / p["gas_bill_kwh"] - 1) < 0.03
+    assert any(
+        "fitted to all 3 bills at once, reproduces each" in t for t in gas["sentences"]
+    )
+    assert "3 bills" not in together["water"]["sentences"][0]
+    assert together["water"]["sentences"][0].startswith("Your water bills (15 Oct 2025")
+
+    loss = lambda r: next(f for f in r["findings"] if f["label"].startswith("How fast"))  # noqa: E731
+    assert loss(together)["value"] == pytest.approx(218.4, rel=0.05)
+    for k in range(3):
+        alone = webmain.calibrate_home(GAS_ANSWERS, period=k)
+        assert alone["ok"] and len(alone["periods"]) == 1
+        assert alone["periods"][0]["label"] == together["periods"][k]["label"]
+        assert loss(alone)["value"] == pytest.approx(218.4, rel=0.05)
+        # narrower together (with the thermometer each period alone is
+        # already tight, about ±6 %, so the gain is smaller than with bills alone)
+        assert loss(together)["uncertainty"] < loss(alone)["uncertainty"]
+    with pytest.raises(ValueError, match="there is no period 3"):
+        webmain._record(webmain.HomeDescription.from_answers(GAS_ANSWERS), 3)
+
+
+def test_one_downloaded_month_is_still_one_period():
+    webmain.load_samples("gas_dec_jan")
+    st = webmain.data_status(GAS_ANSWERS)
+    assert len(st["periods"]) == 1
+    assert "We calibrate on all of them together" not in " ".join(st["messages"])

@@ -12,8 +12,8 @@ stores         across storage               ``RoomAir``, ``BuildingFabric``,
                                             ``StoredWater``
 exchanges      resistor                     ``Envelope``, ``Ventilation``,
                                             ``InteriorSurface``, ``StandbyLoss``
-gains          through source               ``Appliance``, ``BaseLoad``,
-                                            ``Occupants``, ``SolarGain``,
+gains          through source               ``Appliance``, ``GasAppliance``,
+                                            ``BaseLoad``, ``Occupants``, ``SolarGain``,
                                             ``HotWaterDraw``
 machines       composite with a meter       ``Boiler``, ``ElectricHeater``,
                                             ``HeatPump``, ``AirConditioner``,
@@ -39,8 +39,23 @@ from __future__ import annotations
 
 from .boundaries import ZERO_CELSIUS, Outdoors, Setpoint
 from .catalogue import madrid_flat, seville_house
-from .exchanges import Envelope, InteriorSurface, StandbyLoss, Ventilation
-from .gains import Appliance, BaseLoad, HeatGain, HotWaterDraw, Occupants, SolarGain
+from .exchanges import (
+    Envelope,
+    InteriorSurface,
+    SkyRadiation,
+    StandbyLoss,
+    Ventilation,
+    sky_depression,
+)
+from .gains import (
+    Appliance,
+    BaseLoad,
+    GasAppliance,
+    HeatGain,
+    HotWaterDraw,
+    Occupants,
+    SolarGain,
+)
 from .home import HomeRun, HomeTwin, build_home
 from .machines import (
     FUELS,
@@ -68,12 +83,15 @@ __all__ = [
     "WATER_HEAT_CAPACITY",
     # exchanges
     "Envelope",
+    "SkyRadiation",
+    "sky_depression",
     "Ventilation",
     "InteriorSurface",
     "StandbyLoss",
     # gains
     "HeatGain",
     "Appliance",
+    "GasAppliance",
     "BaseLoad",
     "Occupants",
     "SolarGain",

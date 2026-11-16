@@ -1,0 +1,5 @@
+# Data files are byte-exact: real distributor exports use CRLF, and the
+# fixture and sample tests compare bytes. Never convert their line endings.
+tests/fixtures/data/** -text
+web/samples/**/*.csv -text
+web/samples/**/*.json -text

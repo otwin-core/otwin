@@ -9,6 +9,7 @@
   "night": "lower",
   "people": "2",
   "water": "electric",
+  "cooking": "electric",
   "appliances": [
     "dishwasher",
     "washing_machine",

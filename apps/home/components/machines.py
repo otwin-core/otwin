@@ -75,33 +75,78 @@ FUELS = ("electricity", "gas")
 
 
 class Thermostat(Component):
-    """Heat from ``a`` into ``b``: ``Q = clip(power / band · (T_a − T_b), 0, power)``.
+    """Heat from ``a`` into ``b``: ``Q = clip(power / band · (T_a − T_b), 0, power)``,
+    with an interior thermometer.
 
     The one law behind every machine. Parameters ``power`` (W) and ``band``
     (K) stay symbolic, so a fit can estimate a machine's effective power.
+
+    **The thermometer.** A thermostat acts on what its sensor reads, so the
+    sensor is part of it: a probe on the side it controls (``sensor="b"``,
+    the room for a heater, the water for a cylinder; ``"a"`` for a cooler,
+    which takes heat out of ``a``). The probe carries no heat; it reads the
+    temperature of its node. Outputs:
+
+    * ``<name>.temperature`` (K): what the thermometer reads;
+    * ``<name>.on``: 1 while the thermostat calls for heat (or cold), 0 when
+      it is satisfied;
+    * ``<name>.duty``: the fraction of the time the machine runs, 0 to 1. The
+      law is the cycle average of an on/off controller, so ``duty`` is what an
+      hour of on/off switching averages to, and ``on`` says whether it
+      switched on at all.
     """
 
     domain = "thermal"
     type_name = "thermostat"
 
     def __init__(
-        self, power: float, band: float = 1.0, *, name: str | None = None
+        self,
+        power: float,
+        band: float = 1.0,
+        *,
+        sensor: str = "b",
+        name: str | None = None,
     ) -> None:
         super().__init__(name)
+        if sensor not in ("a", "b"):
+            raise ValueError(f"{self.name}: sensor must be 'a' or 'b', not {sensor!r}")
         self.add_port("a")
         self.add_port("b")
+        self.sensor = sensor
         self.P = self.add_parameter("power", power, "W", "maximum heat moved")
         self.band = self.add_parameter(
             "band", band, "K", "proportional band: full power this far from the setpoint"
         )
 
+    @property
+    def thermometer_label(self) -> str:
+        """The label of the thermometer branch (its across is the reading)."""
+        return f"{self.name}.thermometer"
+
     def branches(self) -> list[Branch]:
-        """One resistor ``a`` to ``b`` with the clipped proportional law."""
+        """The clipped proportional law ``a`` to ``b``, and the thermometer: a
+        probe from the sensed port to the datum that carries no heat."""
 
         def law(dT: Expr) -> Expr:
             return ex.minimum(ex.maximum(self.P / self.band * dT, 0.0), self.P)
 
-        return [ResistorBranch(self, self.a, self.b, law=law)]
+        def probe(dT: Expr) -> Expr:
+            return dT * 0.0  # an ideal sensor: no heat flows into it
+
+        sensed = self.a if self.sensor == "a" else self.b
+        return [
+            ResistorBranch(self, self.a, self.b, law=law),
+            ResistorBranch(self, sensed, None, law=probe, label=self.thermometer_label),
+        ]
+
+    def extra_outputs(self, q: ComponentQuantities) -> dict[str, tuple[str, Expr]]:
+        """``temperature`` (K), ``on`` (0 or 1) and ``duty`` (0 to 1)."""
+        moved = q.through[self.name]
+        return {
+            "temperature": ("K", q.across[self.thermometer_label]),
+            "on": ("", ex.where(moved > 1e-6 * self.P, 1.0, 0.0)),
+            "duty": ("", moved / self.P),
+        }
 
 
 class SpaceMachine(Composite):
@@ -150,7 +195,9 @@ class SpaceMachine(Composite):
         self.efficiency = float(efficiency)
         self.setpoint_schedule = setpoint_schedule
         sp = Setpoint(setpoint, name="setpoint")
-        th = Thermostat(power, band, name="thermostat")
+        th = Thermostat(
+            power, band, sensor="b" if self.sense == "heat" else "a", name="thermostat"
+        )
         self.add(sp, th)
         if self.sense == "heat":
             self.connect(sp.port, th.a)

@@ -9,6 +9,10 @@ distinction in a home is whether the electricity meter sees the gain:
   the router), so the heat and the meter reading are the same number. The
   known exception, washers draining hot water, needs a heat fraction on the
   source that Otwin does not have yet (DESIGN.md G2).
+* :class:`GasAppliance` is metered on the **gas** meter instead: a gas hob
+  or oven. All of the gas it burns ends up as heat in the kitchen (what the
+  pan does not take, the flame gives to the air), so here too the heat and
+  the meter reading are the same number.
 * :class:`Occupants` and :class:`SolarGain` are **free**: people give off
   80-100 W each and the sun pours in through the windows, but neither shows
   on a bill. Modelling them matters precisely because leaving them out makes
@@ -31,7 +35,15 @@ from otwin.expr import Expr
 
 from .schedules import Schedule
 
-__all__ = ["HeatGain", "Appliance", "BaseLoad", "Occupants", "SolarGain", "HotWaterDraw"]
+__all__ = [
+    "HeatGain",
+    "Appliance",
+    "GasAppliance",
+    "BaseLoad",
+    "Occupants",
+    "SolarGain",
+    "HotWaterDraw",
+]
 
 
 class HeatGain(Component):
@@ -104,6 +116,25 @@ class Appliance(HeatGain):
         """``heat`` and ``electric_power`` (W), the same number by construction."""
         out = super().extra_outputs(q)
         out["electric_power"] = ("W", out["heat"][1])
+        return out
+
+
+class GasAppliance(HeatGain):
+    """A gas hob or oven: gas from the gas meter that becomes heat indoors.
+
+    Like :class:`Appliance`, but billed on the gas meter. Extra output:
+    ``<name>.gas_power`` (W of gas, gross calorific value), what the gas
+    meter sees. Butane from a bottle shows on no meter: use a plain
+    :class:`HeatGain` for it.
+    """
+
+    type_name = "gas_appliance"
+    fuel = "gas"
+
+    def extra_outputs(self, q: ComponentQuantities) -> dict[str, tuple[str, Expr]]:
+        """``heat`` and ``gas_power`` (W), the same number by construction."""
+        out = super().extra_outputs(q)
+        out["gas_power"] = ("W", out["heat"][1])
         return out
 
 

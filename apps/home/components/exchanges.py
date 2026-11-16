@@ -19,9 +19,53 @@ numbers an insulation or ventilation scenario turns.
 
 from __future__ import annotations
 
+from otwin.components.base import Branch, Component, SourceBranch
 from otwin.components.thermal import Convection
 
-__all__ = ["Envelope", "Ventilation", "InteriorSurface", "StandbyLoss"]
+__all__ = [
+    "Envelope",
+    "Ventilation",
+    "InteriorSurface",
+    "StandbyLoss",
+    "SkyRadiation",
+    "sky_depression",
+    "R_SE",
+    "H_R",
+    "SKY_DIFFERENCE_K",
+    "VIEW_FACTOR",
+]
+
+# ------------------------------------------------- radiation to the sky
+# ISO 13790 §11.4.6 (ISO 52016-1 the same): a building element that sees
+# the sky loses, on top of its transmission loss, Φ_r = R_se · U · A · h_r ·
+# Δθ_er · F_r, because the sky is colder than the outdoor air.
+
+#: External surface resistance, m²·K/W (ISO 6946).
+R_SE = 0.04
+#: External radiative coefficient, W/(m²·K): 4·ε·σ·T³ for ε = 0.9 at 10 °C.
+H_R = 4 * 0.9 * 5.670374e-8 * (273.15 + 10.0) ** 3
+#: Mean difference between the outdoor air and the apparent sky, K. ISO 13790
+#: gives 9 K in the tropics, 13 K in sub-polar climates, 11 K in between.
+SKY_DIFFERENCE_K = 11.0
+#: How much of the sky an element sees, F_r: a flat roof all of it, a wall
+#: half (the other half is the ground and the street), a ground floor none.
+VIEW_FACTOR = {"roof": 1.0, "wall": 0.5, "ground": 0.0}
+
+
+def sky_depression(
+    view_factor: float, sky_difference_k: float = SKY_DIFFERENCE_K
+) -> float:
+    """How much colder than the air the envelope's surroundings are, K.
+
+    Summed over an envelope of conductance ``UA`` whose elements see the sky
+    with the UA-weighted view factor ``view_factor``, the radiation loss is
+    ``UA · R_se · h_r · Δθ_er · F_r``: as if the envelope faced air colder by
+    this many kelvin. About 1 K for a flat's facades, 1.2 K for a house
+    whose roof sees the whole sky.
+    """
+    if not 0.0 <= view_factor <= 1.0:
+        raise ValueError(f"a view factor is between 0 and 1, not {view_factor}")
+    return R_SE * H_R * sky_difference_k * view_factor
 
 
 class Envelope(Convection):
@@ -63,3 +107,40 @@ class StandbyLoss(Convection):
 
     def __init__(self, ua: float = 1.1, *, name: str = "standby") -> None:
         super().__init__(ua, name=name)
+
+
+class SkyRadiation(Component):
+    """Long-wave radiation from the envelope to the night sky, in K.
+
+    A fixed temperature step between the outdoor air (port ``a``) and the
+    envelope's outer face (port ``b``): the face sits ``depression`` kelvin
+    below the air (see :func:`sky_depression`). Everything the envelope loses
+    flows through it, so the extra loss is exactly ``UA · depression`` and
+    follows the envelope's conductance when a fit changes it. The parameter
+    is ``<name>.depression``.
+    """
+
+    domain = "thermal"
+    type_name = "sky_radiation"
+
+    def __init__(self, depression: float, *, name: str = "sky") -> None:
+        super().__init__(name)
+        if depression < 0:
+            raise ValueError(f"{self.name}: the sky is colder than the air, not warmer")
+        self.add_port("a")
+        self.add_port("b")
+        self.depression = float(depression)
+
+    def branches(self) -> list[Branch]:
+        """One across source: ``T_a − T_b = depression``."""
+        return [
+            SourceBranch(
+                self,
+                self.a,
+                self.b,
+                kind="across",
+                value=self.depression,
+                unit="K",
+                quantity="depression",
+            )
+        ]

@@ -21,6 +21,8 @@ from components import (
     WATER_HEAT_CAPACITY,
     Appliance,
     BaseLoad,
+    GasAppliance,
+    HeatGain,
     Schedule,
     ThermalZone,
     WaterHeater,
@@ -52,6 +54,40 @@ def _two_days(backend, h=600.0, **kw):
 
 
 # ---------------------------------------------------------------- madrid
+
+
+def test_a_gas_hob_is_on_the_gas_meter_and_butane_on_none(backend):
+    """The same 900 Wh a day of cooking heat: on the electricity meter from an
+    induction hob, on the gas meter from a gas hob, on no meter from butane.
+    The kitchen gets the heat every time."""
+    hob = Schedule([400.0 if h == 14 else 500.0 if h == 21 else 0.0 for h in range(24)])
+    t = np.arange(0, DAY + 1, 600.0)
+    runs = {}
+    for name, cls in (
+        ("induction", Appliance),
+        ("gas", GasAppliance),
+        ("butane", HeatGain),
+    ):
+        twin = build_home(
+            ThermalZone(150.0, 1e7, temperature=K0 + 18.0),
+            gains=[cls(schedule=hob, name="hob")],
+            backend=backend,
+        )
+        runs[name] = run = twin.simulate(t, start=START, outdoor=K0 + 8.0)
+        assert run.energy_j("hob.heat") == pytest.approx(900 * 3600.0, rel=1e-12)
+    assert runs["induction"].energy_kwh("electricity") == pytest.approx(0.9, rel=1e-12)
+    assert runs["induction"].energy_kwh("gas") == 0.0
+    assert runs["gas"].energy_kwh("gas") == pytest.approx(0.9, rel=1e-12)
+    assert runs["gas"].energy_kwh("electricity") == 0.0
+    assert (
+        runs["butane"].energy_kwh("gas")
+        == runs["butane"].energy_kwh("electricity")
+        == 0.0
+    )
+    # same heat, same rooms
+    np.testing.assert_allclose(
+        runs["gas"]["zone.air.temperature"], runs["butane"]["zone.air.temperature"]
+    )
 
 
 def test_madrid_flat_is_one_model_with_named_inputs(backend):
@@ -325,3 +361,54 @@ def test_the_seville_example_runs_offline(capsys):
     assert "cooling at 26" in out and "heatwave" in out
     assert results["cooling at 26 °C"] < results["as built, 25 °C"]
     assert results["August heatwave, +4 °C"] > results["as built, 25 °C"]
+
+
+def test_sky_radiation_is_a_temperature_step_on_the_envelope(backend):
+    """At steady state, 500 W in: (UA + vent)(T − T_out) + UA·Δθ = 500. The
+    radiation loss is exactly UA·Δθ; ventilation exchanges with the air."""
+    from components import sky_depression
+
+    dtheta = sky_depression(0.5)
+    t = np.arange(0, 40 * DAY + 1, 3600.0)
+    twin = build_home(
+        ThermalZone(150.0, 1e7, ventilation=30.0, temperature=K0 + 20.0, sky=dtheta),
+        gains=[BaseLoad(500.0)],
+        backend=backend,
+    )
+    run = twin.simulate(t, start=START, outdoor=K0 + 5.0)
+    expected = 5.0 + (500.0 - 150.0 * dtheta) / 180.0
+    assert run["zone.temperature"][-1] - K0 == pytest.approx(expected, abs=1e-6)
+    assert run["zone.radiation_loss"][-1] == pytest.approx(150.0 * dtheta, rel=1e-12)
+    assert run["zone.heat_loss"][-1] == pytest.approx(500.0, rel=1e-6)
+
+
+def test_the_thermostat_reads_what_it_controls(backend):
+    """Its thermometer reads the room (heater and cooler alike), carries no
+    heat, and its on/off and duty say how it ran."""
+    from components import AirConditioner, Boiler
+
+    t = np.arange(0, 3 * DAY + 1, 900.0)
+    for machine, outdoor in (
+        (Boiler(8000.0, setpoint=K0 + 20.0), K0 + 5.0),
+        (AirConditioner(5000.0, setpoint=K0 + 25.0), K0 + 35.0),
+    ):
+        twin = build_home(
+            ThermalZone(150.0, 1e7, temperature=K0 + 22.0),
+            gains=[BaseLoad(100.0)],
+            conditioning=[machine],
+            backend=backend,
+        )
+        run = twin.simulate(t, start=START, outdoor=outdoor)
+        name = machine.name
+        np.testing.assert_allclose(
+            run[f"{name}.thermostat.temperature"], run["zone.temperature"], rtol=1e-12
+        )
+        assert twin.thermometer == f"{name}.thermostat.temperature"
+        duty = run[f"{name}.thermostat.duty"][-1]
+        moved = run[f"{name}.{machine.sense}"][-1]
+        assert duty == pytest.approx(moved / machine_power(twin, name), rel=1e-9)
+        assert 0 < duty < 1 and run[f"{name}.thermostat.on"][-1] == 1.0
+
+
+def machine_power(twin, name):
+    return twin.model.parameters[f"{name}.thermostat.power"]

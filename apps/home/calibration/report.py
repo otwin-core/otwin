@@ -35,6 +35,8 @@ __all__ = [
     "USABLE_LIMIT",
     "ASHRAE_CV_RMSE",
     "ASHRAE_NMBE",
+    "ASHRAE_MONTHLY_CV_RMSE",
+    "ASHRAE_MONTHLY_NMBE",
 ]
 
 GOOD = "good"
@@ -48,6 +50,9 @@ USABLE_LIMIT = 0.30
 #: ASHRAE Guideline 14 acceptance for a model calibrated to hourly data.
 ASHRAE_CV_RMSE = 0.30
 ASHRAE_NMBE = 0.10
+#: ASHRAE Guideline 14 acceptance for a model calibrated to monthly bills.
+ASHRAE_MONTHLY_CV_RMSE = 0.15
+ASHRAE_MONTHLY_NMBE = 0.05
 
 
 def verdict_for(uncertainty: float | None) -> str:
@@ -80,6 +85,10 @@ class Finding:
         verdict: :data:`GOOD`, :data:`USABLE` or :data:`NOT_ENOUGH_DATA`.
         sentence: the finding as the householder reads it.
         reason: for "not enough data", why, and what would help.
+        counted: whether it weighs in the overall verdict. Something the
+            meters given can never show (a boiler's size from monthly gas
+            bills) is reported, but does not make the whole calibration
+            "not enough data".
     """
 
     key: str
@@ -90,6 +99,7 @@ class Finding:
     verdict: str
     sentence: str
     reason: str = ""
+    counted: bool = True
 
     @property
     def measured(self) -> bool:

@@ -30,7 +30,7 @@ import otwin
 
 from .boundaries import Outdoors
 from .evaluate import evaluate_outputs
-from .gains import Appliance, HeatGain
+from .gains import Appliance, GasAppliance, HeatGain
 from .machines import SpaceMachine, WaterHeater
 from .schedules import Schedule
 from .zones import ThermalZone
@@ -131,6 +131,18 @@ class HomeTwin:
     #: Outputs whose step averages every run records (the meters and the
     #: zone's heat flows); others can be asked for with ``track=``.
     tracked_outputs: list[str] = field(default_factory=list)
+
+    @property
+    def thermometer(self) -> str:
+        """The output an interior thermometer reads, K: the heating thermostat's
+        own thermometer, else the first machine's, else the zone's air."""
+        from .machines import SpaceMachine
+
+        machines = [c for c in self.system.components if isinstance(c, SpaceMachine)]
+        machines.sort(key=lambda m: m.sense != "heat")
+        if machines:
+            return f"{machines[0].name}.thermostat.temperature"
+        return f"{self.zone.name}.temperature"
 
     @property
     def input_names(self) -> list[str]:
@@ -269,6 +281,8 @@ def build_home(
         tracked.append(f"{g.name}.heat")
         if isinstance(g, Appliance):
             electric.append(f"{g.name}.electric_power")
+        elif isinstance(g, GasAppliance):
+            gas.append(f"{g.name}.gas_power")
         if g.schedule is not None:
             sched[g.name] = g.schedule
     for m in conditioning:

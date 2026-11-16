@@ -1,0 +1,11 @@
+{
+  "scale": {
+    "zone.envelope.conductance": 1.25,
+    "zone.air.capacity": 0.8
+  },
+  "set": {
+    "heating.thermostat.power": 5200.0,
+    "base.power": 175.0
+  },
+  "seed": 11
+}

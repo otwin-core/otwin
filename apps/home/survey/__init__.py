@@ -2,7 +2,7 @@
 
 The first step of the wizard asks only what a householder knows: where the
 home is, its kind, size and age, what heats it and its hot water, how warm
-it is kept, how many people live there and which appliances they use. No
+it is kept, what it cooks on, how many people live there and which appliances they use. No
 physics is typed in. :func:`build_twin` turns the answers into a twin with
 typical values; calibration then corrects those from the home's own
 electricity.
@@ -16,7 +16,7 @@ electricity.
 from __future__ import annotations
 
 from .questions import PROVINCES, QUESTIONS, Option, Province, Question, questions_json
-from .twin import FLOOR_AREA, HomeDescription, assumptions, build_twin
+from .twin import FLOOR_AREA, HomeDescription, assumptions, build_twin, home_summary
 
 __all__ = [
     "QUESTIONS",
@@ -28,5 +28,6 @@ __all__ = [
     "HomeDescription",
     "build_twin",
     "assumptions",
+    "home_summary",
     "FLOOR_AREA",
 ]

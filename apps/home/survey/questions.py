@@ -2,7 +2,8 @@
 
 Nobody is asked for a U-value, a heat-loss coefficient or a thermal mass.
 Every question is something a householder knows (how big the home is, when
-it was built, what heats it, which appliances they own) and every answer is
+it was built, what heats it, its hot water and the hob, which appliances
+they own) and every answer is
 picked from a short list. :mod:`survey.twin` turns the answers into a twin
 with typical values, and calibration then corrects those values from the
 home's own electricity.
@@ -16,7 +17,16 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-__all__ = ["Option", "Question", "QUESTIONS", "PROVINCES", "Province", "questions_json"]
+__all__ = [
+    "Option",
+    "Question",
+    "QUESTIONS",
+    "PROVINCES",
+    "Province",
+    "questions_json",
+    "SPANISH",
+    "LANGUAGES",
+]
 
 
 @dataclass(frozen=True)
@@ -55,11 +65,69 @@ class Province:
     latitude: float
     longitude: float
     timezone: str = "Europe/Madrid"
+    #: A typical January's mean temperature in the capital, °C (approximate
+    #: AEMET normals, rounded): only for the estimate before any data.
+    january_c: float = 7.0
 
+
+_JANUARY_C = {
+    "a_coruna": 10.2,
+    "alava": 4.6,
+    "albacete": 4.6,
+    "alicante": 11.6,
+    "almeria": 12.5,
+    "asturias": 7.6,
+    "avila": 3.1,
+    "badajoz": 8.7,
+    "baleares": 11.6,
+    "barcelona": 9.6,
+    "bizkaia": 9.0,
+    "burgos": 2.9,
+    "caceres": 7.8,
+    "cadiz": 12.8,
+    "cantabria": 9.7,
+    "castellon": 10.4,
+    "ceuta": 13.0,
+    "ciudad_real": 5.5,
+    "cordoba": 9.5,
+    "cuenca": 4.2,
+    "gipuzkoa": 8.0,
+    "girona": 6.6,
+    "granada": 6.8,
+    "guadalajara": 5.3,
+    "huelva": 11.6,
+    "huesca": 4.9,
+    "jaen": 8.5,
+    "la_rioja": 5.6,
+    "las_palmas": 18.0,
+    "leon": 3.2,
+    "lleida": 5.2,
+    "lugo": 5.7,
+    "madrid": 6.3,
+    "malaga": 12.1,
+    "melilla": 13.2,
+    "murcia": 11.0,
+    "navarra": 4.9,
+    "ourense": 7.4,
+    "palencia": 3.9,
+    "pontevedra": 9.5,
+    "salamanca": 3.7,
+    "santa_cruz": 18.2,
+    "segovia": 3.6,
+    "sevilla": 10.9,
+    "soria": 2.7,
+    "tarragona": 10.2,
+    "teruel": 3.8,
+    "toledo": 6.4,
+    "valencia": 11.5,
+    "valladolid": 4.1,
+    "zamora": 4.1,
+    "zaragoza": 6.6,
+}
 
 #: Province capitals, rounded to 0.01° (about 1 km: the weather grid is ~10 km).
 PROVINCES: tuple[Province, ...] = tuple(
-    Province(v, label, lat, lon, tz)
+    Province(v, label, lat, lon, tz, _JANUARY_C[v])
     for v, label, lat, lon, tz in [
         ("a_coruna", "A Coruña", 43.36, -8.41, "Europe/Madrid"),
         ("alava", "Álava", 42.85, -2.67, "Europe/Madrid"),
@@ -170,7 +238,7 @@ QUESTIONS: tuple[Question, ...] = (
         _o(
             ("heat_pump", "Heat pump (split or aerotermia)"),
             ("electric", "Electric heaters or radiators"),
-            ("gas", "Gas boiler"),
+            ("gas", "Gas boiler (natural gas)"),
             ("none", "No heating"),
         ),
         "heat_pump",
@@ -206,11 +274,24 @@ QUESTIONS: tuple[Question, ...] = (
     Question(
         "water",
         "What heats your hot water?",
-        "",
+        "Showers, taps and the kitchen sink.",
         _o(
+            ("boiler", "The gas boiler (the same one that heats the home)"),
+            ("gas", "A separate gas water heater (calentador)"),
             ("electric", "Electric water heater (termo)"),
-            ("gas", "Gas (boiler or calentador)"),
+            ("heat_pump", "Heat-pump water heater (aerotermia)"),
             ("unknown", "Other or not sure"),
+        ),
+        "electric",
+    ),
+    Question(
+        "cooking",
+        "How do you cook?",
+        "The hob you use most days.",
+        _o(
+            ("electric", "Electric or induction hob"),
+            ("gas", "Gas hob, piped natural gas"),
+            ("butane", "Gas hob, bottled butane"),
         ),
         "electric",
     ),
@@ -223,7 +304,6 @@ QUESTIONS: tuple[Question, ...] = (
             ("washing_machine", "Washing machine"),
             ("dryer", "Tumble dryer"),
             ("oven", "Electric oven"),
-            ("hob", "Electric or induction hob"),
             ("tv", "TV and computers"),
             ("ev", "Electric car charged at home"),
         ),
@@ -233,17 +313,111 @@ QUESTIONS: tuple[Question, ...] = (
 )
 
 
-def questions_json() -> dict:
-    """The questions and provinces as plain data, for the web wizard."""
+#: The questions in Spanish: every English text above, as a Spanish
+#: speaker reads it. A text missing here shows in English (and a test fails).
+SPANISH: dict[str, str] = {
+    "Where is your home?": "¿Dónde está tu casa?",
+    "Your province sets the weather and the clock. Nothing else is used.": (
+        "Tu provincia fija el tiempo y la hora. No se usa para nada más."
+    ),
+    "What kind of home is it?": "¿Qué tipo de vivienda es?",
+    "A flat shares walls with its neighbours, so it loses less heat.": (
+        "Un piso comparte paredes con los vecinos, así que pierde menos calor."
+    ),
+    "Flat": "Piso",
+    "Terraced or semi-detached house": "Casa adosada o pareada",
+    "Detached house": "Casa independiente",
+    "How big is it?": "¿Qué tamaño tiene?",
+    "The useful floor area, as on the deed or the energy certificate.": (
+        "La superficie útil, como en la escritura o el certificado energético."
+    ),
+    "Under 60 m²": "Menos de 60 m²",
+    "60–90 m²": "60–90 m²",
+    "90–120 m²": "90–120 m²",
+    "Over 120 m²": "Más de 120 m²",
+    "When was it built?": "¿Cuándo se construyó?",
+    "Older buildings usually have little insulation.": (
+        "Los edificios antiguos suelen tener poco aislamiento."
+    ),
+    "Before 1980": "Antes de 1980",
+    "1980–2006": "1980–2006",
+    "2007 or later": "2007 o después",
+    "What heats your home?": "¿Con qué calientas tu casa?",
+    "Pick the main source of heat.": "Elige la fuente principal de calor.",
+    "Heat pump (split or aerotermia)": "Bomba de calor (split o aerotermia)",
+    "Electric heaters or radiators": "Radiadores o estufas eléctricas",
+    "Gas boiler (natural gas)": "Caldera de gas natural",
+    "No heating": "Sin calefacción",
+    "Do you have air conditioning?": "¿Tienes aire acondicionado?",
+    "No": "No",
+    "Yes": "Sí",
+    "What temperature do you keep in winter?": "¿A qué temperatura tienes la casa en invierno?",
+    "Your usual thermostat setting during the day.": (
+        "Lo que sueles poner en el termostato durante el día."
+    ),
+    "19 °C": "19 °C",
+    "20 °C": "20 °C",
+    "21 °C": "21 °C",
+    "22 °C": "22 °C",
+    "And at night?": "¿Y por la noche?",
+    "The same": "Igual",
+    "Lower (about 16 °C, 23:00 to 07:00)": "Más baja (unos 16 °C, de 23:00 a 07:00)",
+    "How many people live there?": "¿Cuántas personas viven en ella?",
+    "1": "1",
+    "2": "2",
+    "3": "3",
+    "4": "4",
+    "5 or more": "5 o más",
+    "What heats your hot water?": "¿Con qué calientas el agua caliente?",
+    "Showers, taps and the kitchen sink.": "Duchas, grifos y el fregadero.",
+    "The gas boiler (the same one that heats the home)": (
+        "La caldera de gas (la misma de la calefacción)"
+    ),
+    "A separate gas water heater (calentador)": "Un calentador de gas aparte",
+    "Electric water heater (termo)": "Termo eléctrico",
+    "Heat-pump water heater (aerotermia)": "Termo de bomba de calor (aerotermia)",
+    "Other or not sure": "Otro o no lo sé",
+    "How do you cook?": "¿Cómo cocinas?",
+    "The hob you use most days.": "La placa que usas casi todos los días.",
+    "Electric or induction hob": "Placa eléctrica o de inducción",
+    "Gas hob, piped natural gas": "Cocina de gas natural (de red)",
+    "Gas hob, bottled butane": "Cocina de gas butano (bombona)",
+    "Which of these do you use regularly?": "¿Cuáles de estos usas habitualmente?",
+    "The fridge is always counted. Pick the rest.": (
+        "La nevera siempre se cuenta. Elige el resto."
+    ),
+    "Dishwasher": "Lavavajillas",
+    "Washing machine": "Lavadora",
+    "Tumble dryer": "Secadora",
+    "Electric oven": "Horno eléctrico",
+    "TV and computers": "Televisión y ordenadores",
+    "Electric car charged at home": "Coche eléctrico cargado en casa",
+}
+LANGUAGES = ("en", "es")
+
+
+def _tr(text: str, lang: str) -> str:
+    if lang == "es" and text:
+        return SPANISH.get(text, text)
+    return text
+
+
+def questions_json(lang: str = "en") -> dict:
+    """The questions and provinces as plain data, for the web wizard, in
+    ``lang`` (``"en"`` or ``"es"``)."""
+    if lang not in LANGUAGES:
+        raise ValueError(f"lang must be one of {LANGUAGES}, not {lang!r}")
     return {
         "questions": [
             {
                 "id": q.id,
-                "label": q.label,
-                "help": q.help,
+                "label": _tr(q.label, lang),
+                "help": _tr(q.help, lang),
                 "kind": q.kind,
                 "default": list(q.default) if isinstance(q.default, tuple) else q.default,
-                "options": [asdict(o) for o in q.options],
+                "options": [
+                    {"value": o.value, "label": _tr(o.label, lang)} for o in q.options
+                ],
             }
             for q in QUESTIONS
         ],

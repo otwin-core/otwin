@@ -230,8 +230,58 @@ noise seeds the truth lies inside the reported ± for at least 85 % of values
 (in development, 95-100 %). Each "not enough data" case above has its own
 test.
 
-Known limits: one month of electricity cannot calibrate a gas-heated
-home's envelope (gas bills need the core interval form, G1); the
+**Gas homes.** With the heating on gas, the electricity meter cannot see
+the walls; the gas bill can. `HourlyData(..., gas_bills=...)` (or
+`HourlyData.from_series(..., gas=...)`) fits each bill's kWh (m³ × Fc × PCS
+as printed) together with the hourly electricity, and that measures how fast
+the home loses heat, typically to ±20 % from one monthly bill. A bill is a
+total over weeks, so the boiler's size and the home's heat storage are
+reported as "not measured" without making the whole calibration "not
+enough data".
+
+**The interior thermometer.** Every `Thermostat` carries its sensor: a
+probe on the side it controls (the room for a heater) that carries no heat.
+It gives three outputs: `<machine>.thermostat.temperature` (what it reads),
+`.on` (1 while it calls for heat) and `.duty` (the fraction of the time the
+machine runs). A householder's thermometer log (`HourlyData(...,
+indoor_c=...)`) is fitted hour by hour with the meters, and it shows what no
+meter does: how fast the home cools at night (its inertia, the time
+constant C / (UA + ventilation)) and how fast the boiler warms it back in
+the morning (its size). The thermometer's own offset (where it hangs, its
+calibration) is fitted too, so it is not mistaken for the walls. On the gas
+sample home, one month with a thermometer gives the inertia to ±2 %; the
+whole winter gives heat loss, inertia and boiler size, all "good", on the
+truth. Hourly residuals that persist from hour to hour count for their
+effective sample size (AR(1)), so the ± does not overstate.
+
+**Radiation to the sky** (ISO 13790 §11.4.6, ISO 52016-1). An envelope that
+sees the sky loses, on top of its transmission, Φ_r = R_se · UA · h_r ·
+Δθ_er · F_r: R_se 0.04 m²K/W, h_r = 4εσT³ = 4.6 W/m²K, Δθ_er 11 K (the mean
+air-to-sky difference), F_r the view factor (roof 1, walls 0.5, ground floor
+0). `ThermalZone(sky=...)` puts a `SkyRadiation` step of R_se·h_r·Δθ_er·F_r
+kelvin (about 1 K) between the envelope's outer face and the outdoor air,
+so the loss is exactly UA × that step and follows UA when a fit changes it.
+The survey weighs F_r by where each kind of home loses heat: a flat (not on
+the top floor) only through its facades, F_r 0.5; a house through its roof
+too, about 0.6. With its larger envelope a 75 m² detached house radiates
+about 350 W, the same flat 150 W.
+
+**Example homes follow the answers.** Each example is a hidden real home
+(`truth.json`: how it differs from the survey's guess). When the wizard
+calibrates it, `survey.example` simulates it again from the answers on the
+page, the thermostat by day and at night above all, and rewrites its
+electricity, gas bills and thermometer log; the files in `web/samples/` are
+the same code run for the example's own answers.
+
+**Several periods.** `HourlyData.join([oct, dec, feb])` makes one record
+of separate periods (three monthly downloads with weeks between them). The
+twin simulates each period on its own, from its own spin-up, and one set of
+parameters is fitted to all of them: it has to match the home in mild and in
+cold weather at once. On the gas sample home, three monthly bills from 13,
+7 and 10 °C winters narrow the heat loss from ±20 % (any one bill) to ±13 %,
+and the one twin reproduces each bill within 0.5 %.
+
+Known limits: the
 efficiency (COP, EER) and the thermostat setpoints are taken from the twin,
 not fitted; on the NumPy backend a calibration takes about 15 s, on the Rust
 engine about 1.5 s.

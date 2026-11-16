@@ -43,7 +43,12 @@ const OtwinHome = (() => {
 
   function startWorker() {
     return new Promise((resolve, reject) => {
-      worker = new Worker("worker.js");
+      try {
+        worker = new Worker("worker.js");
+      } catch (e) {
+        reject(e);
+        return;
+      }
       worker.onmessage = (event) => {
         const m = event.data;
         if (m.type === "status") statusCb(m.text);
@@ -63,7 +68,18 @@ const OtwinHome = (() => {
 
   function start(onStatus) {
     if (onStatus) statusCb = onStatus;
-    if (!ready) ready = canUseWorker() ? startWorker() : startOnPage();
+    if (!ready) {
+      // Some embedded browsers (an editor's preview pane) serve over http but
+      // refuse workers; the page itself can always run the engine.
+      ready = canUseWorker()
+        ? startWorker().catch((e) => {
+            if (worker) worker.terminate();
+            worker = null;
+            console.warn(`Otwin Home: no worker (${e.message}); running on the page`);
+            return startOnPage();
+          })
+        : startOnPage();
+    }
     return ready;
   }
 

@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 import numpy as np
 from otwin.hybrid import FitResult, fit_parameters
@@ -50,6 +50,9 @@ __all__ = [
     "auto_substeps",
     "ELECTRICITY_SIGMA_KWH",
     "GAS_BILL_SIGMA",
+    "INDOOR_SIGMA_K",
+    "THERMOMETER_OFFSET",
+    "OFFSET_BASE_K",
     "default_bounds",
     "default_spinup_weeks",
     "SUBSTEPS",
@@ -67,6 +70,7 @@ _BOUNDS = {
     "fabric_storage": (1e6, 1e11),  # J/K
     "machine": (100.0, 1e5),  # W
     "base_load": (1.0, 5000.0),  # W
+    "sensor": (10.0 - 3.0, 10.0 + 3.0),  # OFFSET_BASE_K ± 3 K
 }
 
 
@@ -80,6 +84,8 @@ class ParameterRole:
     observable: bool = True  # can the meters given see it at all?
     why_not: str = ""  # plain-language reason when not observable
     given: bool = False  # the householder told us; not fitted
+    from_bills: bool = False  # seen only through bill totals, not hour by hour
+    beyond_bills: bool = False  # not observable, and no number of bills would show it
 
 
 _GAS_NO_BILLS = (
@@ -92,7 +98,7 @@ _BILL_TOTALS_STORAGE = (
 )
 _BILL_TOTALS_SIZE = (
     "gas bills show totals over weeks, not the peaks that would show your boiler's "
-    "size. Tell us its power (step 1) if you know it."
+    "size. It does not change what the bills say about your walls."
 )
 _NO_HEATING = (
     "the twin has no heating or cooling, so the meters cannot show how your home "
@@ -106,6 +112,7 @@ def calibration_parameters(
     *,
     gas_bills: bool = False,
     electricity: bool = True,
+    indoor: bool = False,
     given: Sequence[str] = (),
 ) -> list[ParameterRole]:
     """The parameters the data can be asked about, in this twin.
@@ -115,12 +122,18 @@ def calibration_parameters(
     home's heat loss, but not its heat storage or the boiler's size, because
     they only give totals over weeks. Parameters in ``given`` (values the
     householder told us, such as the heater's power) are never fitted.
+
+    An interior thermometer (``indoor``) shows what no meter does: how fast
+    the home cools when the heating stops at night and how fast the heating
+    warms it back in the morning. With it, the heat storage and a gas
+    boiler's size can be measured, and a home's heat loss even with no
+    heating at all, from how the indoor temperature follows the outdoor one.
     """
     zone = twin.zone.name
     machines = [c for c in twin.system.components if isinstance(c, SpaceMachine)]
     electric = any(m.fuel == "electricity" for m in machines)
     gas = any(m.fuel == "gas" for m in machines)
-    if electric:
+    if electric or indoor:
         loss_why = storage_why = ""
     elif gas and gas_bills:
         loss_why, storage_why = "", _BILL_TOTALS_STORAGE
@@ -128,26 +141,63 @@ def calibration_parameters(
         loss_why = storage_why = _GAS_NO_BILLS
     else:
         loss_why = storage_why = _NO_HEATING
+    by_bills = not electric and not indoor and gas and gas_bills
+
+    def beyond(why: str) -> bool:
+        return why in (_BILL_TOTALS_STORAGE, _BILL_TOTALS_SIZE)
+
     roles = [
-        ParameterRole(f"{zone}.envelope.conductance", "heat_loss", zone,
-                      not loss_why, loss_why),
-        ParameterRole(f"{zone}.air.capacity", "heat_storage", zone,
-                      not storage_why, storage_why),
+        ParameterRole(
+            f"{zone}.envelope.conductance",
+            "heat_loss",
+            zone,
+            not loss_why,
+            loss_why,
+            from_bills=by_bills,
+        ),
+        ParameterRole(
+            f"{zone}.air.capacity",
+            "heat_storage",
+            zone,
+            not storage_why,
+            storage_why,
+            beyond_bills=beyond(storage_why),
+        ),
     ]
     if twin.zone.two_node:
-        roles.append(ParameterRole(f"{zone}.fabric.capacity", "fabric_storage", zone,
-                                   not storage_why, storage_why))
+        roles.append(
+            ParameterRole(
+                f"{zone}.fabric.capacity",
+                "fabric_storage",
+                zone,
+                not storage_why,
+                storage_why,
+                beyond_bills=beyond(storage_why),
+            )
+        )
     for m in machines:
-        if m.fuel == "electricity":
-            why = ""
+        if m.fuel == "electricity" or indoor:
+            why = ""  # the meter, or the morning warm-up on the thermometer
         else:
             why = _BILL_TOTALS_SIZE if gas_bills else _GAS_NO_BILLS
-        roles.append(ParameterRole(f"{m.name}.thermostat.power", "machine", m.name,
-                                   not why, why))
+        roles.append(
+            ParameterRole(
+                f"{m.name}.thermostat.power",
+                "machine",
+                m.name,
+                not why,
+                why,
+                beyond_bills=beyond(why),
+            )
+        )
     for c in twin.system.components:
         if isinstance(c, BaseLoad):
             why = "" if electricity else _NO_ELECTRICITY
-            roles.append(ParameterRole(f"{c.name}.power", "base_load", c.name, not why, why))
+            roles.append(
+                ParameterRole(f"{c.name}.power", "base_load", c.name, not why, why)
+            )
+    if indoor:
+        roles.append(ParameterRole(THERMOMETER_OFFSET, "sensor", "thermometer"))
     given = set(given)
     return [
         replace(r, observable=False, why_not="", given=True) if r.name in given else r
@@ -183,7 +233,7 @@ class HourlyMeter:
             how much the answer depends on how warm the house was at the start.
     """
 
-    output_names = ["electricity", "gas"]
+    output_names = ["electricity", "gas", "indoor"]
 
     def __init__(
         self,
@@ -193,6 +243,7 @@ class HourlyMeter:
         substeps: int = SUBSTEPS,
         spinup_weeks: int | None = None,
         spinup_offset_c: float = 0.0,
+        offset_k: float = 0.0,
     ) -> None:
         if substeps < 1:
             raise ValueError("substeps must be at least 1")
@@ -204,6 +255,10 @@ class HourlyMeter:
         self.substeps = int(substeps)
         self.spinup_weeks = weeks
         self.spinup_offset_c = float(spinup_offset_c)
+        #: How far the householder's thermometer reads above the room, K: where
+        #: it hangs (by a window, over the oven) and its calibration. Fitted
+        #: with the home, so neither is mistaken for the walls or the boiler.
+        self.offset_k = float(offset_k)
         self._grid = self._build_grid()
 
     # ---------------------------------------------------- the Model surface
@@ -214,25 +269,49 @@ class HourlyMeter:
 
     @property
     def param_names(self) -> list[str]:
-        """The compiled model's parameter names."""
-        return list(self.model.param_names)
+        """The compiled model's parameter names, and the thermometer's offset
+        when the record has an indoor temperature."""
+        extra = [THERMOMETER_OFFSET] if self.data.indoor_c is not None else []
+        return list(self.model.param_names) + extra
 
     @property
     def parameters(self) -> dict[str, float]:
-        """The compiled model's current parameter values."""
-        return dict(self.model.parameters)
+        """The current parameter values (see :attr:`param_names`)."""
+        out = dict(self.model.parameters)
+        if self.data.indoor_c is not None:
+            out[THERMOMETER_OFFSET] = OFFSET_BASE_K + self.offset_k
+        return out
+
+    def _split(self, values: Mapping[str, float] | None, kw: Mapping[str, float]):
+        values = {**(values or {}), **kw}
+        offset = values.pop(THERMOMETER_OFFSET, None)
+        return values, offset
 
     def set_parameters(self, values: Mapping[str, float] | None = None, **kw: float):
         """Change parameter values in place."""
-        self.model.set_parameters(values, **kw)
+        model_values, offset = self._split(values, kw)
+        if model_values:
+            self.model.set_parameters(model_values)
+        if offset is not None:
+            self.offset_k = float(offset) - OFFSET_BASE_K
         return self
 
     def with_parameters(self, values: Mapping[str, float] | None = None, **kw: float):
         """A copy with different parameter values; this one is untouched."""
-        return self.variant(model=self.model.with_parameters(values, **kw))
+        model_values, offset = self._split(values, kw)
+        return self.variant(
+            model=self.model.with_parameters(model_values),
+            offset_k=self.offset_k if offset is None else float(offset) - OFFSET_BASE_K,
+        )
 
-    def variant(self, *, model=None, spinup_offset_c: float | None = None) -> HourlyMeter:
-        """The same meter with another model or another spin-up offset."""
+    def variant(
+        self,
+        *,
+        model=None,
+        spinup_offset_c: float | None = None,
+        offset_k: float | None = None,
+    ) -> HourlyMeter:
+        """The same meter with another model, spin-up offset or thermometer offset."""
         return HourlyMeter(
             replace(self.twin, model=model if model is not None else self.model),
             self.data,
@@ -241,6 +320,7 @@ class HourlyMeter:
             spinup_offset_c=(
                 self.spinup_offset_c if spinup_offset_c is None else spinup_offset_c
             ),
+            offset_k=self.offset_k if offset_k is None else offset_k,
         )
 
     def simulate(self, t=None, x0=None, inputs=None, solver: str = "midpoint", **options):
@@ -255,19 +335,35 @@ class HourlyMeter:
         """
         if t is not None and np.asarray(t).size != self.data.hours:
             raise ValueError(f"expected the record's {self.data.hours} hours")
-        elec, gas = self.meters(solver=solver, **options)
+        elec, gas, indoor = self.readings(solver=solver, **options)
         out = {"electricity": np.where(self.data.observed, elec, 0.0)}
         if self.data.gas_bills:
             out["gas"] = bill_vector(self.data, self.bill_totals(gas))
+        if indoor is not None:
+            out["indoor"] = np.where(self.data.indoor_observed, indoor, 0.0)
         return out
 
-    def meters(self, solver: str = "midpoint", **options) -> tuple[np.ndarray, np.ndarray]:
+    def meters(
+        self, solver: str = "midpoint", **options
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Hourly electricity and gas over the record, kWh per hour."""
+        elec, gas, _ = self.readings(solver=solver, indoor=False, **options)
+        return elec, gas
+
+    def readings(
+        self, solver: str = "midpoint", indoor: bool | None = None, **options
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+        """Hourly electricity and gas (kWh per hour) and, when the record has an
+        indoor temperature (or ``indoor=True``), what the twin's interior
+        thermometer reads, the hourly mean in °C; all from one simulation."""
+        if indoor is None:
+            indoor = self.data.indoor_c is not None
         e_names, g_names = self.twin.electric_outputs, self.twin.gas_outputs
-        names = list(e_names) + list(g_names)
+        thermo = [self.twin.thermometer] if indoor else []
+        names = list(e_names) + list(g_names) + thermo
         if not names:
             z = np.zeros(self.data.hours)
-            return z, z
+            return z, z, None
         watts = self.hourly(names, solver=solver, **options)
 
         def total(ns):
@@ -275,7 +371,8 @@ class HourlyMeter:
                 return np.zeros(self.data.hours)
             return np.sum([watts[n] for n in ns], axis=0) / 1000.0
 
-        return total(e_names), total(g_names)
+        reading = watts[thermo[0]] - 273.15 + self.offset_k if thermo else None
+        return total(e_names), total(g_names), reading
 
     def bill_totals(self, gas_hourly: np.ndarray | None = None) -> np.ndarray:
         """The twin's gas over each bill of the record, kWh."""
@@ -285,12 +382,18 @@ class HourlyMeter:
 
     # --------------------------------------------------------- the meter
     def _build_grid(self):
+        """One simulation grid per period of the record (one for a plain record)."""
+        return [self._period_grid(i, j, when) for i, j, when in self.data.spans]
+
+    def _period_grid(self, i0: int, i1: int, when):
         d, sub = self.data, self.substeps
-        week = min(7 * 24, d.hours)
+        n = i1 - i0
+        week = min(7 * 24, n)
         prefix = self.spinup_weeks * week
-        hours = prefix + d.hours
+        hours = prefix + n
         t = np.arange(hours * sub + 1) * (3600.0 / sub)
-        start = d.start - timedelta(hours=prefix)
+        # elapsed, not wall-clock
+        start = when.astimezone(timezone.utc) - timedelta(hours=prefix)
 
         def with_prefix(hourly: np.ndarray, offset: float = 0.0) -> np.ndarray:
             return np.concatenate(
@@ -310,17 +413,27 @@ class HourlyMeter:
             held = np.interp(mid, np.arange(full.size, dtype=float), full)
             return np.append(held, full[-1])
 
-        outdoor = instants(d.outdoor_c + 273.15, self.spinup_offset_c)
+        kelvin = d.outdoor_c[i0:i1] + 273.15
+        outdoor = instants(kelvin, self.spinup_offset_c)
         if self.spinup_offset_c:
             # the offset applies to the spin-up only; the record keeps its weather
-            exact = instants(d.outdoor_c + 273.15, 0.0)
+            exact = instants(kelvin, 0.0)
             outdoor[prefix * sub :] = exact[prefix * sub :]
-        measured = {k: expand(v) for k, v in d.measured.items()}
+        measured = {k: expand(v[i0:i1]) for k, v in d.measured.items()}
         return t, start, outdoor, measured, prefix
 
     def hourly(self, names: Sequence[str], solver: str = "midpoint", **options):
-        """Exact hourly means of model outputs over the record, ``{name: (hours,)}``."""
-        t, start, outdoor, measured, prefix = self._grid
+        """Exact hourly means of model outputs over the record, ``{name: (hours,)}``.
+
+        Each period is simulated on its own, from its own spin-up, and the
+        hours are joined in the record's order."""
+        parts = [
+            self._hourly_period(grid, names, solver, **options) for grid in self._grid
+        ]
+        return {n: np.concatenate([p[n] for p in parts]) for n in names}
+
+    def _hourly_period(self, grid, names, solver, **options):
+        t, start, outdoor, measured, prefix = grid
         u = self.twin.inputs(t, start=start, outdoor=outdoor, **measured)
         run = self.model.simulate(t=t, inputs=u, solver=solver, **options)
         x = np.asarray(run.x)
@@ -342,6 +455,14 @@ def bill_vector(data: HourlyData, totals) -> np.ndarray:
 
 #: Typical mismatch of one hour of electricity, kWh: what weights the hours.
 ELECTRICITY_SIGMA_KWH = 0.1
+#: The fitted offset of the householder's thermometer (see HourlyMeter). Its
+#: value is OFFSET_BASE_K + the offset in K: the search steps each value by a
+#: fraction of itself, and around zero that step would vanish.
+THERMOMETER_OFFSET = "thermometer.offset"
+OFFSET_BASE_K = 10.0
+#: Typical mismatch of one hour of indoor temperature, K: a thermometer's
+#: accuracy, where in the home it hangs, the sun through a window.
+INDOOR_SIGMA_K = 0.3
 #: Typical mismatch of one gas bill, as a fraction of it (estimated readings,
 #: PCS changes, hot-water use): what weights the bills, and the floor on their
 #: uncertainty when there are too few to estimate it.
@@ -350,8 +471,10 @@ GAS_BILL_SIGMA = 0.08
 
 def auto_substeps(data: HourlyData) -> int:
     """Steps per hour: four for a month, fewer for a year of bills, whose totals
-    over weeks do not need quarter-hour detail."""
-    return SUBSTEPS if data.hours <= 62 * 24 else 2
+    over weeks do not need quarter-hour detail. Several separate periods are
+    each simulated on their own, so it is the longest one that counts."""
+    longest = max(j - i for i, j, _ in data.spans)
+    return SUBSTEPS if longest <= 62 * 24 else 2
 
 
 def fit_hourly(
@@ -367,8 +490,9 @@ def fit_hourly(
 ) -> tuple[FitResult, HourlyMeter]:
     """Run :func:`otwin.hybrid.fit_parameters` against the meters.
 
-    The hourly electricity and, when the record has them, the gas bills are
-    fitted together, each weighted by its typical mismatch. Returns the fit
+    The hourly electricity and, when the record has them, the gas bills and
+    the indoor temperature are fitted together, each weighted by its typical
+    mismatch. Returns the fit
     and the meter at the fitted values.
     """
     if not data.observed.any() and not data.gas_bills:
@@ -385,6 +509,9 @@ def fit_hourly(
         kwh = np.array([b.kwh for b in data.gas_bills])
         measurements["gas"] = bill_vector(data, kwh)
         weights["gas"] = 1.0 / (GAS_BILL_SIGMA * max(float(kwh.mean()), 1.0))
+    if data.indoor_c is not None:
+        measurements["indoor"] = np.where(data.indoor_observed, data.indoor_c, 0.0)
+        weights["indoor"] = 1.0 / INDOOR_SIGMA_K
     fit = fit_parameters(
         meter,
         data.t,

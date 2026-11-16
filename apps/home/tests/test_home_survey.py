@@ -4,7 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from components import AirConditioner, Boiler, ElectricHeater, HeatPump, WaterHeater
+from components import (
+    AirConditioner,
+    Appliance,
+    Boiler,
+    ElectricHeater,
+    GasAppliance,
+    HeatGain,
+    HeatPump,
+    WaterHeater,
+)
 from survey import (
     FLOOR_AREA,
     PROVINCES,
@@ -12,6 +21,7 @@ from survey import (
     HomeDescription,
     assumptions,
     build_twin,
+    home_summary,
     questions_json,
 )
 
@@ -53,6 +63,7 @@ def test_defaults_build_the_typical_flat(backend):
             "washing_machine",
             "oven",
             "tv",
+            "hob",
             "water_heater.draw",
         ]
     )
@@ -136,7 +147,131 @@ def test_answers_are_validated_and_explained():
         {"size": "l", "unknown_key": 1, "appliances": ["tv"]}
     )
     assert d.size == "l" and d.appliances == ("tv",)
-    text = assumptions(HomeDescription(heating="gas"))
-    assert text[0].startswith("A typical flat of about 75 m²")
-    assert any("gas does not show on the electricity meter" in t for t in text)
-    assert text[-1].startswith("These are starting points.")
+    # answers saved before cooking had its own question
+    old = HomeDescription.from_answers({"appliances": ["hob", "tv"]})
+    assert old.appliances == ("tv",) and old.cooking == "electric"
+
+
+@pytest.mark.parametrize(
+    "heating, water, cooking, gas, electric",
+    [
+        # a combi boiler for everything: three things on the gas meter
+        ("gas", "boiler", "gas", {"heating", "water_heater", "hob"}, set()),
+        # gas heating, an electric termo, induction
+        ("gas", "electric", "electric", {"heating"}, {"water_heater", "hob"}),
+        # heat pump, a gas calentador, a gas hob
+        ("heat_pump", "gas", "gas", {"water_heater", "hob"}, {"heating"}),
+        # all electric with aerotermia for the water
+        ("heat_pump", "heat_pump", "electric", set(), {"heating", "water_heater", "hob"}),
+        # electric heaters and butane: butane is on no meter
+        ("electric", "electric", "butane", set(), {"heating", "water_heater"}),
+    ],
+)
+def test_heating_hot_water_and_cooking_combine_freely(
+    backend, heating, water, cooking, gas, electric
+):
+    d = HomeDescription(heating=heating, water=water, cooking=cooking)
+    twin = build_twin(d, backend=backend)
+    on = lambda outs: {o.split(".")[0] for o in outs}  # noqa: E731
+    assert on(twin.gas_outputs) == gas
+    appliances = {"base", "dishwasher", "washing_machine", "oven", "tv"}
+    assert on(twin.electric_outputs) - appliances == electric
+    assert d.uses_gas == bool(gas)
+
+
+def test_hot_water_and_hob_machines(backend):
+    by = lambda d: {c.name: c for c in build_twin(d, backend=backend).system.components}  # noqa: E731
+    combi = by(HomeDescription(heating="gas", water="boiler", cooking="gas"))
+    assert combi["water_heater"].fuel == "gas" and combi["water_heater"].efficiency == 0.9
+    assert isinstance(combi["hob"], GasAppliance)
+    calentador = by(HomeDescription(water="gas"))["water_heater"]
+    assert calentador.fuel == "gas" and calentador.efficiency == 0.85
+    aerotermia = by(HomeDescription(water="heat_pump"))["water_heater"]
+    assert aerotermia.fuel == "electricity" and aerotermia.efficiency == 2.5
+    assert isinstance(by(HomeDescription())["hob"], Appliance)
+    butane = by(HomeDescription(cooking="butane"))["hob"]
+    assert type(butane) is HeatGain and butane.indoors  # warms, never billed
+
+
+def test_a_gas_hob_burns_twice_what_an_induction_hob_draws(backend):
+    induction = build_twin(HomeDescription(cooking="electric"), backend=backend)
+    gas = build_twin(HomeDescription(cooking="gas"), backend=backend)
+    e = induction.schedules["hob"].daily_sum()
+    assert e == pytest.approx(900.0)  # 400 W at 14:00 and 500 W at 21:00, two people
+    assert gas.schedules["hob"].daily_sum() == pytest.approx(2 * e)
+
+
+def test_the_home_summary_is_plain_words():
+    rows = dict(
+        home_summary(
+            HomeDescription(
+                province="valladolid",
+                heating="gas",
+                water="boiler",
+                cooking="gas",
+                people="3",
+                built="pre1980",
+            )
+        )
+    )
+    assert list(rows) == [
+        "Your home",
+        "Insulation",
+        "Heat lost to the sky",
+        "Heating",
+        "Hot water",
+        "Cooking",
+        "Air conditioning",
+        "Appliances",
+        "Bills to bring",
+    ]
+    assert rows["Your home"] == (
+        "A flat of about 75 m² in Valladolid, built before 1980. 3 people live there."
+    )
+    assert rows["Heating"] == "A gas boiler, at 20 °C by day and 16 °C at night."
+    assert rows["Hot water"] == "From the gas boiler that heats the home."
+    assert "gas bill for the same month" in rows["Bills to bring"]
+    assert "heating, hot water and cooking are on gas" in rows["Bills to bring"]
+    electric = dict(home_summary(HomeDescription()))
+    assert "no gas bill is needed" in electric["Bills to bring"]
+    # nothing an engineer would write
+    text = " ".join(t for _, t in home_summary(HomeDescription()))
+    for jargon in ("W/K", "W per °C", "kW", "COP", "conductance", "starting point"):
+        assert jargon not in text
+    sentences = assumptions(HomeDescription())
+    assert sentences[0].startswith("Your home: A flat of about 75 m² in Madrid")
+    assert sentences[-1].startswith("These are typical figures for a home like yours.")
+
+
+def test_radiation_to_the_sky_is_iso_13790_and_a_house_loses_more(backend):
+    """ISO 13790 §11.4.6: Φ_r = R_se · UA · h_r · Δθ_er · F_r, with R_se 0.04,
+    h_r = 4εσT³ (ε 0.9, 10 °C), Δθ_er 11 K. A flat's facades see half the sky;
+    a house's roof sees all of it, and a house has more envelope."""
+    from components.exchanges import H_R, R_SE, SKY_DIFFERENCE_K
+
+    assert pytest.approx(4 * 0.9 * 5.670374e-8 * 283.15**3) == H_R
+    flat = HomeDescription(home_type="flat")
+    house = HomeDescription(home_type="detached")
+    assert flat.sky_view == 0.5
+    assert house.sky_view == pytest.approx(0.55 * 0.5 + 0.30 * 1.0)
+    assert flat.sky_depression == pytest.approx(R_SE * H_R * SKY_DIFFERENCE_K * 0.5)
+    assert flat.radiation_w == pytest.approx(flat.envelope_ua * flat.sky_depression)
+    assert house.radiation_w > 2 * flat.radiation_w
+    twin = build_twin(flat, backend=backend)
+    assert twin.model.parameters["zone.sky.depression"] == pytest.approx(
+        flat.sky_depression
+    )
+    rows = dict(home_summary(flat))
+    assert rows["Heat lost to the sky"].startswith(
+        "About 150 W, through the facades only"
+    )
+    assert "a house loses much more" in dict(home_summary(house))["Heat lost to the sky"]
+
+
+def test_the_thermostat_has_a_thermometer(backend):
+    twin = build_twin(HomeDescription(heating="gas"), backend=backend)
+    assert twin.thermometer == "heating.thermostat.temperature"
+    for out in ("temperature", "on", "duty"):
+        assert f"heating.thermostat.{out}" in twin.model.output_names
+    none = build_twin(HomeDescription(heating="none", water="unknown"), backend=backend)
+    assert none.thermometer == "zone.temperature"

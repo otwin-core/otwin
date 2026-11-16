@@ -23,6 +23,7 @@ test_components_*.py.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -34,11 +35,13 @@ from calibration import (
     GOOD,
     NOT_ENOUGH_DATA,
     USABLE,
+    GasBill,
     HourlyData,
     HourlyMeter,
     NotEnoughData,
     calibrate,
     calibration_parameters,
+    synthetic_meters,
     synthetic_month,
     winter_weather,
 )
@@ -238,7 +241,7 @@ def test_nothing_measurable_is_refused():
     )
     data = HourlyData(START, np.full(744, 0.3), np.full(744, 8.0))
     with pytest.raises(
-        NotEnoughData, match="Nothing in this twin shows on the electricity"
+        NotEnoughData, match="Nothing in this twin shows on the meters you gave"
     ):
         calibrate(twin, data)
 
@@ -517,3 +520,209 @@ def test_the_calibration_example_runs_offline(capsys):
     out = capsys.readouterr().out
     assert "Calibration: GOOD" in out and "rough guess" in out
     assert abs(res.values["zone.envelope.conductance"] / 180.0 - 1) < 0.05
+
+
+# ---------------------------------------------------------------- gas bills
+
+
+def gas_month(truth, *, start=START, hours=744, bills=1, seed=7):
+    """A noisy month of electricity and its gas, as ``bills`` equal bills."""
+    data, gas = synthetic_meters(
+        truth,
+        start=start,
+        outdoor_c=winter_weather(seed=1),
+        hours=hours,
+        seed=seed,
+        **NOISE,
+    )
+    edges = np.linspace(0, hours, bills + 1).astype(int)
+    gb = tuple(
+        GasBill(int(a), int(b), float(gas[a:b].sum()), label=f"bill {i + 1}")
+        for i, (a, b) in enumerate(zip(edges, edges[1:], strict=False))
+    )
+    return HourlyData(data.start, data.electricity_kwh, data.outdoor_c, gas_bills=gb), gas
+
+
+def test_one_gas_bill_measures_a_gas_heated_homes_heat_loss():
+    """The bill's kWh is the only thing that sees the boiler; with the hourly
+    electricity for the base load, it pins the heat loss. Storage and boiler
+    size cannot show in a total: reported as such, without sinking the verdict."""
+    truth = flat(machine="gas")
+    data, gas = gas_month(truth)
+    res = calibrate(flat(machine="gas"), data, guess=wrong_for(truth))
+    assert set(res.values) == {"zone.envelope.conductance", "base.power"}
+    ua = res.values["zone.envelope.conductance"]
+    # one bill is one number: the truth must lie inside the reported ±
+    assert abs(ua / 180.0 - 1) <= res.uncertainty["zone.envelope.conductance"]
+    assert ua == pytest.approx(180.0, rel=0.10)
+    loss = res.finding("zone.envelope.conductance")
+    assert loss.verdict in (GOOD, USABLE) and loss.counted
+    for key in ("zone.air.capacity", "heating.thermostat.power"):
+        f = res.finding(key)
+        assert not f.measured and not f.counted and "gas bills" in f.reason.lower()
+    assert res.verdict in (GOOD, USABLE)
+    assert "your gas bill (within" in res.headline and "Bills cannot show" in res.headline
+    assert res.predicted_bills_kwh.tolist() == pytest.approx([gas.sum()], rel=0.01)
+    assert res.worst_bill_error < 0.01
+
+
+def test_a_gas_bill_the_twin_cannot_reach_is_not_calibrated():
+    """A gas home whose bill is three times its heating: a missing gas user the
+    twin cannot absorb into the walls within their bounds."""
+    truth = flat(machine="gas")
+    data, gas = gas_month(truth)
+    huge = (GasBill(0, 744, 50 * float(gas.sum())),)
+    bad = HourlyData(data.start, data.electricity_kwh, data.outdoor_c, gas_bills=huge)
+    res = calibrate(flat(machine="gas"), bad)
+    assert res.verdict == NOT_ENOUGH_DATA
+    assert "does not yet reproduce your gas bills" in res.headline
+
+
+# ---------------------------------------------------------------- clock changes
+
+
+def test_the_spin_up_goes_back_in_real_hours_across_a_clock_change():
+    """A record starting 1 Nov 2025 (Madrid) spins up over the week before,
+    across the 26 Oct clock change: 168 real hours, not 168 wall-clock ones,
+    or every schedule would run an hour late."""
+    from zoneinfo import ZoneInfo
+
+    start = datetime(2025, 11, 1, tzinfo=ZoneInfo("Europe/Madrid"))
+    data = HourlyData(start, np.full(744, 0.5), np.full(744, 8.0))
+    meter = HourlyMeter(flat(), data, spinup_weeks=1)
+    grid_start = meter._grid[0][1]
+    assert start.timestamp() - grid_start.timestamp() == 168 * 3600
+    assert data.hour_label(743) == "01/12/2025 23:00"
+
+
+def test_synthetic_meters_keep_local_time_across_a_clock_change():
+    """Sixty days of history before 15 December reach back into summer time;
+    the dishwasher must still run at 21:00 local, not 22:00."""
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("Europe/Madrid")
+    dish = Appliance(
+        schedule=Schedule([1000.0 if h == 21 else 0.0 for h in range(24)]), name="dish"
+    )
+    twin = build_home(
+        ThermalZone(180.0, 1.2e7), gains=[BaseLoad(100.0), dish], backend=FIT_BACKEND
+    )
+    start = datetime(2025, 12, 15, tzinfo=tz)
+    data, gas = synthetic_meters(
+        twin, start=start, outdoor_c=lambda t: 8.0 + 0 * t, hours=28 * 24
+    )
+    peaks = np.flatnonzero(data.electricity_kwh > 0.5)
+    t0 = start.astimezone(timezone.utc)
+    assert {(t0 + timedelta(hours=int(k))).astimezone(tz).hour for k in peaks} == {21}
+    assert peaks.size == 28
+    assert not gas.any()  # nothing on gas
+
+
+# ---------------------------------------------------------------- several periods
+
+
+def _three_periods(truth):
+    """Three separate months of one home, as three records: October,
+    December-January and February, with weeks between them."""
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("Europe/Madrid")
+    out = []
+    for (y, m), mean in (((2025, 10), 13.0), ((2025, 12), 6.0), ((2026, 2), 9.0)):
+        start = datetime(y, m, 15, tzinfo=tz)
+        data, gas = synthetic_meters(
+            truth,
+            start=start,
+            outdoor_c=winter_weather(mean_c=mean, seed=m),
+            hours=28 * 24,
+            seed=m,
+            **NOISE,
+        )
+        out.append(
+            HourlyData(
+                data.start,
+                data.electricity_kwh,
+                data.outdoor_c,
+                gas_bills=(GasBill(0, data.hours, float(gas.sum())),),
+            )
+        )
+    return out
+
+
+def test_separate_periods_join_into_one_record_and_split_back():
+    pieces = _three_periods(flat(machine="gas"))
+    joined = HourlyData.join(list(reversed(pieces)))  # any order: sorted by time
+    assert joined.hours == 3 * 672 and len(joined.spans) == 3
+    assert [i for i, _, _ in joined.spans] == [0, 672, 1344]
+    assert [b.start for b in joined.gas_bills] == [0, 672, 1344]
+    np.testing.assert_array_equal(
+        joined.timestamps()[672:675],
+        int(pieces[1].start.timestamp()) + 3600 * np.arange(3),
+    )
+    assert joined.hour_label(672) == "15/12/2025 00:00"
+    # October's piece: 672 real hours from 15 Oct 00:00 cross the 26 Oct clock
+    # change, which repeats an hour, so its last hour starts at 22:00
+    assert joined.hour_label(671) == "11/11/2025 22:00"
+    for k, piece in enumerate(pieces):
+        back = joined.period(k)
+        assert back.start == piece.start
+        np.testing.assert_array_equal(back.electricity_kwh, piece.electricity_kwh)
+        assert back.gas_bills == piece.gas_bills
+
+
+def test_a_joined_record_is_checked_as_one():
+    pieces = _three_periods(flat(machine="gas"))
+    with pytest.raises(ValueError, match="overlaps"):
+        HourlyData(
+            pieces[0].start,
+            np.ones(2 * 672),
+            np.ones(2 * 672),
+            periods=((672, pieces[0].start),),
+        )
+    with pytest.raises(ValueError, match="spans two periods"):
+        HourlyData(
+            pieces[0].start,
+            np.ones(2 * 672),
+            np.ones(2 * 672),
+            gas_bills=(GasBill(600, 700, 10.0),),
+            periods=((672, pieces[1].start),),
+        )
+    short = HourlyData(
+        pieces[0].start, np.ones(240), np.ones(240), check_length=False
+    )  # a ten-day piece is fine on its own...
+    with pytest.raises(NotEnoughData, match="at least 28 days"):
+        HourlyData.join(
+            [short, replace(short, start=pieces[1].start)]
+        )  # ...not 20 days in all
+
+
+def test_each_period_is_simulated_on_its_own():
+    """The meter over a joined record is exactly the meters over its periods,
+    side by side: each starts from its own spin-up, none runs into the next."""
+    twin = flat(machine="gas", backend="numpy")
+    pieces = _three_periods(twin)
+    joined = HourlyData.join(pieces)
+    e_all, g_all = HourlyMeter(twin, joined).meters()
+    for k, piece in enumerate(pieces):
+        i, j, _ = joined.spans[k]
+        e, g = HourlyMeter(twin, piece).meters()
+        np.testing.assert_allclose(e_all[i:j], e, rtol=1e-12)
+        np.testing.assert_allclose(g_all[i:j], g, rtol=1e-12)
+
+
+def test_three_bills_in_different_weather_narrow_the_heat_loss():
+    """One gas bill gives the heat loss to about ±20 %; three, from a mild
+    October, a cold December and a February in between, fitted together by
+    one twin, narrow it, and that twin reproduces each bill."""
+    truth = flat(machine="gas")
+    pieces = _three_periods(truth)
+    one = calibrate(flat(machine="gas"), pieces[1], guess=wrong_for(truth))
+    three = calibrate(
+        flat(machine="gas"), HourlyData.join(pieces), guess=wrong_for(truth)
+    )
+    name = "zone.envelope.conductance"
+    assert three.uncertainty[name] < 0.8 * one.uncertainty[name]
+    assert abs(three.values[name] / 180.0 - 1) <= three.uncertainty[name]
+    assert np.max(np.abs(three.predicted_bills_kwh / three.measured_bills_kwh - 1)) < 0.03
+    assert "your 3 gas bills (within" in three.headline
+    assert "the total over the 3 periods" in three.headline

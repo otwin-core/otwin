@@ -1,106 +1,60 @@
 <!doctype html>
-<!-- Otwin Home: a digital twin of your home's energy, entirely in your browser.
+<!-- Otwin Home: a model of your home's energy, entirely in your browser.
      A static site: build with build_bundle.py, serve dist/ from anywhere
-     (GitHub Pages included), or open dist/index.html from disk. -->
+     (GitHub Pages included), or open dist/index.html from disk.
+
+     Everything here is a classic script on purpose: a browser refuses
+     modules from file://, where this page must still work. The React app
+     (ui/, built by Vite to one IIFE bundle) is app.js. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Otwin Home — your home's energy twin</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>Otwin Home</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="app.css" />
 </head>
 <body>
-  <header class="top">
-    <div class="brand">Otwin Home</div>
-    <div class="engine" id="engine" aria-live="polite">Starting the engine …</div>
-  </header>
-
-  <main>
-    <section class="intro">
-      <h1>A digital twin of your home’s energy</h1>
-      <p class="lead">
-        Describe your home, drop the files your electricity company and the
-        weather service give you, and see what your home is made of: how fast
-        it loses heat, how big your heating is, what is always on.
-      </p>
-      <p class="privacy">
-        <strong>Your files never leave this computer.</strong>
-        Everything happens inside this page: reading your files and fitting the
-        model run in your browser. There is no server, and nothing is uploaded.
-      </p>
-    </section>
-
-    <ol class="steps" id="steps">
-      <li data-step="1"><span>1</span> Your home</li>
-      <li data-step="2"><span>2</span> Your data</li>
-      <li data-step="3"><span>3</span> Calibration</li>
-    </ol>
-
-    <section class="step" id="step1" aria-labelledby="h1">
-      <h2 id="h1">Tell us about your home</h2>
-      <p class="sub">Pick the answers that fit best. Nothing technical: we work out the physics.</p>
-      <form id="survey" onsubmit="return false"></form>
-      <div class="assume" id="assume" aria-live="polite"></div>
-      <div class="actions">
-        <span></span>
-        <button type="button" class="primary" id="to2">Next: your data</button>
-      </div>
-    </section>
-
-    <section class="step" id="step2" aria-labelledby="h2" hidden>
-      <h2 id="h2">Add your data</h2>
-      <p class="sub">
-        One month of hourly electricity is enough. Download it from
-        <a href="https://datadis.es" target="_blank" rel="noopener">Datadis</a>
-        or your distributor’s website, then drop the file below.
-      </p>
-      <div class="drop" id="drop">
-        <p class="drop-title">Drop your files here</p>
-        <p class="drop-sub">
-          Electricity (Datadis, e-distribución, i-DE, UFD), weather (Open-Meteo),
-          smart plugs (Shelly, Tapo), Home Assistant, gas and water bills.
-          Any other CSV: you tell us which column is which.
-        </p>
-        <label class="button">Choose files<input id="files" type="file" multiple /></label>
-      </div>
-      <p class="samples">
-        No files at hand?
-        <button type="button" class="link" id="samples">Try it with example files</button>
-      </p>
-      <ul class="files" id="filelist"></ul>
-      <div class="status" id="status2" aria-live="polite"></div>
-      <div class="actions">
-        <button type="button" id="back1">Back</button>
-        <button type="button" class="primary" id="to3" disabled>Next: calibration</button>
-      </div>
-    </section>
-
-    <section class="step" id="step3" aria-labelledby="h3" hidden>
-      <h2 id="h3">Calibrate your twin</h2>
-      <p class="sub" id="period">
-        The twin will adjust itself until it uses electricity the way your home did.
-      </p>
-      <div class="go">
-        <button type="button" class="primary big" id="calibrate">Calibrate my home</button>
-        <span class="progress" id="progress" hidden></span>
-      </div>
-      <div id="report" aria-live="polite"></div>
-      <div class="actions">
-        <button type="button" id="back2">Back</button>
-        <span></span>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    Otwin Home runs on <a href="https://github.com/otwin-core/otwin">Otwin</a>,
-    open source (Apache-2.0). Weather from
-    <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>
-    (CC BY 4.0), only when you ask for it.
-  </footer>
+  <div id="root"></div>
+  <noscript>
+    <p><strong>Your files never leave this computer.</strong> There is no server, and nothing is uploaded.
+    This page needs JavaScript: everything, including the model of your home, runs here in your browser.</p>
+  </noscript>
 
   <script src="questions.js"></script>
+  <script src="build-info.js"></script>
+  <script>
+    /* Opened from the sources (apps/home/web/index.html) rather than the
+       build (dist/index.html), the questions and the engine do not exist.
+       Open the build if there is one; otherwise say how to make it. */
+    if (typeof OTWIN_QUESTIONS === "undefined") {
+      const probe = document.createElement("script");
+      probe.src = "dist/build-info.js";
+      probe.onload = () => location.replace("dist/index.html");
+      probe.onerror = () => {
+        const box = document.createElement("section");
+        box.className = "unbuilt";
+        box.innerHTML =
+          "<h2>This page has not been built yet</h2>" +
+          "<p>This is the source of the page. The working page, with the engine " +
+          "inside it, is made by one command, run from the repository folder:</p>" +
+          "<pre>python apps/home/web/build_bundle.py</pre>" +
+          "<p>Then open <code>apps/home/web/dist/index.html</code> (or reload this " +
+          "page, which will open it for you).</p>";
+        document.getElementById("root").replaceChildren(box);
+      };
+      document.head.appendChild(probe);
+    }
+  </script>
   <script src="client.js"></script>
-  <script src="wizard.js"></script>
+  <script>
+    /* questions.js, build-info.js and client.js declare their values with
+       const, which is script scope, not window. The page is a bundle and
+       reads window, so hand them over here. */
+    window.OTWIN_QUESTIONS = typeof OTWIN_QUESTIONS === "undefined" ? undefined : OTWIN_QUESTIONS;
+    window.OTWIN_BUILD = typeof OTWIN_BUILD === "undefined" ? undefined : OTWIN_BUILD;
+    window.OtwinHome = typeof OtwinHome === "undefined" ? undefined : OtwinHome;
+  </script>
+  <script src="app.js"></script>
 </body>
 </html>
