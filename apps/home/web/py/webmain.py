@@ -11,9 +11,10 @@ The wizard's three steps map to:
 
 1. :func:`questions`, :func:`assumptions` — the home, by selectors only;
 2. :func:`read_file`, :func:`map_file`, :func:`add_bill`, :func:`remove_file`,
-   :func:`data_status`, :func:`load_samples` — the data, by drag and drop,
-   with the column mapper for CSVs no parser knows and a form for bills
-   typed in by hand;
+   :func:`data_status`, :func:`load_samples`, :func:`demo_home` — the data,
+   by drag and drop, with the column mapper for CSVs no parser knows, a form
+   for bills typed in by hand, and the bills a photo or a PDF was read into
+   (:func:`read_invoice`);
 3. :func:`calibrate_home` — the one-click fit and its plain-language report,
    with the gas and water bills set against the twin.
 
@@ -51,6 +52,7 @@ from ingest.units import dimension_of
 from scenarios import Tariff
 from survey import PROVINCES, HomeDescription, build_twin, home_summary, questions_json
 from survey import assumptions as _assumptions
+from survey.climate import typical_year
 from survey.example import (
     Truth,
     electricity_csv,
@@ -278,13 +280,29 @@ def _describe_bills(e: FileEntry, tz: str) -> str:
     )
 
 
+def _describe_electricity_bill(e: FileEntry, tz: str) -> str:
+    kwh = next(s for s in e.series if s.quantity == "electricity_billed")
+    cost = next((s for s in e.series if s.quantity == "electricity_cost"), None)
+    eur = _t("for_eur", eur=_n(float(cost.value[0]), 2)) if cost is not None else ""
+    return _t(
+        "read_electricity_bill",
+        first=_day(int(kwh.start[0]), tz),
+        last=_day(int(kwh.end[0]) - 1, tz),
+        kwh=_n(float(kwh.values_in("kWh")[0])),
+        eur=eur,
+    )
+
+
 def _format_name(fmt: str) -> str:
     return _t(f"fmt_{fmt}") if f"fmt_{fmt}" in _TEXT_KEYS else _FORMATS.get(fmt, fmt)
 
 
 def _summary(file_id: str, e: FileEntry, tz: str) -> dict[str, Any]:
     out: dict[str, Any] = {"id": file_id, "name": e.name, "status": e.status}
-    if e.status == "ok" and e.format in (
+    if e.status == "ok" and e.format == "typed_electricity":
+        out["format"] = _format_name(e.format)
+        out["message"] = _describe_electricity_bill(e, tz)
+    elif e.status == "ok" and e.format in (
         "gas_bills",
         "water_bills",
         "typed_gas",
@@ -554,12 +572,15 @@ def add_bill(
     is optional. Decimal commas are accepted. The bill goes through the same
     checks as a file, including kWh = m³ × Fc × PCS.
     """
-    if kind not in ("gas", "water"):
-        raise ValueError(f"kind must be 'gas' or 'water', not {kind!r}")
+    if kind not in ("gas", "water", "electricity"):
+        raise ValueError(f"kind must be 'gas', 'water' or 'electricity', not {kind!r}")
 
     def num(key: str) -> str:
         v = str(bill.get(key) or "").strip().replace(",", ".")
         return v
+
+    if kind == "electricity":
+        return _add_electricity_bill(file_id, bill, num, timezone_name)
 
     record = {
         "inicio": bill.get("start", ""),
@@ -606,6 +627,165 @@ def add_bill(
         entry = FileEntry(name, csv, "ok", format=f"typed_{kind}", series=list(series))
     SESSION[file_id] = entry
     return _summary(file_id, entry, timezone_name)
+
+
+def _add_electricity_bill(
+    file_id: str, bill: dict[str, Any], num, tz: str
+) -> dict[str, Any]:
+    """An electricity bill: the kWh billed over its period and, if given, the
+    amount. It does not replace the hourly electricity the fit needs; it
+    tells what the electricity really cost (the bill panel) and lets the
+    hourly record be checked against the bill."""
+    zone = ZoneInfo(tz)
+    name = _t("electricity_bill_title")
+    try:
+        start = datetime.fromisoformat(bill.get("start", "")).replace(tzinfo=zone)
+        end = datetime.fromisoformat(bill.get("end", "")).replace(tzinfo=zone)
+        kwh = float(num("kwh"))
+        eur = float(num("eur")) if num("eur") else None
+        if end <= start:
+            raise ValueError(
+                _t("check_field", field=_t("field_fin"), detail="end before start")
+            )
+        if not 1 <= kwh <= 20000:
+            raise ValueError(_t("check_field", field="kWh", detail=f"{kwh} kWh"))
+    except ValueError as exc:
+        text = str(exc)
+        entry = FileEntry(
+            name,
+            b"",
+            "error",
+            message=text,
+            problem=("bill_unreadable", {"detail": text}),
+        )
+        SESSION[file_id] = entry
+        return _summary(file_id, entry, tz)
+    t0, t1 = int(start.timestamp()), int(end.timestamp())
+    name = _t(
+        "typed_bill_name", what=name, first=f"{start:%d/%m/%Y}", last=f"{end:%d/%m/%Y}"
+    )
+    series = [
+        ingest.Series(
+            "electricity_billed",
+            "main",
+            "interval",
+            np.array([t0], dtype=np.int64),
+            np.array([t1], dtype=np.int64),
+            np.array([kwh * 3.6e6]),
+            np.array([False]),
+            source=name,
+        )
+    ]
+    if eur is not None:
+        series.append(
+            ingest.Series(
+                "electricity_cost",
+                "main",
+                "interval",
+                np.array([t0], dtype=np.int64),
+                np.array([t1], dtype=np.int64),
+                np.array([eur]),
+                np.array([False]),
+                source=name,
+            )
+        )
+    entry = FileEntry(name, b"", "ok", format="typed_electricity", series=series)
+    SESSION[file_id] = entry
+    return _summary(file_id, entry, tz)
+
+
+def read_invoice(pages: list, hint: str | None = None) -> dict[str, Any]:
+    """The fields of a bill, from the words on its pages (each page a list of
+    ``{text, x, y, w, h, conf}``), with a sentence saying what was read and
+    the form the page should prefill. Nothing is added to the session."""
+    words = [
+        [
+            ingest.Word(
+                str(w.get("text", "")),
+                float(w.get("x", 0)),
+                float(w.get("y", 0)),
+                float(w.get("w", 0)),
+                float(w.get("h", 0)),
+                float(w.get("conf", 1.0)),
+            )
+            for w in page
+            if str(w.get("text", "")).strip()
+        ]
+        for page in pages
+    ]
+    inv = ingest.read_invoice(words, hint)
+    out = inv.as_dict()
+    fields = {
+        k: v["value"]
+        for k, v in out.items()
+        if isinstance(v, dict) and v and "value" in v
+    }
+    read_any = any(k in fields for k in ("kwh", "m3", "eur", "start"))
+    kind = (
+        inv.kind
+        if inv.kind != "unknown"
+        else (
+            "gas"
+            if "m3" in fields and "kwh" in fields
+            else "water"
+            if "m3" in fields
+            else "electricity"
+        )
+    )
+    form = {
+        "start": fields.get("start", ""),
+        "end": fields.get("end", ""),
+        "kwh": _plain(fields.get("kwh")),
+        "m3": _plain(fields.get("m3")),
+        "fc": _plain(fields.get("fc")),
+        "pcs": _plain(fields.get("pcs")),
+        "eur": _plain(fields.get("eur")),
+    }
+    period = (
+        _t("inv_period", first=_readable(fields["start"]), last=_readable(fields["end"]))
+        if "start" in fields and "end" in fields
+        else ""
+    )
+    amounts = []
+    if "kwh" in fields:
+        amounts.append(f"{_n(fields['kwh'])} kWh")
+    if "m3" in fields:
+        amounts.append(f"{_n(fields['m3'], 1)} m³")
+    if "eur" in fields:
+        amounts.append(f"{_n(fields['eur'], 2)} €")
+    sentence = (
+        _t(
+            "inv_read",
+            kind=_t(f"inv_kind_{inv.kind}"),
+            **{"from": _t("inv_from", supplier=inv.supplier) if inv.supplier else ""},
+            period=period,
+            amounts=(": " + ", ".join(amounts)) if amounts else "",
+        )
+        if read_any
+        else _t("inv_nothing")
+    )
+    notes = [_t(f"inv_{n}") for n in inv.notes if f"inv_{n}" in _TEXT_KEYS]
+    return {
+        "ok": read_any,
+        "kind": kind,
+        "fields": out,
+        "form": form,
+        "sentence": sentence,
+        "notes": notes,
+    }
+
+
+def _plain(v) -> str:
+    if v is None:
+        return ""
+    return str(int(v)) if float(v) == int(v) else str(round(float(v), 4))
+
+
+def _readable(d: str) -> str:
+    try:
+        return f"{date.fromisoformat(d):%d/%m/%Y}"
+    except ValueError:
+        return d
 
 
 def remove_file(file_id: str) -> dict[str, Any]:
@@ -1131,8 +1311,11 @@ def load_samples(sample: str = "electric") -> dict[str, Any]:
     files = []
     for i, name in enumerate(names):
         out = read_file(f"sample-{i}", Path(name).name, (SAMPLES / name).read_bytes(), tz)
-        if "termometro" in name and out["status"] == "needs_mapping":
-            out = map_file(out["id"], out["mapping"]["guess"], tz)  # it is a thermometer
+        if out["status"] == "needs_mapping" and (
+            "termometro" in name or out["mapping"].get("confident")
+        ):
+            # a thermometer's or a weather station's log: read with the guess
+            out = map_file(out["id"], out["mapping"]["guess"], tz)
         files.append(out)
     truth_path = SAMPLES / Path(home).parent / "truth.json"
     EXAMPLE.clear()
@@ -1142,6 +1325,12 @@ def load_samples(sample: str = "electric") -> dict[str, Any]:
         made_for=_answers_key(HomeDescription.from_answers(answers)),
     )
     return {"answers": answers, "files": files, "label": label}
+
+
+def _given(desc: HomeDescription) -> list[str]:
+    """The parameters the householder knows, kept as given and never fitted:
+    the heating's power when it was read off the nameplate."""
+    return ["heating.thermostat.power"] if desc.heating_kw is not None else []
 
 
 def _answers_key(desc: HomeDescription) -> tuple:
@@ -1233,11 +1422,6 @@ def prepare_example(answers: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def sample_sets() -> dict[str, Any]:
-    """The example homes the page offers."""
-    return {"samples": [{"id": k, "label": v[0]} for k, v in SAMPLE_SETS.items()]}
-
-
 # ---------------------------------------------------------------- step 3
 
 
@@ -1270,7 +1454,7 @@ def calibrate_home(answers: dict[str, Any], period: str | int = "all") -> dict[s
         )
     twin = build_twin(desc, backend=BACKEND, with_heating=heating, with_cooling=cooling)
     try:
-        result = calibrate(twin, data)
+        result = calibrate(twin, data, given=_given(desc))
     except NotEnoughData as exc:
         return {"ok": False, "message": str(exc)}
     tz = ZoneInfo(desc.timezone)
@@ -1573,12 +1757,12 @@ def _water_report(desc: HomeDescription, data) -> dict[str, Any] | None:
 
 #: How well a home keeps the heat, as the energy certificate's letters: the
 #: envelope's and the ventilation's conductance per m² of floor, W/K·m².
-#: Provisional thresholds (WORKFLOW.md §8): a scale people know, not the
+#: Provisional thresholds (ARCHITECTURE.md, "The grade"): a scale people know, not the
 #: official certificate, which the page says.
 LETTERS = ((0.8, "A"), (1.2, "B"), (1.7, "C"), (2.3, "D"), (3.0, "E"), (3.8, "F"))
 #: Typical all-in prices (energy, standing charges, taxes), € per kWh, used
 #: when a bill gives no amount: electricity on a regulated tariff, gas TUR.
-PRICES = {"electricity": 0.17, "gas": 0.075}
+PRICES = {"electricity": 0.17, "gas": 0.075, "water": 2.0}  # water: € per m³, all in
 #: Envelope area per m² of floor, for "insulate the walls": a flat's facades,
 #: a house's walls and roof.
 _ENVELOPE_PER_M2 = {"flat": 0.9, "terraced": 2.0, "detached": 3.0}
@@ -1593,6 +1777,54 @@ def set_language(lang: str) -> dict[str, Any]:
         raise ValueError(f"lang must be 'en' or 'es', not {lang!r}")
     LANG = lang
     return {"lang": LANG}
+
+
+#: The demo homes a householder may start from, inside "My home": the
+#: sample set, and a name in each language.
+DEMO_HOMES = {
+    "gas_winter": {
+        "en": "Demo: gas flat in Madrid",
+        "es": "Demo: piso con gas en Madrid",
+    },
+    "electric": {
+        "en": "Demo: all-electric flat in Madrid",
+        "es": "Demo: piso todo eléctrico en Madrid",
+    },
+}
+_KIND_BY_NAME = (
+    ("consumo", "electricity"),
+    ("factura_gas", "gas"),
+    ("factura_agua", "water"),
+    ("termometro", "thermometer"),
+    ("meteo", "weather"),
+    ("open_meteo", "weather"),
+)
+
+
+def demo_home(key: str) -> dict[str, Any]:
+    """A demo home to start from: its answers and its files (bytes, base64),
+    each with the kind of data it holds, so the page adds them to a home of
+    the householder's like files of their own. The bills are the demo
+    home's own, simulated from the same answers, so a model built on them
+    is exactly the demo home."""
+    import base64
+
+    if key not in DEMO_HOMES:
+        raise KeyError(f"no demo home {key!r}; demos: {list(DEMO_HOMES)}")
+    label, home, names = SAMPLE_SETS[key]
+    answers = json.loads((SAMPLES / home).read_text())
+    files = []
+    for name in names:
+        path = SAMPLES / name
+        kind = next((k for word, k in _KIND_BY_NAME if word in path.name), "electricity")
+        files.append(
+            {
+                "name": path.name,
+                "kind": kind,
+                "data": base64.b64encode(path.read_bytes()).decode("ascii"),
+            }
+        )
+    return {"key": key, "name": DEMO_HOMES[key][LANG], "answers": answers, "files": files}
 
 
 def files(timezone_name: str = "Europe/Madrid") -> dict[str, Any]:
@@ -1638,6 +1870,161 @@ def _by_use(twin, kwh_by_output: dict[str, float]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda r: -r["kwh"])
 
 
+#: The model's outputs the drawing of the house is made from: the heat the
+#: zone loses to the outside (envelope and ventilation together, radiation to
+#: the sky included), the part of it that is radiation, the part that is
+#: ventilation, and the heat the heating machine put into the rooms.
+_FLOW_OUTPUTS = (
+    "zone.heat_loss",
+    "zone.radiation_loss",
+    "zone.ventilation.heat_flow",
+    "heating.heat",
+)
+
+
+def _gain_outputs(twin) -> list[str]:
+    """The other heat generated in the rooms: people (present half the time
+    on average), appliances, the hob, the always-on load and the water
+    heater's standby loss; not the heating."""
+    names = []
+    for n in twin.model.output_names:
+        head, _, tail = n.rpartition(".")
+        if (
+            tail == "heat"
+            and "." not in head
+            and head not in ("heating", "water_heater", "zone")
+        ):
+            names.append(n)
+    if "water_heater.standby_loss" in twin.model.output_names:
+        names.append("water_heater.standby_loss")
+    return names
+
+
+def _flow_names(twin) -> list[str]:
+    return [n for n in _FLOW_OUTPUTS if n in twin.model.output_names] + _gain_outputs(
+        twin
+    )
+
+
+def _flows(
+    desc: HomeDescription,
+    uses: list[dict[str, Any]],
+    *,
+    kwh: dict[str, float],
+    delta_c: float,
+    hours: float,
+    water_m3: float | None,
+    loss_w_per_k: float,
+    heater_w: float | None,
+    period: dict[str, Any],
+    gas_exact: bool = False,
+    electricity_exact: bool = False,
+    water_eur: float | None = None,
+    to_hours: float | None = None,
+) -> dict[str, Any]:
+    """What flows into the home and out of it, for the drawing of the house.
+
+    In: electricity and gas (kWh, from ``uses``) and water (m³, the bill or
+    a typical household of this size). Made: the heat the heating machine
+    put into the rooms, and the other heat generated inside (people,
+    appliances, cooking, the always-on load, the water heater's standby).
+    Out: the heat the zone lost to the outside, as the model itself computed
+    it hour by hour (``zone.heat_loss``: transmission through the fabric,
+    radiation to the sky and ventilation), split into the fabric (radiation
+    included) and the air. In ISO 13790's terms the loss is Q_ht, the heat
+    made is Q_H,nd and the other heat is Q_gn: Q_ht = Q_H,nd + η·Q_gn, so the
+    loss is what leaves, not what was used to heat the home. ``kwh`` holds
+    the energy of each output in :data:`_FLOW_OUTPUTS` and of the gains,
+    over ``hours``; ``to_hours`` rescales every amount to that many hours
+    (a month of 30.4 days, say).
+    """
+    factor = 1.0 if to_hours is None else to_hours / max(hours, 1.0)
+    span = hours * factor
+    loss = kwh.get("zone.heat_loss", 0.0) * factor
+    air = kwh.get("zone.ventilation.heat_flow", 0.0) * factor
+    radiation = kwh.get("zone.radiation_loss", 0.0) * factor
+    heat = kwh["heating.heat"] * factor if "heating.heat" in kwh else None
+    gains = sum(v for n, v in kwh.items() if n not in _FLOW_OUTPUTS) * factor
+    if water_m3 is None:
+        water = TYPICAL_WATER_L_PER_PERSON * desc.people_count * span / 24.0 / 1000.0
+        water_typical = True
+    else:
+        water, water_typical = water_m3 * factor, False
+    by_use = [
+        {
+            **r,
+            "kwh": round(r["kwh"] * factor, 1),
+            "eur": round(r.get("eur", 0.0) * factor),
+        }
+        for r in uses
+    ]
+    # what the drawing shows: the energy spent on conditioning the rooms
+    # (heating in winter, cooling in summer), by fuel; the rest by fuel
+    conditioning = [
+        {"kind": r["use"], "fuel": r["fuel"], "kwh": round(r["kwh"]), "eur": r["eur"]}
+        for r in by_use
+        if r["use"] in ("heating", "cooling")
+    ]
+    by_fuel = {
+        fuel: [r for r in by_use if r["fuel"] == fuel]
+        for fuel in ("electricity", "gas")
+        if any(r["fuel"] == fuel for r in by_use)
+    }
+    water_cost = water * PRICES["water"] if water_eur is None else water_eur * factor
+    bill = {
+        "electricity": {
+            "kwh": round(sum(r["kwh"] for r in by_fuel.get("electricity", []))),
+            "eur": round(sum(r["eur"] for r in by_fuel.get("electricity", []))),
+            "exact": electricity_exact,
+        },
+        "gas": {
+            "kwh": round(sum(r["kwh"] for r in by_fuel["gas"])),
+            "eur": round(sum(r["eur"] for r in by_fuel["gas"])),
+            "exact": gas_exact,
+        }
+        if "gas" in by_fuel
+        else None,
+        "water": {
+            "m3": round(water, 1),
+            "eur": round(water_cost),
+            "exact": water_eur is not None,
+        },
+    }
+    bill["total_eur"] = sum(
+        part["eur"] for part in bill.values() if isinstance(part, dict)
+    )
+    return {
+        "period": period,
+        "conditioning": conditioning,
+        "by_fuel": by_fuel,
+        "bill": bill,
+        "hours": round(span),
+        "electricity_kwh": round(
+            sum(r["kwh"] for r in by_use if r["fuel"] == "electricity")
+        ),
+        "gas_kwh": round(sum(r["kwh"] for r in by_use if r["fuel"] == "gas")),
+        "water_m3": round(water, 1),
+        "water_typical": water_typical,
+        "heat_kwh": None if heat is None else round(heat),
+        "gains_kwh": round(gains),
+        "loss_kwh": round(loss),
+        "loss_fabric_kwh": round(loss - air),
+        "loss_radiation_kwh": round(radiation),
+        "loss_air_kwh": round(air),
+        # the loss as a rate: the conductance to the outside (fabric and air,
+        # W per °C) and the mean power over the period
+        "loss_w_per_k": round(loss_w_per_k),
+        "loss_kw": round(loss / max(span, 1.0), 2),
+        "heater_kw": None if heater_w is None else round(heater_w / 1000.0, 1),
+        "heater_given": desc.heating_kw is not None,
+        "delta_c": round(delta_c, 1),
+        "heater": desc.heating,
+        "water_heater": desc.water,
+        "cooking": desc.cooking,
+        "by_use": by_use,
+    }
+
+
 def _header(desc: HomeDescription) -> str:
     province = next(p.label for p in PROVINCES if p.value == desc.province)
     return " · ".join(
@@ -1661,10 +2048,13 @@ def _estimate(desc: HomeDescription) -> dict[str, Any]:
     spin, hours, sub = 7 * 24, 31 * 24, 4
     t = np.arange((spin + hours) * sub + 1) * (3600.0 / sub)
     weather = winter_weather(mean_c=p.january_c, seed=0)
+    outdoor = 273.15 + weather(t - spin * 3600.0)
+    flow_names = _flow_names(twin)
     run = twin.simulate(
         t,
         start=start - timedelta(hours=spin),
-        outdoor=273.15 + weather(t - spin * 3600.0),
+        outdoor=outdoor,
+        track=flow_names,
     )
     window = (spin * 3600.0, float(t[-1]))
     kwh = {
@@ -1676,7 +2066,26 @@ def _estimate(desc: HomeDescription) -> dict[str, Any]:
         r["eur"] = round(r["kwh"] * PRICES[r["fuel"]], 0)
     total = sum(r["eur"] for r in uses)
     heating = sum(r["eur"] for r in uses if r["use"] == "heating")
+    inside = t >= window[0]
+    flows = _flows(
+        desc,
+        uses,
+        kwh={n: run.energy_j(n, between=window) / 3.6e6 for n in flow_names},
+        delta_c=float(np.mean(run.indoor_temperature[inside] - outdoor[inside])),
+        hours=hours,
+        water_m3=None,
+        loss_w_per_k=desc.envelope_ua + desc.ventilation_ua,
+        heater_w=twin.model.parameters.get("heating.thermostat.power"),
+        period={
+            "label": MONTHS[LANG][0],
+            "periods": 1,
+            "outdoor_c": round(p.january_c, 1),
+            "indoor_c": round(float(np.mean(run.indoor_temperature[inside])) - 273.15, 1),
+            "typical": True,
+        },
+    )
     return {
+        "flows": flows,
         "month": MONTHS[LANG][0],
         "january_c": p.january_c,
         "province": p.label,
@@ -1716,7 +2125,7 @@ def _kind_of(e: FileEntry) -> str:
         return "other"
     qs = {s.quantity for s in e.series}
     for kind, names in (
-        ("electricity", {"electricity_import"}),
+        ("electricity", {"electricity_import", "electricity_billed"}),
         ("gas", {"gas_volume", "gas_energy"}),
         ("water", {"water_volume"}),
         ("thermometer", {"indoor_temperature"}),
@@ -1822,8 +2231,75 @@ def cards(answers: dict[str, Any], timezone_name: str | None = None) -> dict[str
         "problem": problem,
         "periods": periods_info,
         "next": _next_step(desc, out, periods_info),
+        "warnings": _plausibility(desc, elec),
         "example": EXAMPLE.get("key"),
     }
+
+
+#: The first estimate by answers, kept so the cards can compare the bills
+#: with it without simulating again each time.
+_ESTIMATE_CACHE: dict[tuple, dict[str, Any]] = {}
+
+
+def _typical_per_day(desc: HomeDescription) -> dict[str, float]:
+    """A typical January's kWh a day by fuel, for a home as described."""
+    key = (_answers_key(desc), LANG)
+    if key not in _ESTIMATE_CACHE:
+        _ESTIMATE_CACHE.clear()
+        _ESTIMATE_CACHE[key] = _estimate(desc)
+    est = _ESTIMATE_CACHE[key]
+    return {
+        "electricity": est["electricity_kwh"] / 31.0,
+        "gas": est["gas_kwh"] / 31.0,
+    }
+
+
+def _plausibility(desc: HomeDescription, elec) -> list[dict[str, Any]]:
+    """Do the bills look like this home's? A gas bill or an electricity record
+    far from what a home as described would use (less than a third, or
+    more than three times, a typical January's) is most likely another
+    home's bill, or the answers do not describe this home. A warning the
+    page shows before anyone trusts a fit on them."""
+    typical = _typical_per_day(desc)
+    warnings = []
+    gas_bills = _bills("gas")
+    if gas_bills and typical["gas"] > 0:
+        kwh = sum(b.kwh for b in gas_bills if b.kwh is not None)
+        days = sum(b.days for b in gas_bills if b.kwh is not None)
+        if days > 0:
+            per_day = kwh / days
+            if per_day > 3.0 * typical["gas"] or per_day < typical["gas"] / 3.0:
+                warnings.append(
+                    {
+                        "kind": "gas",
+                        "text": _t(
+                            "gas_implausible",
+                            bill=_n(per_day, 1),
+                            typical=_n(typical["gas"], 1),
+                        ),
+                    }
+                )
+    elif gas_bills and typical["gas"] == 0:
+        warnings.append({"kind": "gas", "text": _t("gas_but_no_gas")})
+    if elec is not None and len(elec):
+        days = (int(elec.end[-1]) - int(elec.start[0])) / 86400.0
+        if days >= 7:
+            per_day = float(elec.values_in("kWh").sum()) / days
+            if (
+                per_day > 3.0 * typical["electricity"]
+                or per_day < typical["electricity"] / 3.0
+            ):
+                warnings.append(
+                    {
+                        "kind": "electricity",
+                        "text": _t(
+                            "elec_implausible",
+                            record=_n(per_day, 1),
+                            typical=_n(typical["electricity"], 1),
+                        ),
+                    }
+                )
+    return warnings
 
 
 def _next_step(desc: HomeDescription, out: list[dict], periods: list) -> str:
@@ -1851,6 +2327,53 @@ def _next_step(desc: HomeDescription, out: list[dict], periods: list) -> str:
 # ------------------------------------------------------------ the analysis
 
 
+#: Fitted parameters whose uncertainty widens or narrows the energy the home
+#: uses: the conductances (more loss, more heating) and the always-on load.
+#: Moving them together by their own uncertainty, up and then down, gives the
+#: band the page draws around the twin: not a full statistical interval, but
+#: what the fit itself says it may be off by.
+_BAND_ROLES = (".envelope.conductance", ".ventilation.conductance", "base.power")
+_DEFAULT_UNCERTAINTY = 0.10
+
+
+def _band_overrides(
+    values: dict[str, float], uncertainty: dict[str, float], sign: float
+) -> dict[str, float]:
+    out = {}
+    for name, v in values.items():
+        if any(name.endswith(r) or name == r for r in _BAND_ROLES):
+            u = uncertainty.get(name)
+            u = (
+                _DEFAULT_UNCERTAINTY
+                if u is None or not np.isfinite(u)
+                else min(float(u), 0.5)
+            )
+            out[name] = float(v) * (1.0 + sign * u)
+    return out
+
+
+def _hourly_band(result, data) -> tuple[np.ndarray, np.ndarray] | None:
+    """The twin's hourly electricity with its measured parameters moved by
+    their uncertainty, both ways: ``(low, high)`` kWh per hour."""
+    try:
+        runs = []
+        for sign in (-1.0, 1.0):
+            twin = replace(
+                result.twin,
+                model=result.twin.model.with_parameters(
+                    _band_overrides(result.values, result.uncertainty, sign)
+                ),
+            )
+            meter = HourlyMeter(twin, data, substeps=auto_substeps(data))
+            elec, _, _ = meter.readings()
+            runs.append(np.asarray(elec, dtype=float))
+        lo = np.minimum(runs[0], runs[1])
+        hi = np.maximum(runs[0], runs[1])
+        return lo, hi
+    except Exception:  # noqa: BLE001  (a band is an extra; the fit stands without it)
+        return None
+
+
 def analyse(answers: dict[str, Any]) -> dict[str, Any]:
     """Get to know the home from everything in the session; the dashboard."""
     t_start = time.perf_counter()
@@ -1867,7 +2390,7 @@ def analyse(answers: dict[str, Any]) -> dict[str, Any]:
         desc, backend=BACKEND, with_heating=mean_out < 18.0, with_cooling=mean_out >= 18.0
     )
     try:
-        result = calibrate(twin, data)
+        result = calibrate(twin, data, given=_given(desc))
     except NotEnoughData as exc:
         return {"ok": False, "message": str(exc)}
     CACHE.clear()
@@ -1880,6 +2403,7 @@ def analyse(answers: dict[str, Any]) -> dict[str, Any]:
         example_changed=bool(example.get("changed")),
         whatif=_what_ifs(desc, result, data),
         trust=None,
+        band=_hourly_band(result, data),
         seconds=round(time.perf_counter() - t_start, 1),
     )
     return report()
@@ -2088,6 +2612,62 @@ def _confidence(result, findings: list[dict[str, Any]]) -> tuple[str, str]:
     return code, _t("conf_more", poor=_list(poor) or _t("nothing_yet"), sources=sources)
 
 
+class _AdoptedFit:
+    """A fit taken as given (a demo home's, baked at build time): what the
+    forecast needs of a calibration, without fitting."""
+
+    def __init__(
+        self, twin, values: dict[str, float], given: dict[str, float], uncertainty=None
+    ) -> None:
+        self.twin = twin
+        self.values = dict(values)
+        self.given = dict(given)
+        self.uncertainty = dict(uncertainty or {})
+
+
+def adopt_fit(answers: dict[str, Any], fit: dict[str, Any]) -> dict[str, Any]:
+    """Take a fit as given: ``fit`` has ``values`` and ``given`` (parameters
+    by name) and ``periods`` (``[[start, end], ...]``, UTC seconds). The
+    forecast can then run on it as if it had just been fitted here."""
+    desc = HomeDescription.from_answers(answers)
+    twin = build_twin(desc, backend=BACKEND, with_cooling=False)
+    params = twin.model.parameters
+    values = {k: float(v) for k, v in fit.get("values", {}).items() if k in params}
+    given = {k: float(v) for k, v in fit.get("given", {}).items() if k in params}
+    twin.model.set_parameters({**values, **given})
+    CACHE.clear()
+    CACHE.update(
+        desc=desc,
+        result=_AdoptedFit(twin, values, given, fit.get("uncertainty")),
+        data=None,
+        gas_used=False,
+        periods=[Period(int(a), int(b)) for a, b in fit.get("periods", [])],
+        example_changed=False,
+        whatif=[],
+        trust=None,
+        seconds=0.0,
+        adopted=True,
+    )
+    return {"ok": True, "parameters": len(values) + len(given)}
+
+
+def fit_summary() -> dict[str, Any]:
+    """The last fit's parameters and periods, to bake beside a demo's report."""
+    if not CACHE:
+        return {}
+    r = CACHE["result"]
+    return {
+        "values": {k: float(v) for k, v in r.values.items()},
+        "given": {k: float(v) for k, v in r.given.items()},
+        "uncertainty": {
+            k: float(v)
+            for k, v in getattr(r, "uncertainty", {}).items()
+            if np.isfinite(v)
+        },
+        "periods": [[p.start, p.end] for p in CACHE["periods"]],
+    }
+
+
 def report() -> dict[str, Any]:
     """The dashboard from the last analysis, in the session's language (no
     fitting: changing the language is instant)."""
@@ -2107,21 +2687,55 @@ def report() -> dict[str, Any]:
     # energy by use, over everything analysed
     meter = HourlyMeter(twin, data, substeps=auto_substeps(data))
     outs = list(twin.electric_outputs) + list(twin.gas_outputs)
-    hourly = meter.hourly(outs)
-    uses = _by_use(twin, {n: float(v.sum()) / 1000.0 for n, v in hourly.items()})
+    flow_names = _flow_names(twin)
+    hourly = meter.hourly(outs + flow_names)
+    uses = _by_use(twin, {n: float(hourly[n].sum()) / 1000.0 for n in outs})
     gas_bills = [b for b in _bills("gas") if _bill_in(data, b)]
     gas_price = PRICES["gas"]
     amounts = _gas_amounts(gas_bills)
     if amounts:
         gas_price = amounts[0] / max(amounts[1], 1.0)
+    elec_price = PRICES["electricity"]
+    elec_amounts = _electricity_amounts(data)
+    if elec_amounts:
+        elec_price = elec_amounts[0] / max(elec_amounts[1], 1.0)
     for r in uses:
-        r["eur"] = round(
-            r["kwh"] * (gas_price if r["fuel"] == "gas" else PRICES["electricity"]), 0
-        )
+        r["eur"] = round(r["kwh"] * (gas_price if r["fuel"] == "gas" else elec_price), 0)
     total = sum(r["eur"] for r in uses)
     days = data.hours / 24.0
     heat = _heating_report(desc, result, data)
     gas_report = _gas_report(desc, result, data, CACHE["gas_used"])
+    water_report = _water_report(desc, data)
+    water_bills = [b for b in _bills("water") if _bill_in(data, b)] or _bills("water")[
+        -1:
+    ]
+    indoor = (
+        result.predicted_indoor_c
+        if result.predicted_indoor_c.size == data.outdoor_c.size
+        else np.full(data.outdoor_c.shape, desc.setpoint_c - 1.0)
+    )
+    flows = _flows(
+        desc,
+        uses,
+        kwh={n: float(hourly[n].sum()) / 1000.0 for n in flow_names},
+        delta_c=float(np.nanmean(indoor - data.outdoor_c)),
+        hours=data.hours,
+        water_m3=water_report["m3"] * data.hours / 24.0 / water_report["days"]
+        if water_report
+        else None,
+        loss_w_per_k=params[f"{zone}.envelope.conductance"]
+        + params.get(f"{zone}.ventilation.conductance", 0.0),
+        heater_w=params.get("heating.thermostat.power"),
+        period=_period_summary(CACHE["periods"], desc.timezone, data.outdoor_c, indoor),
+        gas_exact=bool(amounts),
+        electricity_exact=bool(elec_amounts),
+        water_eur=(
+            _water_amounts(water_bills) * data.hours / 24.0 / water_report["days"]
+            if water_report and _water_amounts(water_bills) is not None
+            else None
+        ),
+        to_hours=30.4 * 24.0,
+    )
     stamps = data.timestamps()
     by_period = []
     for (i, j, _), p in zip(data.spans, CACHE["periods"], strict=True):
@@ -2152,7 +2766,9 @@ def report() -> dict[str, Any]:
         ),
         None,
     )
-    if machine is None or machine["value"] is None:
+    if "heating.thermostat.power" in result.given:
+        boiler = "given"
+    elif machine is None or machine["value"] is None:
         boiler = "unknown"
     elif not machine["counted"]:
         boiler = "bigger_than_needed"
@@ -2194,7 +2810,8 @@ def report() -> dict[str, Any]:
             "eur_per_month": round(total / days * 30.4, 0),
             "by_use": uses,
             "gas_price": round(gas_price, 3),
-            "from_bills": bool(amounts),
+            "electricity_price": round(elec_price, 3),
+            "from_bills": bool(amounts) or bool(elec_amounts),
         },
         "heating_share": round(
             sum(r["eur"] for r in uses if r["use"] == "heating") / total, 3
@@ -2206,14 +2823,19 @@ def report() -> dict[str, Any]:
         else None,
         "keeps_warm_verdict": keeps["verdict"] if keeps else None,
         "boiler": boiler,
-        "boiler_kw": machine["value"] if machine else None,
+        "boiler_kw": result.given["heating.thermostat.power"] / 1000.0
+        if boiler == "given"
+        else machine["value"]
+        if machine
+        else None,
         "heating": heat["sentences"] if heat else [],
         "running": round(float(np.mean(heat["duty"])), 3)
         if heat and heat["duty"] is not None
         else None,
         "findings": findings,
         "gas": gas_report,
-        "water": _water_report(desc, data),
+        "water": water_report,
+        "flows": flows,
         "periods": by_period,
         "whatif": whatif,
         "whatif_basis": basis,
@@ -2234,19 +2856,81 @@ def report() -> dict[str, Any]:
 
 
 def _daily(result, stamps, i: int, j: int, tz) -> list[dict[str, Any]]:
-    """Electricity day by day over one period: the meter and the model."""
+    """Electricity day by day over one period: the meter, the model, and the
+    model's band (its measured parameters moved by their uncertainty)."""
+    band = CACHE.get("band")
     days: dict[str, list[float]] = {}
     for k in range(i, j):
         key = f"{datetime.fromtimestamp(int(stamps[k]), tz):%Y-%m-%d}"
         m, p = result.measured_kwh[k], result.predicted_kwh[k]
-        acc = days.setdefault(key, [0.0, 0.0])
+        acc = days.setdefault(key, [0.0, 0.0, 0.0, 0.0])
         if np.isfinite(m):
             acc[0] += float(m)
             acc[1] += float(p)
+            if band is not None:
+                acc[2] += float(band[0][k])
+                acc[3] += float(band[1][k])
     return [
-        {"day": d, "measured": round(v[0], 3), "twin": round(v[1], 3)}
+        {
+            "day": d,
+            "measured": round(v[0], 3),
+            "twin": round(v[1], 3),
+            **({"lo": round(v[2], 3), "hi": round(v[3], 3)} if band is not None else {}),
+        }
         for d, v in days.items()
     ]
+
+
+def _period_summary(periods: list, tz: str, outdoor_c, indoor_c) -> dict[str, Any]:
+    """The months analysed, as the drawing labels them ("Dec–Jan"; several
+    periods are averaged), with the mean outdoor and indoor temperatures."""
+    zone = ZoneInfo(tz)
+    first = datetime.fromtimestamp(periods[0].start, zone)
+    last = datetime.fromtimestamp(periods[-1].end - 1, zone)
+    months = MONTHS[LANG]
+    label = (
+        months[first.month - 1]
+        if (first.year, first.month) == (last.year, last.month)
+        else f"{months[first.month - 1]}–{months[last.month - 1]}"
+    )
+    return {
+        "label": label,
+        "periods": len(periods),
+        "outdoor_c": round(float(np.nanmean(outdoor_c)), 1),
+        "indoor_c": round(float(np.nanmean(indoor_c)), 1),
+        "typical": False,
+    }
+
+
+def _electricity_amounts(data) -> tuple[float, float] | None:
+    """(€, kWh) over the electricity bills that overlap the record, or None."""
+    spans = _utc_spans(data)
+    eur = kwh = 0.0
+    for e in SESSION.values():
+        if e.status != "ok" or e.format != "typed_electricity":
+            continue
+        energy = next(s for s in e.series if s.quantity == "electricity_billed")
+        cost = next((s for s in e.series if s.quantity == "electricity_cost"), None)
+        if cost is None:
+            continue
+        a, b = int(energy.start[0]), int(energy.end[0])
+        if any(a < t1 and b > t0 for t0, t1 in spans):
+            eur += float(cost.value[0])
+            kwh += float(energy.values_in("kWh")[0])
+    return (eur, kwh) if eur > 0 and kwh > 0 else None
+
+
+def _water_amounts(bills: list[Bill]) -> float | None:
+    """€ over the water bills whose amount is known, or None."""
+    eur = 0.0
+    for e in SESSION.values():
+        if e.status != "ok":
+            continue
+        for c in (x for x in e.series if x.quantity == "water_cost"):
+            for a, b, v in zip(c.start, c.end, c.value, strict=True):
+                if any(int(a) == x.start and int(b) == x.end for x in bills):
+                    eur += float(v)
+    return eur if eur > 0 else None
 
 
 def _gas_amounts(bills: list[Bill]) -> tuple[float, float] | None:
@@ -2270,6 +2954,186 @@ def _gas_amounts(bills: list[Bill]) -> tuple[float, float] | None:
     return (eur, kwh) if eur > 0 and kwh > 0 else None
 
 
+# ------------------------------------------------------------ the next twelve months
+
+#: What a simulation may change on top of the answers: how much insulating
+#: the walls, or the walls and the windows, cuts the envelope's loss.
+INSULATION_FACTOR = {"as_is": 1.0, "walls": 0.75, "walls_windows": 0.55}
+_MONTH_DAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+
+
+def _seen_months(tz: str) -> set[int]:
+    """The months (1-12) the fitted record covers for at least a week."""
+    seen: set[int] = set()
+    zone = ZoneInfo(tz)
+    for p in CACHE.get("periods", []):
+        t = p.start
+        while t < p.end:
+            d = datetime.fromtimestamp(t, zone)
+            month_end = datetime(
+                d.year + (d.month == 12), d.month % 12 + 1, 1, tzinfo=zone
+            )
+            covered = min(p.end, int(month_end.timestamp())) - t
+            if covered >= 7 * 86400:
+                seen.add(d.month)
+            t = int(month_end.timestamp())
+    return seen
+
+
+def forecast(
+    answers: dict[str, Any],
+    changes: dict[str, Any] | None = None,
+    prices: dict[str, float] | None = None,
+    year: int = 2026,
+) -> dict[str, Any]:
+    """The next twelve months of the home, month by month, on an average
+    year's weather, from the fitted model.
+
+    ``changes`` are answers to replace (another heating system, a different
+    thermostat, air conditioning…) plus ``insulation`` (``as_is``, ``walls``
+    or ``walls_windows``). What the fit measured is kept wherever the
+    scenario keeps the same thing: the envelope (scaled by the insulation
+    chosen), what the home stores, the always-on load; a heating system
+    that changed takes its own typical or nameplate size. ``prices`` are
+    € per kWh of electricity and gas; the bills' own by default.
+    """
+    if not CACHE:
+        return {"ok": False, "message": "no model yet"}
+    base = CACHE["desc"]
+    result = CACHE["result"]
+    changes = dict(changes or {})
+    insulation = changes.pop("insulation", "as_is")
+    if insulation not in INSULATION_FACTOR:
+        raise ValueError(f"insulation must be one of {list(INSULATION_FACTOR)}")
+    desc = HomeDescription.from_answers({**answers, **changes})
+    twin = build_twin(
+        desc, backend=BACKEND, with_heating=True, with_cooling=desc.cooling == "yes"
+    )
+    zone = twin.zone.name
+    params = twin.model.parameters
+    fitted = {**result.values, **result.given}
+    overrides: dict[str, float] = {}
+    for name, value in fitted.items():
+        if (
+            name not in params
+            or name.startswith("cooling.")
+            or name == "thermometer.offset"
+        ):
+            continue
+        if name.startswith("heating.") and desc.heating != base.heating:
+            continue  # another machine: its own size
+        overrides[name] = float(value)
+    ratio = desc.area / base.area  # a bigger home in the scenario: in proportion
+    for name in list(overrides):
+        if name.startswith(f"{zone}.") and ratio != 1.0:
+            overrides[name] *= ratio
+    key = f"{zone}.envelope.conductance"
+    if key in overrides:
+        overrides[key] *= INSULATION_FACTOR[insulation]
+    twin.model.set_parameters(overrides)
+    uncertainty = getattr(result, "uncertainty", {}) or {}
+    band_overrides = [
+        {
+            **overrides,
+            **_band_overrides({k: overrides[k] for k in overrides}, uncertainty, sign),
+        }
+        for sign in (-1.0, 1.0)
+    ]
+
+    start, outdoor_c = typical_year(desc.province, year)
+    hours = outdoor_c.size
+    sub = 2
+    prefix = 14 * 24  # two weeks of January replayed before it, so the home starts warm
+    full = np.concatenate([outdoor_c[:prefix], outdoor_c])
+    n = full.size
+    t = np.arange(n * sub + 1) * (3600.0 / sub)
+    mid = (t[:-1] + t[1:]) / 2 / 3600.0
+    outdoor = np.append(np.interp(mid, np.arange(n, dtype=float), full), full[-1])
+    start_utc = start.astimezone(timezone.utc) - timedelta(hours=prefix)
+    outs = list(twin.electric_outputs) + list(twin.gas_outputs)
+
+    def year_of(model_twin):
+        run = model_twin.simulate(t, start=start_utc, outdoor=outdoor + 273.15)
+        return {
+            o: run.step_mean[o].reshape(n, sub).mean(axis=1)[prefix:] / 1000.0
+            for o in outs
+        }
+
+    hourly = year_of(twin)  # kWh per hour
+    band_hourly = [
+        year_of(replace(twin, model=twin.model.with_parameters(ov)))
+        for ov in band_overrides
+    ]
+
+    gas_price = PRICES["gas"]
+    elec_price = PRICES["electricity"]
+    data = CACHE.get("data")
+    if data is not None:
+        amounts = _gas_amounts([b for b in _bills("gas") if _bill_in(data, b)])
+        if amounts:
+            gas_price = amounts[0] / max(amounts[1], 1.0)
+        elec_amounts = _electricity_amounts(data)
+        if elec_amounts:
+            elec_price = elec_amounts[0] / max(elec_amounts[1], 1.0)
+    if prices:
+        gas_price = float(prices.get("gas", gas_price))
+        elec_price = float(prices.get("electricity", elec_price))
+
+    seen = _seen_months(desc.timezone)
+    zone_tz = ZoneInfo(desc.timezone)
+    stamps = [start + timedelta(hours=k) for k in range(hours)]
+    month_of = np.array([s.astimezone(zone_tz).month for s in stamps])
+    months = []
+    for m in range(1, 13):
+        sel = month_of == m
+        by_output = {o: float(v[sel].sum()) for o, v in hourly.items()}
+        uses = _by_use(twin, by_output)
+        elec = sum(r["kwh"] for r in uses if r["fuel"] == "electricity")
+        gas = sum(r["kwh"] for r in uses if r["fuel"] == "gas")
+        band_eur, band_kwh = [], []
+        for h in band_hourly:
+            e = sum(float(h[o][sel].sum()) for o in twin.electric_outputs)
+            g = sum(float(h[o][sel].sum()) for o in twin.gas_outputs)
+            band_kwh.append(e + g)
+            band_eur.append(e * elec_price + g * gas_price)
+        months.append(
+            {
+                "band_eur": [round(min(band_eur)), round(max(band_eur))],
+                "band_kwh": [round(min(band_kwh)), round(max(band_kwh))],
+                "month": m,
+                "label": MONTHS[LANG][m - 1],
+                "outdoor_c": round(float(outdoor_c[sel].mean()), 1),
+                "seen": m in seen,
+                "electricity_kwh": round(elec),
+                "gas_kwh": round(gas),
+                "eur_electricity": round(elec * elec_price),
+                "eur_gas": round(gas * gas_price),
+                "eur": round(elec * elec_price + gas * gas_price),
+                "by_use": {r["use"]: round(r["kwh"]) for r in uses},
+                "conditioning_kwh": round(
+                    sum(r["kwh"] for r in uses if r["use"] in ("heating", "cooling"))
+                ),
+            }
+        )
+    return {
+        "ok": True,
+        "months": months,
+        "totals": {
+            "electricity_kwh": round(sum(x["electricity_kwh"] for x in months)),
+            "gas_kwh": round(sum(x["gas_kwh"] for x in months)),
+            "eur": round(sum(x["eur"] for x in months)),
+            "eur_electricity": round(sum(x["eur_electricity"] for x in months)),
+            "eur_gas": round(sum(x["eur_gas"] for x in months)),
+        },
+        "prices": {"electricity": round(elec_price, 3), "gas": round(gas_price, 3)},
+        "seen": sorted(seen),
+        "year": year,
+        "insulation": insulation,
+        "heater": desc.heating,
+        "cooling": desc.cooling == "yes",
+    }
+
+
 # ------------------------------------------------------------ the hidden-month test
 
 
@@ -2288,7 +3152,7 @@ def trust_test(answers: dict[str, Any]) -> dict[str, Any]:
         train, *_ = _record(desc, list(range(held)))
         test, *_ = _record(desc, held)
         twin = build_twin(desc, backend=BACKEND, with_cooling=False)
-        result = calibrate(twin, train)
+        result = calibrate(twin, train, given=_given(desc))
     except (NotEnoughData, ValueError) as exc:
         CACHE["trust"] = {"status": "error", "message": str(exc)}
         return _trust_text()
@@ -2352,93 +3216,6 @@ def _trust_text() -> dict[str, Any] | None:
     return {**trust, "sentences": lines}
 
 
-# ---------------------------------------------------------------- the demo page
-
-
-def run_example() -> dict[str, Any]:
-    """The demo page's run: calibrate the sample month and answer five what-ifs."""
-    from scenarios import (
-        ElectricityTariff,
-        Insulation,
-        MoveAppliance,
-        OutdoorShift,
-        ScenarioStudy,
-        SetpointChange,
-        Tariff,
-        TariffChange,
-    )
-
-    timings: dict[str, int] = {}
-    t = time.perf_counter()
-    SESSION.clear()
-    answers = json.loads((SAMPLES / "home.json").read_text())
-    read_file(
-        "demo-elec",
-        "consumo_horario_enero_2026.csv",
-        (SAMPLES / "consumo_horario_enero_2026.csv").read_bytes(),
-    )
-    read_file(
-        "demo-weather",
-        "open_meteo_enero_2026.json",
-        (SAMPLES / "open_meteo_enero_2026.json").read_bytes(),
-    )
-    timings["read_files_ms"] = round((time.perf_counter() - t) * 1000)
-    t = time.perf_counter()
-    desc = HomeDescription.from_answers(answers)
-    data, *_ = _record(desc)
-    result = calibrate(build_twin(desc, backend=BACKEND, with_cooling=False), data)
-    timings["calibrate_ms"] = round((time.perf_counter() - t) * 1000)
-    t = time.perf_counter()
-    tariff = Tariff(
-        ElectricityTariff(
-            "2.0TD",
-            {"P1": 0.19, "P2": 0.12, "P3": 0.08},
-            power_kw=4.6,
-            power_eur_per_kw_day=0.0885,
-            meter_eur_per_day=0.0266,
-        )
-    )
-    flat = Tariff(
-        ElectricityTariff(
-            "Tarifa Plana",
-            0.135,
-            power_kw=4.6,
-            power_eur_per_kw_day=0.0885,
-            meter_eur_per_day=0.0266,
-        )
-    )
-    study = ScenarioStudy.from_calibration(result, data, tariff)
-    runs = study.run_all(
-        [
-            OutdoorShift(-3.0),
-            SetpointChange(-1.0),
-            MoveAppliance("dishwasher", from_hours=(21,), to_hours=(2,)),
-            Insulation(r_value=2.0, area_m2=40.0, envelope_area_m2=120.0),
-            TariffChange(flat),
-        ]
-    )
-    timings["scenarios_ms"] = round((time.perf_counter() - t) * 1000)
-    import otwin
-    import scipy
-
-    return {
-        "calibration": {
-            "verdict": result.verdict,
-            "headline": result.headline,
-            "findings": [f.line() for f in result.findings],
-        },
-        "scenarios": [{"name": r.name, "sentence": r.sentence} for r in runs],
-        "timings": timings,
-        "versions": (
-            f"Python {sys.version.split()[0]} on {sys.platform}, otwin "
-            f"{otwin.__version__}, NumPy {np.__version__}, SciPy {scipy.__version__}"
-            " — all inside this page."
-        ),
-    }
-
-
-# ---------------------------------------------------------------- the bridge
-
 PUBLIC = {
     "questions": questions,
     "assumptions": assumptions,
@@ -2447,8 +3224,11 @@ PUBLIC = {
     "remove_file": remove_file,
     "data_status": data_status,
     "load_samples": load_samples,
-    "sample_sets": sample_sets,
     "add_bill": add_bill,
+    "read_invoice": read_invoice,
+    "demo_home": demo_home,
+    "forecast": forecast,
+    "adopt_fit": adopt_fit,
     "prepare_example": prepare_example,
     "set_language": set_language,
     "files": files,
@@ -2459,7 +3239,6 @@ PUBLIC = {
     "trust_test": trust_test,
     "forget": forget,
     "calibrate_home": calibrate_home,
-    "run_example": run_example,
     "ping": lambda: {"status": "ok", "python": sys.version.split()[0]},
 }
 

@@ -6,11 +6,12 @@
 import { useEffect, useState } from "react";
 
 import { useT } from "../i18n";
-import { Block, Letter, Question } from "./bits";
+import { bandOf, Block, Lights, Question } from "./bits";
+import { House } from "./House";
 
 const PAGES = [
   ["ob_where", ["province", "home_type", "size", "built"]],
-  ["ob_heat", ["heating", "water", "cooking", "cooling"]],
+  ["ob_heat", ["heating", "heating_power", "water", "cooking", "cooling", "cooling_setpoint"]],
   ["ob_live", ["thermostat", "night", "people", "appliances"]],
 ];
 
@@ -50,9 +51,12 @@ export function Onboarding({ questions, answers, onSave, onCancel, fetchHome, sa
         <Summary home={home} t={t} n={n} />
       ) : (
         <form onSubmit={(e) => e.preventDefault()}>
-          {PAGES[page][1].map((id) => (
-            <Question key={id} question={byId[id]} value={draft[id]} onChange={(v) => set(id, v)} />
-          ))}
+          {PAGES[page][1]
+            .filter((id) => byId[id] && !(id === "cooling_setpoint" && draft.cooling !== "yes"))
+            .filter((id) => !((id === "heating_power" || id === "thermostat" || id === "night") && draft.heating === "none"))
+            .map((id) => (
+              <Question key={id} question={byId[id]} value={draft[id]} onChange={(v) => set(id, v)} />
+            ))}
         </form>
       )}
       <div className="actions">
@@ -79,23 +83,17 @@ function Summary({ home, t, n }) {
   if (!home) return <p className="small">{t("preparing")}</p>;
   if (!home.ok) return <p className="error">{home.message}</p>;
   const e = home.estimate;
+  const band = bandOf(home.typical_letter);
+  const caption = t("house_caption_estimate", { province: e.province, temp: n(e.january_c, 1) });
   return (
     <>
-      <Block>
-        <dl className="summary">
-          {home.summary.map((row) => (
-            <div key={row.topic} style={{ display: "contents" }}>
-              <dt>{row.topic}</dt>
-              <dd>{row.text}</dd>
-            </div>
-          ))}
-        </dl>
-      </Block>
       <Block colour="yellow">
         <p className="tile-label">{t("estimate_title")}</p>
+        <House flows={e.flows} band={band} caption={caption} />
         <div className="estimate-row">
-          <Letter letter={home.typical_letter} small />
+          <Lights band={band} small />
           <p style={{ margin: 0 }}>
+            <strong>{t(`keeps_${band}`)}.</strong>{" "}
             {t("estimate_text", {
               province: e.province,
               temp: n(e.january_c, 1),
@@ -105,9 +103,20 @@ function Summary({ home, t, n }) {
           </p>
         </div>
         <p className="small" style={{ marginTop: 10 }}>
-          {t("typical_letter", { letter: home.typical_letter })}. {t("estimate_note")}
+          {t("estimate_note")} {t("lights_note")}
         </p>
       </Block>
+      <details className="how">
+        <summary>{t("answers_in_words")}</summary>
+        <dl className="summary">
+          {home.summary.map((row) => (
+            <div key={row.topic} style={{ display: "contents" }}>
+              <dt>{row.topic}</dt>
+              <dd>{row.text}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
     </>
   );
 }

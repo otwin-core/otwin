@@ -32,10 +32,12 @@ def machines(twin):
 
 def test_every_question_is_a_selector_with_a_valid_default():
     for q in QUESTIONS:
-        assert q.kind in ("single", "multi") and q.options
+        assert q.kind in ("single", "multi", "switch", "slider", "gauge") and q.options
+        if q.numeric:
+            assert q.minimum < q.maximum and q.step and q.accepts(q.default)
         values = q.values()
         defaults = q.default if q.kind == "multi" else (q.default,)
-        assert all(d in values for d in defaults), q.id
+        assert all(q.accepts(d) for d in defaults), q.id
         assert len(set(values)) == len(values), q.id
     data = questions_json()
     assert [q["id"] for q in data["questions"]] == [q.id for q in QUESTIONS]
@@ -54,11 +56,20 @@ def test_defaults_build_the_typical_flat(backend):
     assert p["zone.air.capacity"] == pytest.approx(1.6e5 * 75)
     assert p["heating.thermostat.power"] == pytest.approx(4500.0)
     assert p["base.power"] == pytest.approx(100 + 15 * 2)
-    assert p["occupants.power"] == pytest.approx(2 * 60.0)
+    # people are an input: 70 W of sensible heat each, home half the time
+    # on average (all night, one in four by day), not a constant all day
+    assert "occupants.power" not in p
+    presence = twin.schedules["occupants"].values
+    assert presence[3] == pytest.approx(2 * 70.0) and presence[12] == pytest.approx(
+        2 * 70.0 / 4
+    )
+    assert sum(presence) / 24 == pytest.approx(2 * 70.0 / 2)
     assert sorted(twin.input_names) == sorted(
         [
             "outdoor",
+            "solar",
             "heating.setpoint",
+            "occupants",
             "dishwasher",
             "washing_machine",
             "oven",
@@ -139,7 +150,7 @@ def test_canary_homes_keep_canary_time(backend):
 
 
 def test_answers_are_validated_and_explained():
-    with pytest.raises(ValueError, match="size: 'huge' is not one of"):
+    with pytest.raises(ValueError, match="size: 'huge' is not a number from 30 to 250"):
         HomeDescription(size="huge")
     with pytest.raises(ValueError, match="appliances: 'sauna'"):
         HomeDescription(appliances=("dishwasher", "sauna"))

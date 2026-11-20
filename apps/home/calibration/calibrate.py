@@ -473,6 +473,29 @@ def _findings(
 
     for role in roles:
         value = params[role.name]
+        if role.given:
+            # The householder told us (a nameplate): kept as given, not fitted,
+            # and not weighed in the verdict.
+            label = _LABELS.get(role.role, role.name)
+            if role.role == "machine":
+                label = f"Size of your {_machine_kind(machines[role.component])}"
+                shown, unit = value / 1000.0, "kW"
+            else:
+                shown, unit = value, "W"
+            out.append(
+                Finding(
+                    role.name,
+                    label,
+                    shown,
+                    unit,
+                    None,
+                    GOOD,
+                    f"{label}: {shown:.1f} {unit}, as you told us",
+                    "",
+                    counted=False,
+                )
+            )
+            continue
         if not role.observable:
             # Nothing was measured: report no number, only why.
             label = _LABELS.get(role.role, role.name)

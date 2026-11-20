@@ -147,6 +147,14 @@ QUANTITIES: dict[str, QuantitySpec] = {
             description="water volume as read on the meter",
         ),
         QuantitySpec(
+            "electricity_billed",
+            "energy",
+            (INTERVAL,),
+            "kWh",
+            max_rate=_HOUSE_ELECTRIC_MAX_W,
+            description="electricity as billed over a billing period",
+        ),
+        QuantitySpec(
             "electricity_cost",
             "currency",
             (INTERVAL,),

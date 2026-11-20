@@ -8,7 +8,7 @@ distinction in a home is whether the electricity meter sees the gain:
   electricity ends as heat indoors (the fridge, the television, the lights,
   the router), so the heat and the meter reading are the same number. The
   known exception, washers draining hot water, needs a heat fraction on the
-  source that Otwin does not have yet (DESIGN.md G2).
+  source that Otwin does not have yet (ARCHITECTURE.md, "Choices").
 * :class:`GasAppliance` is metered on the **gas** meter instead: a gas hob
   or oven. All of the gas it burns ends up as heat in the kitchen (what the
   pan does not take, the flame gives to the air), so here too the heat and

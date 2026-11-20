@@ -8,17 +8,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import * as engine from "./engine";
+import { isDocument } from "./ocr/engine";
 
 const DEBOUNCE_MS = 500;
 const paint = () => new Promise((r) => setTimeout(r, 40)); // let the page draw first
 
 export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }) {
   const [summaries, setSummaries] = useState(() => new Map());
-  const [task, setTask] = useState(""); // "", "preparing", "analyse", "trust"
+  const [task, setTask] = useState(""); // "", "preparing", "analyse"
   const [seconds, setSeconds] = useState(0);
   const [failure, setFailure] = useState("");
   const [weatherBusy, setWeatherBusy] = useState(false);
   const [weatherMessage, setWeatherMessage] = useState("");
+  //  Documents (a PDF, a photo of a bill) are read in the page, not by the
+  //  engine: they wait here, in order, until the householder has checked
+  //  what was read and added it as a bill. {id, name, bytes, state, pages, result}
+  const [docs, setDocs] = useState([]);
   const busy = useRef(false);
   //  Every change to the data or the answers bumps `version`; a report is
   //  made from one version. The engine runs on this thread when the page is
@@ -83,28 +88,10 @@ export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }
   );
 
   /* ---------------------------------------------------------- analysis */
-  const runTrust = useCallback(() => engine.serial(async () => {
-    if (busy.current) return;
-    busy.current = true;
-    setTask("trust");
-    setSeconds(0);
-    await paint();
-    try {
-      await ensure();
-      const trust = await engine.call("trust_test", { answers: sliceRef.current.answers });
-      const report = sliceRef.current.report;
-      if (report) patch({ report: { ...report, trust } });
-    } catch (e) {
-      setFailure(e.message);
-    } finally {
-      busy.current = false;
-      setTask("");
-    }
-  }), [ensure, patch]);
-
-  const analyse = useCallback(
-    (force = false) =>
-      engine.serial(async () => {
+  //  The fit itself, as a plain job: `analyse` queues it, `build` runs it
+  //  inside its own job (a job waiting on another job would wait forever).
+  const runAnalyse = useCallback(
+    async (force = false) => {
     clearTimeout(timer.current);
     timer.current = null;
     if (busy.current) return; // the run under way will catch up at its end
@@ -136,7 +123,7 @@ export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }
     setTask("");
     if (out.ok) {
       setFailure("");
-      patch({ report: out, previous: sliceRef.current.report });
+      patch({ report: out, previous: sliceRef.current.report, stale: false, simulation: null });
       if (out.example) {
         // the demo was simulated again: its files changed
         const files = await engine.call("files", { timezone_name: timezone() });
@@ -146,43 +133,127 @@ export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }
       }
     } else {
       setFailure(out.message);
-      patch({ report: null });
+      patch({ report: null, stale: false, simulation: null });
     }
     if (version.current !== at) {
-      analyse(); // something changed while we were fitting
-      return;
+      if (demoKey) analyse(); // something changed while we were fitting
+      else patch({ stale: true });
     }
-    // where the engine has its own thread, test it on a hidden month too
-    if (out.ok && (sliceRef.current.cards?.periods?.length || 0) >= 2 && engine.engineMode() === "worker") {
-      runTrust();
-    }
-      }),
-    [engineReady, ensure, patch, runTrust, timezone],
+    },
+    [engineReady, ensure, patch, timezone, demoKey],
   );
 
-  /* Analyse again in a moment (the data was marked changed by the caller). */
+  const analyse = useCallback((force = false) => engine.serial(() => runAnalyse(force)), [runAnalyse]);
+
+  /* The data or the answers changed. A demo is fitted again by itself (its
+     files were just simulated anew); the householder's home waits for
+     "Build / Update my digital home": building a model is their decision,
+     and they may still be adding files. Meanwhile the home is marked
+     `stale`, so the page can say the files changed since the last fit. */
   const schedule = useCallback(() => {
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => analyse(), DEBOUNCE_MS);
-  }, [analyse]);
+    if (demoKey) {
+      timer.current = setTimeout(() => analyse(), DEBOUNCE_MS);
+      return;
+    }
+    patch({ stale: true });
+  }, [analyse, demoKey, patch]);
 
   /* The data or the answers changed: say so before scheduling a run, so a
-     run that starts in between is not repeated for nothing. */
+     run that starts in between is not repeated for nothing. A demo shown
+     from its baked answer is from now on a home like any other: fitted
+     here, in the browser. */
   const changed = useCallback(() => {
     version.current += 1;
-  }, []);
+    if (sliceRef.current.baked) patch({ baked: false });
+    // a home that started from a demo: its files or answers are no longer the demo's
+    if (sliceRef.current.demo && !sliceRef.current.demoTouched) patch({ demoTouched: true });
+  }, [patch]);
+
+  /* A home straight from a demo is built at once from the fit baked at build
+     time (demos.js), in this language; the engine is told the fitted values
+     so the simulation can run on them. Once the home is touched, "build"
+     fits for real like any other home. */
+  const bakedFor = (lang_) => (sliceRef.current.demo && !sliceRef.current.demoTouched ? window.OTWIN_DEMOS?.[sliceRef.current.demo]?.[lang_] || null : null);
+  const build = useCallback(
+    () =>
+      engine.serial(async () => {
+        const baked = bakedFor(lang);
+        if (!baked) {
+          await runAnalyse(true);
+          return;
+        }
+        setTask("analyse");
+        await paint();
+        try {
+          await ensure();
+          await engine.call("adopt_fit", { answers: sliceRef.current.answers, fit: window.OTWIN_DEMOS[sliceRef.current.demo].fit || {} });
+          patch({ home: baked.home, cards: baked.cards, report: baked.report, stale: false });
+          analysedAt.current = version.current;
+        } finally {
+          setTask("");
+        }
+      }),
+    [runAnalyse, ensure, lang, patch],
+  );
+
+  /* the language changed on a demo home built from the baked fit: its baked words in the new language */
+  useEffect(() => {
+    const baked = bakedFor(lang);
+    if (baked && sliceRef.current.report) patch({ home: baked.home, cards: baked.cards, report: baked.report });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
+
+  /* The next twelve months on the fitted model, with changes and prices. */
+  const forecast = useCallback(
+    (changes, prices) =>
+      engine.serial(async () => {
+        await ensure();
+        try {
+          return await engine.call("forecast", { answers: sliceRef.current.answers, changes: changes || {}, prices: prices || null });
+        } catch (e) {
+          return { ok: false, message: e.message };
+        }
+      }),
+    [ensure],
+  );
+  const setSimulation = useCallback((simulation) => patch({ simulation }), [patch]);
+
+  /* A demo's answer, worked out at build time (demos.js) in this language:
+     its files as the engine describes them, its first estimate, its cards
+     and its analysis. Shown at once, with no engine at all; the engine is
+     only asked for something once the demo is edited or given a file. */
+  const baked =
+    demoKey && slice.baked ? window.OTWIN_DEMOS?.[demoKey]?.[lang] || null : null;
+  useEffect(() => {
+    if (!baked) return;
+    setSummaries(new Map(baked.files.map((f) => [f.id, f])));
+    patch({ home: baked.home, cards: baked.cards, report: baked.report });
+    analysedAt.current = version.current; // the answer on screen is current
+  }, [baked, patch]);
 
   /* ---------------------------------------------------------- the data */
+  /* `kind` is what the householder said the files are ("gas", "electricity",
+     "water", "thermometer", "weather"): kept with each file, and the hint
+     the bill reader starts from. */
   const addFiles = useCallback(
-    (list) => {
+    (list, kind = null) => {
       // Read the bytes now, not in the job: a FileList is live and the input
       // is cleared as soon as this returns, so by the time the engine is free
       // the files would be gone.
-      const items = [...list].map((file) => ({
+      const all = [...list].map((file) => ({
         id: `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
         name: file.name,
         bytes: file.arrayBuffer(),
       }));
+      // a PDF or a photo is a bill to read in the page first
+      const documents = all.filter((f) => isDocument(f.name));
+      const items = all.filter((f) => !isDocument(f.name));
+      if (documents.length) {
+        Promise.all(documents.map(async (d) => ({ ...d, bytes: new Uint8Array(await d.bytes), state: "new", hint: kind }))).then((ds) =>
+          setDocs((cur) => [...cur, ...ds]),
+        );
+      }
       if (!items.length) return undefined;
       return engine.serial(async () => {
       if (!sliceRef.current.answers) return;
@@ -204,7 +275,7 @@ export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }
           bytes,
         );
         let mapping = null;
-        if (out.status === "needs_mapping" && out.mapping?.confident) {
+        if (out.status === "needs_mapping" && (out.mapping?.confident || (kind === "thermometer" && out.mapping))) {
           // a thermometer's or a weather station's log: read it with the guess
           mapping = out.mapping.guess;
           const mapped = await engine.call("map_file", { file_id: id_, mapping, timezone_name: tz });
@@ -212,14 +283,39 @@ export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }
           else mapping = null;
         }
         setSummaries((m) => new Map(m).set(id_, out));
-        added.push({ id: id_, name: file.name, bytes: keep, mapping });
+        added.push({ id: id_, name: file.name, bytes: keep, mapping, kind, enabled: true });
       }
       changed();
-      patch({ files: [...sliceRef.current.files, ...added] });
+      patch((h) => ({ files: [...h.files, ...added] }));
       await refresh();
       schedule();
       });
     },
+    [changed, ensure, patch, refresh, schedule, timezone],
+  );
+
+  /* A file in or out of the calibration: out, the engine forgets it; in
+     again, it is read again. The page keeps it either way. */
+  const toggleFile = useCallback(
+    (fileId) =>
+      engine.serial(async () => {
+        const file = sliceRef.current.files.find((f) => f.id === fileId);
+        if (!file) return;
+        await ensure();
+        const enabled = file.enabled === false;
+        if (enabled) {
+          const tz = timezone();
+          let out = await engine.call("read_file", { file_id: fileId, name: file.name, timezone_name: tz }, new Uint8Array(file.bytes.slice(0)));
+          if (out.status === "needs_mapping" && (file.mapping || out.mapping?.confident || file.kind === "thermometer")) out = await engine.call("map_file", { file_id: fileId, mapping: file.mapping || out.mapping.guess, timezone_name: tz });
+          setSummaries((m) => new Map(m).set(fileId, out));
+        } else {
+          await engine.call("remove_file", { file_id: fileId });
+        }
+        changed();
+        patch((h) => ({ files: h.files.map((f) => (f.id === fileId ? { ...f, enabled } : f)) }));
+        await refresh();
+        schedule();
+      }),
     [changed, ensure, patch, refresh, schedule, timezone],
   );
 
@@ -233,10 +329,10 @@ export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }
         return next;
       });
       changed();
-      patch({
-        files: sliceRef.current.files.filter((f) => f.id !== fileId),
-        bills: sliceRef.current.bills.filter((b) => b.id !== fileId),
-      });
+      patch((h) => ({
+        files: h.files.filter((f) => f.id !== fileId),
+        bills: h.bills.filter((b) => b.id !== fileId),
+      }));
       await refresh();
       schedule();
     },
@@ -256,9 +352,10 @@ export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }
       if (out.status === "ok") {
         changed();
         setSummaries((m) => new Map(m).set(id_, out));
-        patch({ bills: [...sliceRef.current.bills, { id: id_, kind, bill }] });
-        await refresh();
-        schedule();
+        patch((h) => ({ bills: [...h.bills, { id: id_, kind, bill, enabled: true }] }));
+        // the bill is in: answer now, so the page can put the form away; the
+        // header and the fit catch up in the background
+        refresh().then(() => schedule());
       } else {
         await engine.call("remove_file", { file_id: id_ });
       }
@@ -326,6 +423,17 @@ export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }
     [changed, ensure, patch, refresh, schedule, timezone, weatherBusy],
   );
 
+  const updateDoc = useCallback((id, part) => setDocs((cur) => cur.map((d) => (d.id === id ? { ...d, ...part } : d))), []);
+  const dismissDoc = useCallback((id) => setDocs((cur) => cur.filter((d) => d.id !== id)), []);
+  /* The fields of a bill, from the words read on its pages (the engine's reader). */
+  const readInvoice = useCallback(
+    async (pages, hint) => {
+      await ensure();
+      return engine.call("read_invoice", { pages, hint: hint || null });
+    },
+    [ensure],
+  );
+
   const setAnswers = useCallback(
     async (answers) => {
       const different = JSON.stringify(answers) !== JSON.stringify(sliceRef.current.answers);
@@ -354,14 +462,15 @@ export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }
     const key = id + (demoKey || "");
     if (prepared.current === key) return;
     prepared.current = key;
+    if (sliceRef.current.baked) return; // its answer is baked: nothing to prepare
     // one job: the engine's session must not be swapped under a fit
     engine.serial(async () => {
       setTask("preparing");
       try {
         const out = await ensure();
         await refresh(out?.answers);
-        if (!sliceRef.current.report) {
-          changed(); // there is no report yet: make the first one
+        if (!sliceRef.current.report && demoKey) {
+          changed(); // a demo with no report yet: make the first one
           schedule();
         } else {
           analysedAt.current = version.current; // the report on screen is current
@@ -372,9 +481,10 @@ export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }
     });
   }, [active, engineReady, id, demoKey, slice.answers, ensure, refresh, schedule]);
 
-  /* the language changed: every sentence comes from the engine again */
+  /* the language changed: every sentence comes from the engine again (a
+     baked demo has both languages baked: see above) */
   useEffect(() => {
-    if (!active || !engineReady || !slice.answers) return;
+    if (!active || !engineReady || !slice.answers || slice.baked) return;
     let gone = false;
     engine.serial(async () => {
       await ensure();
@@ -407,13 +517,20 @@ export function useHome({ id, slice, patch, demoKey, engineReady, active, lang }
     weatherBusy,
     weatherMessage,
     addFiles,
+    toggleFile,
     removeFile,
     addBill,
     mapFile,
     fetchWeather,
+    docs,
+    updateDoc,
+    dismissDoc,
+    readInvoice,
     setAnswers,
     analyse,
-    runTrust,
+    build,
+    forecast,
+    setSimulation,
     refresh,
   };
 }

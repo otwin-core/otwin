@@ -1,6 +1,6 @@
 """Hourly smart-meter electricity: Datadis and the distributor portals.
 
-Three layouts are accepted (DESIGN.md §4.1):
+Three layouts are accepted (ARCHITECTURE.md, "Ingest"):
 
 * **CNMC family** (CSV): one row per hour with ``CUPS``, a date column
   (``Fecha``/``Data``), an hour number (``Hora``) and an energy column. The

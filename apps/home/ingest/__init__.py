@@ -4,7 +4,7 @@ Every parser takes the bytes of a file a household can export today and
 returns a list of :class:`Series`. Each Series holds one quantity
 (electricity imported, plug energy, gas, water, outdoor temperature...) on
 one channel (a CUPS, a plug, a bill, a weather cell), as UTC intervals or
-instants with values in SI units. See DESIGN.md §4 for where each file comes
+instants with values in SI units. See ARCHITECTURE.md for where each file comes
 from.
 
 >>> import ingest
@@ -26,6 +26,7 @@ from .electricity import parse_datadis_json, parse_distributor_csv, parse_ide_cs
 from .errors import IngestError
 from .generic import ColumnGuess, ColumnMap, CsvDescription, describe_csv, parse_mapped
 from .homeassistant import parse_ha_history, parse_ha_statistics
+from .invoice import Invoice, Word, lines_from_words, read_invoice
 from .plugs import parse_shelly_csv, parse_tapo_xlsx
 from .schema import (
     ESTIMATED,
@@ -41,6 +42,10 @@ from .schema import (
 from .weather import parse_open_meteo_csv, parse_open_meteo_json
 
 __all__ = [
+    "Invoice",
+    "Word",
+    "lines_from_words",
+    "read_invoice",
     "Series",
     "QuantitySpec",
     "QUANTITIES",

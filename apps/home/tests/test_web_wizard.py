@@ -54,7 +54,7 @@ def test_the_electricity_file_is_recognised_in_plain_words():
     assert out["status"] == "ok"
     assert out["message"] == (
         "Read as hourly electricity from Datadis or your distributor: hourly electricity "
-        "from the grid, 744 readings from 1 Jan 2026 to 31 Jan 2026, 1,043 kWh."
+        "from the grid, 744 readings from 1 Jan 2026 to 31 Jan 2026, 982 kWh."
     )
 
 
@@ -125,13 +125,15 @@ def test_too_little_data_is_refused_with_the_reason():
 
 
 def test_the_wizard_calibrates_the_sample_home():
-    """The page's three steps, as calls: the sample answers, the two files
-    (the station through the mapper), one click. The sample home loses 187.5
-    W/K and has a 5.2 kW heat pump; the survey guessed 150 and 4.5."""
+    """The page's three steps, as calls: the sample answers, the files (the
+    station's log through the mapper's own confident guess, as the page
+    would), one click. The sample home loses 187.5 W/K and has a 5.2 kW heat
+    pump; the survey guessed 150 and 4.5."""
     samples = webmain.load_samples()
     assert samples["answers"] == ANSWERS
-    station = next(f for f in samples["files"] if f["status"] == "needs_mapping")
-    webmain.map_file(station["id"], station["mapping"]["guess"])
+    assert [f["status"] for f in samples["files"]] == ["ok", "ok", "ok"]
+    station = next(f for f in samples["files"] if "estacion" in f["name"])
+    assert station["format"] == "your own columns"  # read with the mapper's guess
     assert webmain.data_status(ANSWERS)["ready"]
     report = webmain.dispatch("calibrate_home", {"answers": ANSWERS})
     assert report["ok"] and report["verdict"] in ("good", "usable")
@@ -144,25 +146,21 @@ def test_the_wizard_calibrates_the_sample_home():
         "Your thermometer",
     }
     assert "18" in found["How fast your home loses heat"]["sentence"]  # 18x W per °C
-    assert "5.1 kW" in found["Size of your heat pump"]["sentence"] or (
-        "5.2 kW" in found["Size of your heat pump"]["sentence"]
-    )
+    # the heat pump's power came from its nameplate: kept as given, not fitted
+    pump = found["Size of your heat pump"]
+    assert pump["sentence"] == "Size of your heat pump: 5.0 kW, as you told us"
+    assert pump["verdict"] == "good"
     assert len(report["daily"]) == 31 and report["period"] == "01/01/2026 to 31/01/2026"
     measured = np.array([d["measured"] for d in report["daily"]])
     twin = np.array([d["twin"] for d in report["daily"]])
-    assert measured.sum() == pytest.approx(1043, abs=1)
+    assert measured.sum() == pytest.approx(982, abs=1)
     assert np.abs(twin - measured).max() < 0.15 * measured.mean()
     assert report["notes"] == []
     assert report["gas"] is None and report["water"] is None  # all electric, no bills
 
 
 def test_air_conditioning_is_left_out_of_a_winter_fit():
-    webmain.load_samples()
-    station = next(e for k, e in webmain.SESSION.items() if e.status == "needs_mapping")
-    webmain.map_file(
-        next(k for k, e in webmain.SESSION.items() if e is station),
-        station.mapping["guess"],
-    )
+    webmain.load_samples()  # the station's log is read with the mapper's guess
     report = webmain.calibrate_home({**ANSWERS, "cooling": "yes"})
     assert report["ok"]
     assert any("air conditioning was left out" in n for n in report["notes"])
@@ -230,24 +228,17 @@ GAS_HOME = SAMPLES / "gas_home"
 GAS_ANSWERS = json.loads((GAS_HOME / "home.json").read_text())
 #: (sample id, folder, days, gas bill m³, kWh)
 GAS_PERIODS = [
-    ("gas_dec_jan", "15dic-15ene", 31, 267, 2958),
-    ("gas_feb_mar", "15feb-15mar", 28, 192, 2119),
-    ("gas_oct_nov", "15oct-15nov", 31, 150, 1669),
+    ("gas_dec_jan", "15dic-15ene", 31, 245, 2714),
+    ("gas_feb_mar", "15feb-15mar", 28, 150, 1656),
+    ("gas_oct_nov", "15oct-15nov", 31, 117, 1302),
 ]
 
 
-def test_every_example_set_is_offered_and_its_files_exist():
-    offered = webmain.sample_sets()["samples"]
-    assert [x["id"] for x in offered] == [
-        "electric",
-        "gas_dec_jan",
-        "gas_feb_mar",
-        "gas_oct_nov",
-        "gas_winter",
-    ]
-    for _, (label, home, names) in webmain.SAMPLE_SETS.items():
+def test_every_sample_set_and_demo_home_has_its_files():
+    assert list(webmain.DEMO_HOMES) == ["gas_winter", "electric"]
+    for key, (label, home, names) in webmain.SAMPLE_SETS.items():
         assert (SAMPLES / home).is_file() and label
-        assert all((SAMPLES / n).is_file() for n in names)
+        assert all((SAMPLES / n).is_file() for n in names), key
 
 
 @pytest.mark.parametrize("sample, folder, days, m3, kwh", GAS_PERIODS)
@@ -292,8 +283,9 @@ def test_the_gas_bill_measures_how_fast_the_home_loses_heat():
     loss = found["How fast your home loses heat"]
     assert loss["verdict"] in ("good", "usable")
     assert loss["value"] == pytest.approx(218.4, rel=0.05)
-    assert found["Size of your boiler"]["verdict"] == "not enough data"
-    assert "Gas bills show totals over weeks" in found["Size of your boiler"]["reason"]
+    # the boiler's power came from its nameplate: given, not something bills measure
+    assert found["Size of your boiler"]["verdict"] == "good"
+    assert found["Size of your boiler"]["value"] == 24.0
     assert "your gas bill (within" in report["headline"]
     assert "Bills cannot show" in report["headline"]
 
@@ -301,15 +293,15 @@ def test_the_gas_bill_measures_how_fast_the_home_loses_heat():
     assert gas["used_in_fit"]
     (bill,) = gas["bills"]
     assert bill["period"] == "15 Dec 2025 to 15 Jan 2026"
-    assert (bill["bill_m3"], bill["bill_kwh"]) == (267, 2958)
+    assert (bill["bill_m3"], bill["bill_kwh"]) == (245, 2714)
     assert bill["kwh_per_m3"] == pytest.approx(
-        2958 / 267, abs=1e-3
+        2714 / 245, abs=1e-3
     )  # the bill's Fc × PCS
     assert abs(bill["off"]) < 0.02
     assert bill["twin_m3"] == pytest.approx(bill["twin_kwh"] / (2958 / 267), abs=0.1)
     assert set(gas["by_use_kwh"]) == {"heating", "hot water", "cooking"}
     assert gas["sentences"][0] == (
-        "Your gas bill, 15 Dec 2025 to 15 Jan 2026: 267 m³, charged as 2,958 kWh "
+        "Your gas bill, 15 Dec 2025 to 15 Jan 2026: 245 m³, charged as 2,714 kWh "
         "(11.08 kWh per m³, the conversion printed on your bill)."
     )
     assert "fitted to this bill" in gas["sentences"][1]
@@ -336,8 +328,7 @@ def test_the_thermometer_shows_what_bills_cannot():
     keeps = found["How long your home keeps its warmth"]
     assert keeps["verdict"] == "good" and keeps["value"] == pytest.approx(tau, rel=0.05)
     boiler = found["Size of your boiler"]
-    assert boiler["verdict"] in ("good", "usable")
-    assert abs(boiler["value"] / 24.0 - 1) <= boiler["uncertainty"]
+    assert boiler["verdict"] == "good" and boiler["value"] == 24.0  # given
     assert abs(found["Your thermometer"]["value"]) < 0.5
     assert report["indoor_error"] < 0.3
     week = report["periods"][0]["indoor"]
@@ -504,7 +495,14 @@ def test_bills_typed_in_are_checked_like_files():
     )
     assert water["message"] == "Read 1 water bill: 15 Dec 2025 to 15 Jan 2026, 11 m³."
     with pytest.raises(ValueError, match="kind must be"):
-        webmain.add_bill("t6", "electricity", {})
+        webmain.add_bill("t6", "petrol", {})
+    # an electricity bill is a kind of its own: the kWh billed and the amount
+    e = webmain.add_bill(
+        "t7",
+        "electricity",
+        {"start": "2026-01-01", "end": "2026-02-01", "kwh": "1051", "eur": "178,40"},
+    )
+    assert e["status"] == "ok" and "1,051 kWh" in e["message"]
 
 
 def test_the_home_summary_reaches_the_page():
@@ -549,7 +547,7 @@ def test_all_periods_together_and_each_alone():
     ]
     assert len(together["daily"]) == 90
     gas = together["gas"]
-    assert [b["bill_kwh"] for b in gas["bills"]] == [1669, 2958, 2119]
+    assert [b["bill_kwh"] for b in gas["bills"]] == [1302, 2714, 1656]
     for p, b in zip(together["periods"], gas["bills"], strict=True):
         assert p["gas_bill_kwh"] == b["bill_kwh"]
         assert abs(p["twin_gas_kwh"] / p["gas_bill_kwh"] - 1) < 0.03

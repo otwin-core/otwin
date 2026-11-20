@@ -1,9 +1,9 @@
 /* The page's handle on the engine (web/py/webmain.py, untouched).
  *
  * The engine keeps one session: the files it has read. The page has two
- * workspaces, so before anything is asked of the engine the session is made
- * to match the workspace asking: the demo's sample files, or the
- * householder's own files from this browser. Whatever a section already
+ * workspaces (one per home), so before anything is asked of the engine the
+ * session is made to match the workspace asking: that home's files, from
+ * this browser. Whatever a section already
  * knows (its last analysis) is kept by the page, so changing section shows
  * it at once and the engine is only needed again to read or fit something.
  */
@@ -54,29 +54,28 @@ export function invalidate() {
 
 /* Make the engine's session the one `id` needs, and say what it read.
  *
- * `spec` is {demo: key} or {files, bills, timezone}. Returns the engine's
- * description of every file, by id.
+ * `spec` is {files, bills, timezone}. Returns the engine's description of
+ * every file, by id.
  */
 export async function useWorkspace(id, spec) {
   if (loadedFor === id && !spec.force) return null;
   loadedFor = null;
   await call("forget");
   const summaries = new Map();
-  if (spec.demo) {
-    const out = await call("load_samples", { sample: spec.demo });
-    for (const f of out.files) summaries.set(f.id, f);
-    loadedFor = id;
-    return { summaries, answers: out.answers };
-  }
   const tz = spec.timezone || "Europe/Madrid";
   for (const f of spec.files || []) {
+    if (f.enabled === false) continue; // kept, but left out of the calibration
+    // a copy: the worker takes the bytes with it (transfer), and the page
+    // keeps this home's files in its state and in this browser
     let out = await call(
       "read_file",
       { file_id: f.id, name: f.name, timezone_name: tz },
-      new Uint8Array(f.bytes),
+      new Uint8Array(f.bytes.slice(0)),
     );
-    if (f.mapping && out.status === "needs_mapping") {
-      out = await call("map_file", { file_id: f.id, mapping: f.mapping, timezone_name: tz });
+    if (out.status === "needs_mapping" && (f.mapping || out.mapping?.confident || f.kind === "thermometer")) {
+      // the column choice kept with the file, the mapper's own confident guess,
+      // or its guess for a file the householder said is a thermometer's log
+      out = await call("map_file", { file_id: f.id, mapping: f.mapping || out.mapping.guess, timezone_name: tz });
     }
     summaries.set(f.id, out);
   }

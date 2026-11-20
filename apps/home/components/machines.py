@@ -28,7 +28,7 @@ The machines:
 * :class:`ElectricHeater`: resistive; efficiency 1 by definition.
 * :class:`HeatPump`: heats with electricity at ``cop`` ≈ 2.5-4. The COP is
   taken constant (a seasonal value); a COP falling with the outdoor
-  temperature is DESIGN.md G4.
+  temperature is a choice recorded in ARCHITECTURE.md.
 * :class:`AirConditioner`: the same law run the other way. It removes heat
   when the room is *above* its setpoint and pays electricity at ``eer``
   (heat removed per electrical watt, ≈ 2.5-3.5 seasonal).

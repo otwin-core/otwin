@@ -41,7 +41,17 @@ class Option:
 class Question:
     """One selector of the first step.
 
-    ``kind`` is ``"single"`` (pick one) or ``"multi"`` (pick any).
+    ``kind`` says how it is answered, and the page draws the same control
+    for it everywhere (the questions, a simulation):
+
+    * ``"single"``: pick one option (three or fewer: a three-way selector;
+      more: a row of buttons; many: a list);
+    * ``"multi"``: any of the options, one switch each;
+    * ``"switch"``: two options, off and on;
+    * ``"slider"``: a number between ``minimum`` and ``maximum`` in steps of
+      ``step``, with ``unit``; the options, if any, are legacy names for
+      numbers (``"m"`` for 75 m²) still accepted;
+    * ``"gauge"``: a temperature, drawn as a semicircle from blue to red.
     """
 
     id: str
@@ -50,10 +60,30 @@ class Question:
     options: tuple[Option, ...]
     default: str | tuple[str, ...]
     kind: str = "single"
+    minimum: float | None = None
+    maximum: float | None = None
+    step: float | None = None
+    unit: str = ""
 
     def values(self) -> tuple[str, ...]:
-        """The values an answer may take."""
+        """The values an answer may take, as options (not numbers)."""
         return tuple(o.value for o in self.options)
+
+    @property
+    def numeric(self) -> bool:
+        return self.kind in ("slider", "gauge")
+
+    def accepts(self, value: object) -> bool:
+        """Is ``value`` an answer to this question?"""
+        if value in self.values():
+            return True
+        if not self.numeric:
+            return False
+        try:
+            v = float(str(value))
+        except (TypeError, ValueError):
+            return False
+        return self.minimum <= v <= self.maximum  # type: ignore[operator]
 
 
 @dataclass(frozen=True)
@@ -218,7 +248,12 @@ QUESTIONS: tuple[Question, ...] = (
             ("l", "90–120 m²"),
             ("xl", "Over 120 m²"),
         ),
-        "m",
+        "75",
+        kind="slider",
+        minimum=30,
+        maximum=250,
+        step=5,
+        unit="m²",
     ),
     Question(
         "built",
@@ -229,7 +264,11 @@ QUESTIONS: tuple[Question, ...] = (
             ("1980_2006", "1980–2006"),
             ("post2007", "2007 or later"),
         ),
-        "1980_2006",
+        "1995",
+        kind="slider",
+        minimum=1900,
+        maximum=2026,
+        step=1,
     ),
     Question(
         "heating",
@@ -244,11 +283,39 @@ QUESTIONS: tuple[Question, ...] = (
         "heat_pump",
     ),
     Question(
+        "heating_power",
+        "How powerful is your heating?",
+        "The useful heat output on the nameplate of the boiler, the heat pump or the sum of the heaters, in kW. Real homes have systems bigger or smaller than they need, and the twin is built on the one you have.",
+        _o(
+            ("auto", "I don't know: use a typical size"),
+            *((str(k), f"{k} kW") for k in (3, 4, 5, 6, 8, 10, 12, 15, 18, 24, 30, 35)),
+        ),
+        "auto",
+        kind="slider",
+        minimum=0,
+        maximum=40,
+        step=1,
+        unit="kW",
+    ),
+    Question(
         "cooling",
         "Do you have air conditioning?",
         "",
         _o(("no", "No"), ("yes", "Yes")),
         "no",
+        kind="switch",
+    ),
+    Question(
+        "cooling_setpoint",
+        "What temperature do you set the air conditioning to?",
+        "Only if you have air conditioning.",
+        _o(*((str(c), f"{c} °C") for c in (23, 24, 25, 26, 27))),
+        "25",
+        kind="gauge",
+        minimum=22,
+        maximum=28,
+        step=0.5,
+        unit="°C",
     ),
     Question(
         "thermostat",
@@ -256,13 +323,19 @@ QUESTIONS: tuple[Question, ...] = (
         "Your usual thermostat setting during the day.",
         _o(("19", "19 °C"), ("20", "20 °C"), ("21", "21 °C"), ("22", "22 °C")),
         "20",
+        kind="gauge",
+        minimum=16,
+        maximum=26,
+        step=0.5,
+        unit="°C",
     ),
     Question(
         "night",
-        "And at night?",
-        "",
-        _o(("same", "The same"), ("lower", "Lower (about 16 °C, 23:00 to 07:00)")),
+        "Lower at night?",
+        "About 16 °C from 23:00 to 07:00, as most thermostats do when set to.",
+        _o(("same", "No, the same"), ("lower", "Yes, lower")),
         "lower",
+        kind="switch",
     ),
     Question(
         "people",
@@ -270,6 +343,10 @@ QUESTIONS: tuple[Question, ...] = (
         "",
         _o(("1", "1"), ("2", "2"), ("3", "3"), ("4", "4"), ("5", "5 or more")),
         "2",
+        kind="slider",
+        minimum=1,
+        maximum=6,
+        step=1,
     ),
     Question(
         "water",
@@ -316,6 +393,30 @@ QUESTIONS: tuple[Question, ...] = (
 #: The questions in Spanish: every English text above, as a Spanish
 #: speaker reads it. A text missing here shows in English (and a test fails).
 SPANISH: dict[str, str] = {
+    "How powerful is your heating?": "¿Qué potencia tiene tu calefacción?",
+    (
+        "The useful heat output on the nameplate of the boiler, the heat pump or the "
+        "sum of the heaters, in kW. Real homes have systems bigger or smaller than "
+        "they need, and the twin is built on the one you have."
+    ): (
+        "La potencia útil que figura en la placa de la caldera, de la bomba de calor "
+        "o la suma de los radiadores, en kW. En las casas reales hay sistemas más "
+        "grandes o más pequeños de lo necesario, y el gemelo se construye con el que "
+        "tienes."
+    ),
+    "I don't know: use a typical size": "No lo sé: usa un tamaño típico",
+    "Lower at night?": "¿Más baja por la noche?",
+    "About 16 °C from 23:00 to 07:00, as most thermostats do when set to.": (
+        "Unos 16 °C de 23:00 a 07:00, como hacen casi todos los termostatos si se les pide."
+    ),
+    "No, the same": "No, la misma",
+    "Yes, lower": "Sí, más baja",
+    "What temperature do you set the air conditioning to?": (
+        "¿A qué temperatura pones el aire acondicionado?"
+    ),
+    "Only if you have air conditioning.": "Solo si tienes aire acondicionado.",
+    **{f"{c} °C": f"{c} °C" for c in (23, 24, 25, 26, 27)},
+    **{f"{k} kW": f"{k} kW" for k in (3, 4, 5, 6, 8, 10, 12, 15, 18, 24, 30, 35)},
     "Where is your home?": "¿Dónde está tu casa?",
     "Your province sets the weather and the clock. Nothing else is used.": (
         "Tu provincia fija el tiempo y la hora. No se usa para nada más."
@@ -414,6 +515,10 @@ def questions_json(lang: str = "en") -> dict:
                 "label": _tr(q.label, lang),
                 "help": _tr(q.help, lang),
                 "kind": q.kind,
+                "minimum": q.minimum,
+                "maximum": q.maximum,
+                "step": q.step,
+                "unit": q.unit,
                 "default": list(q.default) if isinstance(q.default, tuple) else q.default,
                 "options": [
                     {"value": o.value, "label": _tr(o.label, lang)} for o in q.options

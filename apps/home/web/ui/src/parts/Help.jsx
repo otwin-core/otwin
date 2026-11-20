@@ -5,7 +5,7 @@ import * as Accordion from "@radix-ui/react-accordion";
 
 import { useT } from "../i18n";
 
-export function Help({ onForget }) {
+export function Help() {
   const { t } = useT();
   const sections = [
     ["what", "help_what", [t("help_what_text")]],
@@ -34,7 +34,7 @@ export function Help({ onForget }) {
       <section className="help-section">
         <h3>{t("help_words")}</h3>
         <ul className="glossary">
-          {["help_word_letter", "help_word_conf", "help_word_hidden", "help_word_model"].map((k) => (
+          {["help_word_light", "help_word_conf", "help_word_hidden", "help_word_model"].map((k) => (
             <li key={k}>{t(k)}</li>
           ))}
         </ul>
@@ -42,9 +42,6 @@ export function Help({ onForget }) {
       <section className="help-section">
         <h3>{t("help_delete")}</h3>
         <p>{t("help_delete_text")}</p>
-        <button type="button" onClick={onForget}>
-          {t("forget_all")}
-        </button>
       </section>
     </div>
   );

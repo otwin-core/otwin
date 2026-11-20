@@ -4,3 +4,7 @@ extend = "../../pyproject.toml"
 
 [lint.isort]
 known-first-party = ["ingest", "components", "calibration", "scenarios", "survey", "fixtures"]
+
+[lint.per-file-ignores]
+# the browser proof reads as a script of clicks: one check per line, several short calls
+"web/verify_wizard.py" = ["E701", "E702", "E501"]

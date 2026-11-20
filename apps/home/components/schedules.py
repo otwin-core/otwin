@@ -29,7 +29,7 @@ import numpy.typing as npt
 
 from .stores import WATER_HEAT_CAPACITY
 
-__all__ = ["Schedule", "hot_water_heat", "WATER_HEAT_CAPACITY"]
+__all__ = ["Schedule", "ClimateSchedule", "hot_water_heat", "WATER_HEAT_CAPACITY"]
 
 
 @dataclass(frozen=True)
@@ -101,6 +101,47 @@ class Schedule:
             local = datetime.fromtimestamp(int(h) * 3600, tz)
             idx = local.hour + (24 * local.weekday() if self.weekly else 0)
             out[hours == h] = values[idx]
+        return out
+
+
+class ClimateSchedule(Schedule):
+    """A value that follows the calendar, not just the clock: the sun through
+    the windows, which depends on the season as much as on the hour.
+
+    ``profile(local_datetimes) -> values`` is called for the distinct local
+    hours a simulation touches. Built for :func:`survey.climate.solar_at`;
+    the 24 ``values`` a plain schedule carries are the profile's mean day,
+    kept so code that reads them (a daily sum, say) still gets a number.
+    """
+
+    def __init__(
+        self,
+        profile,
+        timezone: str = "Europe/Madrid",
+        mean_day: Sequence[float] | None = None,
+    ) -> None:
+        super().__init__(mean_day if mean_day is not None else [0.0] * 24, timezone)
+        object.__setattr__(self, "profile", profile)
+
+    def scaled(self, factor: float) -> Schedule:
+        return ClimateSchedule(
+            lambda stamps, f=factor, p=self.profile: p(stamps) * f,
+            self.timezone,
+            [v * factor for v in self.values],
+        )
+
+    def sample(self, t: npt.ArrayLike, *, start: datetime | int) -> np.ndarray:
+        t0 = _as_unix(start)
+        tz = ZoneInfo(self.timezone)
+        ts = np.asarray(t, dtype=float).ravel()
+        hours = np.floor((t0 + ts) / 3600.0).astype(np.int64)
+        distinct = np.unique(hours)
+        stamps = [datetime.fromtimestamp(int(h) * 3600, tz) for h in distinct]
+        values = np.asarray(self.profile(stamps), dtype=float)
+        lookup = dict(zip(distinct.tolist(), values.tolist(), strict=True))
+        out = np.empty(ts.shape)
+        for h in distinct:
+            out[hours == h] = lookup[int(h)]
         return out
 
 

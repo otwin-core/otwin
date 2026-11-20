@@ -4,6 +4,7 @@
   "size": "l",
   "built": "pre1980",
   "heating": "gas",
+  "heating_power": "24",
   "cooling": "no",
   "thermostat": "21",
   "night": "lower",

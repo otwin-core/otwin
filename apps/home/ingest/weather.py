@@ -1,4 +1,4 @@
-"""Hourly outside weather from Open-Meteo (DESIGN.md §4.8).
+"""Hourly outside weather from Open-Meteo (ARCHITECTURE.md, "Ingest").
 
 Two shapes are accepted: the API's JSON and the CSV the website offers for
 download. Both carry hourly arrays with a unit per variable.

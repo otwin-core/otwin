@@ -4,6 +4,7 @@
   "size": "m",
   "built": "1980_2006",
   "heating": "heat_pump",
+  "heating_power": "5",
   "cooling": "no",
   "thermostat": "20",
   "night": "lower",

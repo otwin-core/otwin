@@ -7,7 +7,7 @@ sensitivities at the optimum. Nothing here is a second optimiser.
 
 What this module adds is the **measurement**. ``fit_parameters`` compares
 model outputs at grid instants, while a smart meter reports the energy of
-each hour, an integral (DESIGN.md G1). An instant and an hourly mean differ
+each hour, an integral (ARCHITECTURE.md, "Choices"). An instant and an hourly mean differ
 badly for a thermostat that runs flat out for twenty minutes after a
 setback and then eases off. :class:`HourlyMeter` presents the compiled home
 to ``fit_parameters`` as a model whose single output, ``"electricity"``, is

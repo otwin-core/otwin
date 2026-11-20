@@ -4,7 +4,7 @@ The result is a static folder that works from ``file://`` with the network
 off: a page built only of classic ``<script>`` tags (the one thing a
 ``file://`` page may load), every binary asset embedded as base64 inside
 those scripts, and a ``fetch`` shim that serves them from memory. Nothing is
-fetched at run time; see DECISION.md for why this shape was chosen.
+fetched at run time; ARCHITECTURE.md ("Where the engine runs") says why.
 
 What goes in:
 
@@ -70,7 +70,6 @@ APP_SOURCES = [
 #: from ui/ by Vite, see :func:`build_ui`.
 STATIC = [
     "index.html",
-    "demo.html",
     "client.js",
     "runtime.js",
     "worker.js",
@@ -79,15 +78,33 @@ STATIC = [
 #: browser refuses modules from file://.
 UI = WEB / "ui"
 UI_BUILT = ["app.js", "app.css"]
-#: The example files the wizard's "Try with example files" reads.
-#: The example files the wizard's "Try with example files" reads: every data
-#: file in samples/ (the generator's own script stays out), so a file added
-#: to the examples can never be missing from the bundle.
+#: Reading bills in the page (ui/src/ocr/engine.js): pdf.js's worker script,
+#: copied from the package; and the OCR models and runtime, embedded as
+#: base64 in ``dist/ocr-assets.js`` and loaded the first time a document is
+#: read. PaddleOCR's PP-OCRv4 detector and PP-OCRv3 Latin recogniser (Apache
+#: 2.0, converted to ONNX by the RapidOCR project), its dictionary, and ONNX
+#: Runtime Web's WebAssembly (from the npm package), about 34 MB in all.
+PDF_WORKER = UI / "node_modules" / "pdfjs-dist" / "build" / "pdf.worker.min.js"
+OCR_MODELS = {
+    "det.onnx": "https://huggingface.co/SWHL/RapidOCR/resolve/main/PP-OCRv4/ch_PP-OCRv4_det_infer.onnx",
+    "rec.onnx": "https://huggingface.co/SWHL/RapidOCR/resolve/main/PP-OCRv3/en_PP-OCRv3_rec_infer.onnx",
+    "dict.txt": "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/ppocr/utils/en_dict.txt",
+}
+ORT_WASM = ["ort-wasm-simd.wasm", "ort-wasm.wasm"]
+#: The example files the demo homes read: every data file in samples/ (the
+#: generator's own script stays out), so a file added to the examples can
+#: never be missing from the bundle.
 SAMPLE_FILES = sorted(
     str(f.relative_to(WEB / "samples"))
     for f in (WEB / "samples").rglob("*")
     if f.suffix in (".csv", ".json")
 )
+#: The demo homes a householder may start from (webmain.DEMO_HOMES).
+#: Their data never changes, so their whole answer (files read, first
+#: estimate, cards, analysis and hidden-month test) is worked out here, once,
+#: in both languages, and baked into ``dist/demos.js``: a demo opens at once
+#: and the browser fits nothing until the demo is edited.
+DEMOS = ["gas_winter", "electric"]
 
 
 def cache_dir() -> Path:
@@ -275,6 +292,95 @@ def questions_script() -> str:
     return f"const OTWIN_QUESTIONS = {json.dumps(data, ensure_ascii=False)};\n"
 
 
+def engine_sources() -> list[Path]:
+    """The files a demo's baked answer depends on: the engine and the samples."""
+    files = [f for rel in APP_SOURCES for f in sorted((REPO / rel).rglob("*.py"))]
+    files += sorted((WEB / "py").glob("*.py"))
+    files += [WEB / "samples" / name for name in SAMPLE_FILES]
+    return files
+
+
+def demo_results() -> dict:
+    """Every demo home's answers and, in every language, its files as the
+    engine describes them, its first estimate, its cards and its analysis
+    with the hidden-month test: what the page would get from the engine,
+    worked out here natively (about a minute and a half) and cached in the
+    cache directory under a fingerprint of the engine's sources and the
+    sample files, so a build that only touches the page is quick."""
+    h = hashlib.sha256()
+    for f in engine_sources():
+        h.update(str(f.relative_to(REPO)).encode() + b"\0" + f.read_bytes() + b"\0")
+    h.update(json.dumps(DEMOS).encode())
+    cached = cache_dir() / f"demos-{h.hexdigest()[:16]}.json"
+    if cached.exists():
+        return json.loads(cached.read_text())
+    for extra in (HOME, WEB / "py"):
+        if str(extra) not in sys.path:
+            sys.path.insert(0, str(extra))
+    import webmain
+
+    from survey import HomeDescription
+    from survey.questions import LANGUAGES
+
+    results = {}
+    for demo in DEMOS:
+        print(f"  working out the demo home {demo!r} (fit and hidden-month test) ...")
+        webmain.forget()
+        webmain.set_language("en")
+        answers = webmain.load_samples(demo)["answers"]
+        report = webmain.analyse(answers)
+        if not report.get("ok"):
+            raise SystemExit(f"the demo home {demo!r} could not be analysed: {report}")
+        if len(webmain.cards(answers)["periods"]) >= 2:
+            webmain.trust_test(answers)
+        tz = HomeDescription.from_answers(answers).timezone
+        entry: dict = {"answers": answers, "fit": webmain.fit_summary()}
+        for lang in LANGUAGES:
+            webmain.set_language(lang)
+            entry[lang] = {
+                "files": webmain.files(tz)["files"],
+                "home": webmain.home(answers),
+                "cards": webmain.cards(answers),
+                "report": webmain.report(),
+            }
+        results[demo] = entry
+    webmain.forget()
+    webmain.set_language("en")
+    cached.write_text(json.dumps(results, ensure_ascii=False))
+    return results
+
+
+def demos_script(results: dict) -> str:
+    """``dist/demos.js``: the demo homes' baked answers, a classic script."""
+    return f"const OTWIN_DEMOS = {json.dumps(results, ensure_ascii=False)};\n"
+
+
+def ocr_assets_script() -> str:
+    """``dist/ocr-assets.js``: the OCR models, their dictionary and the ONNX
+    runtime's wasm, each registered with the page by name."""
+    ocr_cache = cache_dir().parent / "ocr"
+    ocr_cache.mkdir(parents=True, exist_ok=True)
+    parts = []
+    for name, url in OCR_MODELS.items():
+        path = ocr_cache / name
+        if not path.exists():
+            print(f"  downloading the OCR model {name} ...")
+            tmp = path.with_suffix(path.suffix + ".part")
+            with urllib.request.urlopen(url) as r, open(tmp, "wb") as f:
+                shutil.copyfileobj(r, f)
+            tmp.rename(path)
+        parts.append((name, path.read_bytes()))
+    for name in ORT_WASM:
+        path = UI / "node_modules" / "onnxruntime-web" / "dist" / name
+        if not path.is_file():
+            raise SystemExit(f"{path} is missing: run npm install in {UI}")
+        parts.append((name, path.read_bytes()))
+    return "".join(
+        f"otwinRegisterOcrAsset({json.dumps(name)}, {json.dumps(base64.b64encode(data).decode('ascii'))});\n"
+        for name, data in parts
+    )
+
+
 def asset_script(name: str, data: bytes) -> str:
     """A classic script registering one embedded asset."""
     b64 = base64.b64encode(data).decode("ascii")
@@ -310,6 +416,9 @@ def main() -> Path:
     scripts.append("assets/app.js")
     (DIST / "assets" / "manifest.js").write_text(manifest_script(scripts))
     (DIST / "questions.js").write_text(questions_script())
+    (DIST / "demos.js").write_text(demos_script(demo_results()))
+    (DIST / "ocr-assets.js").write_text(ocr_assets_script())
+    shutil.copy(PDF_WORKER, DIST / "pdf.worker.min.js")
     built = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")  # any language
     (DIST / "build-info.js").write_text(build_info_script(fingerprint(), built))
     for name in STATIC:

@@ -1,7 +1,7 @@
 """Smart-plug and sub-meter energy exports: Shelly (local CSV) and Tapo (app workbook).
 
 **Shelly** Gen2+ energy meters store per-interval records and serve them as
-CSV from the local web server (DESIGN.md §4.3)::
+CSV from the local web server (ARCHITECTURE.md)::
 
     http://<ip>/em1data/<id>/data.csv?add_keys=true   (single phase: Pro EM, EM Gen3)
     http://<ip>/emdata/<id>/data.csv?add_keys=true    (three phase: Pro 3EM)
@@ -15,8 +15,7 @@ ignored. The record length is the spacing between timestamps, so a device
 offline for ten minutes leaves a ten-minute gap rather than one long
 interval.
 
-**Tapo** P110/P115 plugs export an Excel workbook from the app (DESIGN.md
-§4.2): hourly energy for the last 7 days, daily for the last 3 months,
+**Tapo** P110/P115 plugs export an Excel workbook from the app (ARCHITECTURE.md): hourly energy for the last 7 days, daily for the last 3 months,
 monthly for the last 12 months, and a sheet of instantaneous power. Sheet
 names and headers vary with app version and language, so each sheet is
 recognised by its contents rather than its name. That means a header row
@@ -26,7 +25,7 @@ because the same days appear in several sheets at different resolutions;
 use :func:`ingest.merge` to join overlapping exports of the *same* sheet.
 Labels are local time at the *start* of each hour, day or month. The
 column names in the fixtures are a best reading of public descriptions,
-pending a real export (DESIGN.md §7, Q3).
+pending a real export (ARCHITECTURE.md).
 """
 
 from __future__ import annotations

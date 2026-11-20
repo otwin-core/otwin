@@ -1,4 +1,4 @@
-"""Hand-entered gas and water bills (DESIGN.md §4.5, §4.6).
+"""Hand-entered gas and water bills (ARCHITECTURE.md, "Ingest").
 
 A bill is one row: the reading dates, the two meter readings, whether the
 reading was real or estimated, and the amount. Gas bills also carry the

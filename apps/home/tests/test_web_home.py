@@ -1,4 +1,4 @@
-"""The "My home" dashboard's engine calls (WORKFLOW.md, proposal B), natively.
+"""The "My home" page's engine calls, natively.
 
 What the page shows on its one screen comes from these calls: the first
 estimate from the answers alone, the five data cards and the next best
@@ -49,6 +49,17 @@ def test_a_first_estimate_from_the_answers_alone():
     assert e["province"] == "Madrid" and e["january_c"] == 6.3
     assert 150 < e["eur"] < 600 and 0.5 < e["heating_share"] < 0.95
     assert {r["use"] for r in e["by_use"]} >= {"heating", "hot water", "cooking"}
+    # the house drawn: what comes in, the heat made, what gets out
+    f = e["flows"]
+    assert f["heater"] == "gas" and f["gas_kwh"] > f["electricity_kwh"] > 0
+    assert f["water_typical"] and f["water_m3"] == pytest.approx(
+        130 * 3 * 31 / 1000, abs=0.1
+    )
+    assert f["loss_kwh"] == pytest.approx(f["loss_fabric_kwh"] + f["loss_air_kwh"], abs=1)
+    assert f["loss_fabric_kwh"] > f["loss_air_kwh"] > 0
+    # the heat made is what the loss needs, less the free gains
+    assert 0.8 * f["loss_kwh"] < f["heat_kwh"] < f["loss_kwh"]
+    assert 10 < f["delta_c"] < 16 and f["hours"] == 744
     webmain.set_language("es")
     es = webmain.home(GAS)
     assert es["header"] == "Madrid · piso · 105 m² · caldera de gas"
@@ -94,8 +105,16 @@ def test_the_analysis_is_the_dashboard_and_speaks_both_languages():
     assert r["money"]["eur_per_month"] > 100 and r["money"]["from_bills"]
     uses = {u["use"] for u in r["money"]["by_use"]}
     assert {"heating", "hot water", "cooking", "always_on"} <= uses
-    assert r["boiler"] in ("measured", "bigger_than_needed")
+    assert (
+        r["boiler"] == "given" and r["boiler_kw"] == 24.0
+    )  # from the nameplate, not fitted
     assert r["keeps_warm_hours"] == pytest.approx(21.1, rel=0.1)
+    f = r["flows"]  # a month, from the data: the water bill, not a typical one
+    assert f["hours"] == 730 and not f["water_typical"] and 5 < f["water_m3"] < 20
+    assert f["gas_kwh"] > 1000 and f["heat_kwh"] < f["loss_kwh"]
+    assert sum(u["kwh"] for u in f["by_use"]) == pytest.approx(
+        f["gas_kwh"] + f["electricity_kwh"], abs=2
+    )
     keys = [w["key"] for w in r["whatif"]]
     assert keys == ["thermostat_down", "thermostat_up", "insulate", "colder"]
     down = r["whatif"][0]
@@ -141,7 +160,7 @@ def test_the_language_changes_every_sentence_of_the_files():
     webmain.set_language("es")
     (f,) = webmain.files()["files"]
     assert f["message"] == (
-        "Leída 1 factura de gas: del 15 dic 2025 al 15 ene 2026, 267 m³ facturados como 2958 kWh."
+        "Leída 1 factura de gas: del 15 dic 2025 al 15 ene 2026, 245 m³ facturados como 2714 kWh."
     )
     with pytest.raises(ValueError, match="lang must be"):
         webmain.set_language("fr")

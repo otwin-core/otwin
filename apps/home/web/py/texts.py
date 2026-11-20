@@ -203,6 +203,54 @@ TEXTS: dict[str, dict[str, str]] = {
         "es": "{what}, {first} a {last} (escrita a mano)",
     },
     "gas_bill_title": {"en": "Gas bill", "es": "Factura de gas"},
+    "electricity_bill_title": {"en": "Electricity bill", "es": "Factura de electricidad"},
+    "fmt_typed_electricity": {
+        "en": "an electricity bill typed in",
+        "es": "una factura de electricidad escrita a mano",
+    },
+    "read_electricity_bill": {
+        "en": "Electricity bill, {first} to {last}: {kwh} kWh{eur}.",
+        "es": "Factura de electricidad, del {first} al {last}: {kwh} kWh{eur}.",
+    },
+    "for_eur": {"en": ", {eur} €", "es": ", {eur} €"},
+    # ------------------------------------------------------- do the bills fit the home?
+    "gas_implausible": {
+        "en": "These gas bills show about {bill} kWh a day. A home as you described it would use about {typical} kWh a day in January. Either the bills are from another home, or the answers do not describe this one.",
+        "es": "Estas facturas de gas muestran unos {bill} kWh al día. Una casa como la que has descrito gastaría unos {typical} kWh al día en enero. O las facturas son de otra casa, o las respuestas no describen esta.",
+    },
+    "gas_but_no_gas": {
+        "en": "There are gas bills, but nothing in the home you described runs on gas. Either the bills are from another home, or the answers do not describe this one.",
+        "es": "Hay facturas de gas, pero en la casa que has descrito nada funciona con gas. O las facturas son de otra casa, o las respuestas no describen esta.",
+    },
+    "elec_implausible": {
+        "en": "This electricity record shows about {record} kWh a day. A home as you described it would use about {typical} kWh a day in January. Either the file is from another home, or the answers do not describe this one.",
+        "es": "Este registro de electricidad muestra unos {record} kWh al día. Una casa como la que has descrito gastaría unos {typical} kWh al día en enero. O el archivo es de otra casa, o las respuestas no describen esta.",
+    },
+    # ------------------------------------------------------- reading a bill
+    "inv_kind_electricity": {
+        "en": "an electricity bill",
+        "es": "una factura de electricidad",
+    },
+    "inv_kind_gas": {"en": "a gas bill", "es": "una factura de gas"},
+    "inv_kind_water": {"en": "a water bill", "es": "una factura de agua"},
+    "inv_kind_unknown": {
+        "en": "a bill we could not place",
+        "es": "una factura que no sabemos ubicar",
+    },
+    "inv_from": {"en": " from {supplier}", "es": " de {supplier}"},
+    "inv_read": {
+        "en": "This looks like {kind}{from}{period}{amounts}. Check the fields and add it.",
+        "es": "Parece {kind}{from}{period}{amounts}. Revisa los campos y añádela.",
+    },
+    "inv_period": {"en": ", {first} to {last}", "es": ", del {first} al {last}"},
+    "inv_nothing": {
+        "en": "We could not read the numbers on this document. Type them in from the paper, or try a sharper photo.",
+        "es": "No hemos podido leer los números de este documento. Escríbelos del papel, o prueba con una foto más nítida.",
+    },
+    "inv_kwh_mismatch": {
+        "en": "m³ × Fc × PCS does not give the kWh read: one of them is misread.",
+        "es": "m³ × Fc × PCS no da los kWh leídos: alguno está mal leído.",
+    },
     "water_bill_title": {"en": "Water bill", "es": "Factura de agua"},
     # ------------------------------------------------------------ the example
     "example_remade": {

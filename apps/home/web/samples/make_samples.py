@@ -87,6 +87,7 @@ ANSWERS = {
     "size": "m",
     "built": "1980_2006",
     "heating": "heat_pump",
+    "heating_power": "5",  # the nameplate: a 5 kW split
     "cooling": "no",
     "thermostat": "20",
     "night": "lower",
@@ -100,7 +101,7 @@ ANSWERS = {
 #: and a 175 W always-on load.
 TRUTH = Truth(
     scale={"zone.envelope.conductance": 1.25, "zone.air.capacity": 0.8},
-    set={"heating.thermostat.power": 5200.0, "base.power": 175.0},
+    set={"heating.thermostat.power": 5000.0, "base.power": 175.0},
     seed=11,
 )
 
@@ -112,6 +113,7 @@ GAS_ANSWERS = {
     "size": "l",
     "built": "pre1980",
     "heating": "gas",
+    "heating_power": "24",  # the nameplate: a 24 kW caldera mixta
     "cooling": "no",
     "thermostat": "21",
     "night": "lower",

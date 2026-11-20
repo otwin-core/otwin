@@ -22,6 +22,10 @@ radiation to the sky                   ISO 13790 §11.4.6: the envelope faces ai
                                        facades, about 0.6 for a house (roof 1,
                                        walls 0.5, ground floor 0): about 1.0 and
                                        1.2 K
+heating power                          the nameplate's useful kW when given
+                                       (``heating_power``), kept as given and
+                                       never fitted; otherwise the typical sizes
+                                       below, which the fit then measures
 heat pump                              60 W of heat per m², at least 3.5 kW;
                                        seasonal COP 3
 electric heaters                       100 W per m²
@@ -43,8 +47,10 @@ cooking                                electric or induction hob: 0.9 kWh a
 air conditioning                       60 W of cooling per m², at least 2.5 kW;
                                        seasonal EER 3; set to 25 °C
 always-on electricity                  100 W plus 15 W per person
-people                                 60 W of body heat each, averaged over a
-                                       day of comings and goings
+people                                 70 W of sensible heat each (ISO 7730, a
+                                       seated adult), present half the time on
+                                       average: everyone home and asleep from
+                                       23:00 to 07:00, one in four during the day
 =====================================  =========================================
 """
 
@@ -66,6 +72,7 @@ from components import (
     HomeTwin,
     Occupants,
     Schedule,
+    SolarGain,
     ThermalZone,
     WaterHeater,
     build_home,
@@ -73,7 +80,9 @@ from components import (
 )
 from components.catalogue import LIVING
 from components.exchanges import VIEW_FACTOR, sky_depression
+from components.schedules import ClimateSchedule
 
+from .climate import solar_at
 from .questions import PROVINCES, QUESTIONS
 
 __all__ = ["HomeDescription", "build_twin", "assumptions", "home_summary", "FLOOR_AREA"]
@@ -94,7 +103,18 @@ SKY_VIEW: dict[str, dict[str, float]] = {
     "detached": {"wall": 0.55, "roof": 0.3, "ground": 0.15},
 }
 _CAPACITY_PER_M2 = 1.6e5  # J/K per m²
-_PERSON_W = 60.0
+#: Sensible heat of a person, W (ISO 7730: a seated adult gives off about
+#: 100-120 W, 70 of them sensible; the rest is moisture).
+_PERSON_W = 70.0
+#: Effective solar aperture per m² of floor: glazing 15 % of the floor,
+#: g-value 0.6, half of it shaded or framed (0.15 × 0.6 × 0.5).
+_SOLAR_APERTURE = 0.045
+#: How much of each person is home, hour by hour: everyone home and asleep
+#: from 23:00 to 07:00, one in four during the day, which averages to half
+#: the time. People are the "other heat generated inside", with the
+#: appliances; counting them all day long would hand the fit heat the home
+#: never had.
+_PRESENCE = Schedule([1.0 if (h >= 23 or h < 7) else 0.25 for h in range(24)])
 #: Hot water drawn by two people, litres per hour at 40 °C (170 L a day).
 _HOT_WATER_2P = [
     0,
@@ -162,7 +182,9 @@ class HomeDescription:
     size: str = "m"
     built: str = "1980_2006"
     heating: str = "heat_pump"
+    heating_power: str = "auto"  # the nameplate's useful kW, or "auto" for a typical size
     cooling: str = "no"
+    cooling_setpoint: str = "25"  # the air conditioning's setting, °C
     thermostat: str = "20"
     night: str = "lower"
     people: str = "2"
@@ -177,11 +199,15 @@ class HomeDescription:
         object.__setattr__(self, "appliances", apps)
         for q in QUESTIONS:
             value = getattr(self, q.id)
-            allowed = q.values()
             given = value if q.kind == "multi" else (value,)
-            bad = [v for v in given if v not in allowed]
+            bad = [v for v in given if not q.accepts(v)]
             if bad:
-                raise ValueError(f"{q.id}: {bad[0]!r} is not one of {list(allowed)}")
+                what = (
+                    f"a number from {q.minimum:g} to {q.maximum:g}"
+                    if q.numeric
+                    else f"one of {list(q.values())}"
+                )
+                raise ValueError(f"{q.id}: {bad[0]!r} is not {what}")
 
     @classmethod
     def from_answers(cls, answers: Mapping[str, object]) -> HomeDescription:
@@ -209,13 +235,29 @@ class HomeDescription:
     # ------------------------------------------------------------ derived
     @property
     def area(self) -> float:
-        """Representative floor area, m²."""
-        return FLOOR_AREA[self.size]
+        """Floor area, m²: the number given, or the class's typical one."""
+        if self.size in FLOOR_AREA:
+            return FLOOR_AREA[self.size]
+        return float(self.size)
+
+    @property
+    def size_class(self) -> str:
+        """``s``, ``m``, ``l`` or ``xl``, from the area."""
+        a = self.area
+        return "s" if a < 60 else "m" if a < 90 else "l" if a < 120 else "xl"
+
+    @property
+    def era(self) -> str:
+        """``pre1980``, ``1980_2006`` or ``post2007``, from the year built."""
+        if self.built in _UA_PER_M2:
+            return self.built
+        year = int(float(self.built))
+        return "pre1980" if year < 1980 else "1980_2006" if year < 2007 else "post2007"
 
     @property
     def people_count(self) -> int:
         """Number of people."""
-        return int(self.people)
+        return int(float(self.people))
 
     @property
     def timezone(self) -> str:
@@ -225,7 +267,7 @@ class HomeDescription:
     @property
     def envelope_ua(self) -> float:
         """Typical heat loss through the envelope, W/K."""
-        return _UA_PER_M2[self.built] * _EXPOSURE[self.home_type] * self.area
+        return _UA_PER_M2[self.era] * _EXPOSURE[self.home_type] * self.area
 
     @property
     def ventilation_ua(self) -> float:
@@ -249,6 +291,14 @@ class HomeDescription:
     def radiation_w(self) -> float:
         """Typical radiation loss to the sky, W: ``UA · depression``."""
         return self.envelope_ua * self.sky_depression
+
+    @property
+    def heating_kw(self) -> float | None:
+        """The heating's useful power from its nameplate, kW; None for a
+        typical size (the ``heating_power`` answer is ``"auto"``)."""
+        if self.heating_power == "auto" or float(self.heating_power) <= 0:
+            return None
+        return float(self.heating_power)
 
     @property
     def setpoint_c(self) -> float:
@@ -288,11 +338,12 @@ def build_twin(
     setpoint = Schedule([day if 7 <= h < 23 else night for h in range(24)], tz)
 
     conditioning = []
+    nameplate = None if desc.heating_kw is None else 1000.0 * desc.heating_kw
     if with_heating and desc.heating != "none":
         if desc.heating == "heat_pump":
             conditioning.append(
                 HeatPump(
-                    max(3500.0, 60.0 * a),
+                    nameplate or max(3500.0, 60.0 * a),
                     cop=3.0,
                     setpoint=None,
                     setpoint_schedule=setpoint,
@@ -302,13 +353,16 @@ def build_twin(
         elif desc.heating == "electric":
             conditioning.append(
                 ElectricHeater(
-                    100.0 * a, setpoint=None, setpoint_schedule=setpoint, name="heating"
+                    nameplate or 100.0 * a,
+                    setpoint=None,
+                    setpoint_schedule=setpoint,
+                    name="heating",
                 )
             )
         else:
             conditioning.append(
                 Boiler(
-                    24e3,
+                    nameplate or 24e3,
                     setpoint=None,
                     setpoint_schedule=setpoint,
                     efficiency=0.9,
@@ -320,7 +374,7 @@ def build_twin(
             AirConditioner(
                 max(2500.0, 60.0 * a),
                 eer=3.0,
-                setpoint=ZERO_CELSIUS + 25.0,
+                setpoint=ZERO_CELSIUS + float(desc.cooling_setpoint),
                 name="cooling",
             )
         )
@@ -329,7 +383,23 @@ def build_twin(
     scale = _people_factor(desc)
     gains: list = [
         BaseLoad(100.0 + 15.0 * people),
-        Occupants(float(people), watts_each=_PERSON_W),
+        # the sun through the windows: a typical glazed area of about 15 % of
+        # the floor, a g-value of 0.6 and half of it shaded or framed, on the
+        # province's typical irradiance for the day of the year
+        SolarGain(
+            schedule=ClimateSchedule(
+                lambda stamps, prov=desc.province, k=_SOLAR_APERTURE * a: solar_at(
+                    prov, stamps
+                )
+                * k,
+                tz,
+            )
+        ),
+        Occupants(
+            None,
+            watts_each=_PERSON_W,
+            schedule=Schedule(_PRESENCE.scaled(people * _PERSON_W).values, tz),
+        ),
     ]
     for name in desc.appliances:
         hours, scales, indoors = _APPLIANCES[name]
@@ -470,9 +540,9 @@ def home_summary(desc: HomeDescription, lang: str = "en") -> list[tuple[str, str
         (
             "Your home",
             f"{_KIND[desc.home_type]} of about {desc.area:.0f} m² in {province}, "
-            f"{_BUILT[desc.built]}. {people} there.",
+            f"{_BUILT[desc.era]}. {people} there.",
         ),
-        ("Insulation", _INSULATION[desc.built]),
+        ("Insulation", _INSULATION[desc.era]),
         ("Heat lost to the sky", _sky_text(desc)),
     ]
     if desc.heating == "none":
@@ -588,13 +658,13 @@ def _home_summary_es(desc: HomeDescription) -> list[tuple[str, str]]:
             f"{_KIND_ES[desc.home_type]} de unos {desc.area:.0f} m² en {province}, "
             # a piso is masculine, a casa feminine
             + (
-                _BUILT_ES[desc.built]
+                _BUILT_ES[desc.era]
                 if desc.home_type == "flat"
-                else _BUILT_ES[desc.built].replace("construido", "construida")
+                else _BUILT_ES[desc.era].replace("construido", "construida")
             )
             + f". {people} en ella.",
         ),
-        ("Aislamiento", _INSULATION_ES[desc.built]),
+        ("Aislamiento", _INSULATION_ES[desc.era]),
         ("Calor que se va al cielo", sky),
     ]
     if desc.heating == "none":

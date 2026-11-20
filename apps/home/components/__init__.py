@@ -2,7 +2,7 @@
 
 One module per role, the way ``otwin.components`` keeps one module per
 domain. Every component plays exactly one role, and the roles map one to one
-onto Otwin's own (see COMPONENTS.md in this directory):
+onto Otwin's own (see ARCHITECTURE.md, "Components"):
 
 =============  ===========================  =======================================
 home role      otwin role                   components

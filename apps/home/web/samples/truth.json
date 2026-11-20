@@ -4,7 +4,7 @@
     "zone.air.capacity": 0.8
   },
   "set": {
-    "heating.thermostat.power": 5200.0,
+    "heating.thermostat.power": 5000.0,
     "base.power": 175.0
   },
   "seed": 11

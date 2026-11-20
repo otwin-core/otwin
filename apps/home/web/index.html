@@ -22,6 +22,7 @@
   </noscript>
 
   <script src="questions.js"></script>
+  <script src="demos.js"></script>
   <script src="build-info.js"></script>
   <script>
     /* Opened from the sources (apps/home/web/index.html) rather than the
@@ -48,10 +49,11 @@
   </script>
   <script src="client.js"></script>
   <script>
-    /* questions.js, build-info.js and client.js declare their values with
+    /* questions.js, demos.js, build-info.js and client.js declare their values with
        const, which is script scope, not window. The page is a bundle and
        reads window, so hand them over here. */
     window.OTWIN_QUESTIONS = typeof OTWIN_QUESTIONS === "undefined" ? undefined : OTWIN_QUESTIONS;
+    window.OTWIN_DEMOS = typeof OTWIN_DEMOS === "undefined" ? undefined : OTWIN_DEMOS;
     window.OTWIN_BUILD = typeof OTWIN_BUILD === "undefined" ? undefined : OTWIN_BUILD;
     window.OtwinHome = typeof OtwinHome === "undefined" ? undefined : OtwinHome;
   </script>

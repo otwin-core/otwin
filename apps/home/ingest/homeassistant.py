@@ -1,6 +1,6 @@
 """Home Assistant exports: long-term statistics and the History panel CSV.
 
-**Long-term statistics** (DESIGN.md §4.4) are hourly and kept forever. The
+**Long-term statistics** (ARCHITECTURE.md, "Ingest") are hourly and kept forever. The
 ``homeassistant-statistics`` integration exports them as CSV or TSV with
 columns ``statistic_id, unit, start, min, max, mean, sum, state`` (and
 optionally ``delta``). ``start`` is the start of the hour, written either in

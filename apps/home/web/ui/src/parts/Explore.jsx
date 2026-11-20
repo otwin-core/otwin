@@ -1,43 +1,9 @@
-/* The five areas: where the money goes, the heating, what if, can I trust
- * it, and month by month. Radix Tabs underneath; the look is ours.
+/* The areas of a fit, each a panel: where the money goes, the heating,
+ * the improvements, and month by month. The pages place them.
  */
-import * as Tabs from "@radix-ui/react-tabs";
-
 import { useT } from "../i18n";
 import { Chip } from "./bits";
 import { DailyChart, IndoorChart } from "./Charts";
-
-const AREAS = ["money", "heating", "whatif", "trust", "months"];
-
-export function Explore({ report, estimate, periods, trustBusy, onRunTrust }) {
-  const { t } = useT();
-  return (
-    <Tabs.Root defaultValue="money">
-      <Tabs.List className="explore-tabs" aria-label={t("explore_title")}>
-        {AREAS.map((a) => (
-          <Tabs.Trigger key={a} value={a} data-tab={a}>
-            {t(`tab_${a}`)}
-          </Tabs.Trigger>
-        ))}
-      </Tabs.List>
-      <Tabs.Content className="panel" value="money">
-        <Money report={report} estimate={estimate} />
-      </Tabs.Content>
-      <Tabs.Content className="panel" value="heating">
-        <Heating report={report} />
-      </Tabs.Content>
-      <Tabs.Content className="panel" value="whatif">
-        <WhatIf report={report} />
-      </Tabs.Content>
-      <Tabs.Content className="panel" value="trust">
-        <Trust report={report} periods={periods} busy={trustBusy} onRun={onRunTrust} />
-      </Tabs.Content>
-      <Tabs.Content className="panel" value="months">
-        <Months report={report} />
-      </Tabs.Content>
-    </Tabs.Root>
-  );
-}
 
 function Empty() {
   const { t } = useT();
@@ -66,7 +32,7 @@ function Bars({ rows }) {
   );
 }
 
-function Money({ report, estimate }) {
+export function Money({ report, estimate }) {
   const { t, n } = useT();
   if (!report) {
     if (!estimate) return <Empty />;
@@ -117,7 +83,7 @@ function Lines({ title, lines }) {
   );
 }
 
-function Heating({ report }) {
+export function Heating({ report }) {
   const { t, n } = useT();
   if (!report) return <Empty />;
   const facts = [
@@ -126,7 +92,9 @@ function Heating({ report }) {
       : t("keeps_warm_unknown"),
     report.boiler === "measured"
       ? t("boiler_measured", { kw: n(report.boiler_kw, 1) })
-      : report.boiler === "bigger_than_needed"
+      : report.boiler === "given"
+        ? t("boiler_given", { kw: n(report.boiler_kw, 1) })
+        : report.boiler === "bigger_than_needed"
         ? t("boiler_bigger")
         : t("boiler_unknown"),
     report.running != null ? t("running", { pct: n(100 * report.running) }) : null,
@@ -159,7 +127,7 @@ function Heating({ report }) {
   );
 }
 
-function HowWeKnow({ report }) {
+export function HowWeKnow({ report }) {
   const { t } = useT();
   if (!report) return null;
   return (
@@ -183,7 +151,7 @@ function HowWeKnow({ report }) {
   );
 }
 
-function WhatIf({ report }) {
+export function WhatIf({ report }) {
   const { t } = useT();
   if (!report?.whatif?.length) return <Empty />;
   return (
@@ -206,37 +174,7 @@ function WhatIf({ report }) {
   );
 }
 
-function Trust({ report, periods, busy, onRun }) {
-  const { t } = useT();
-  if (!report) return <Empty />;
-  const trust = report.trust;
-  return (
-    <>
-      <p>{report.confidence_text}</p>
-      <p className="small">{t("trust_intro")}</p>
-      {trust?.sentences ? (
-        <div
-          className={`trust ${trust.passed ? "passed" : trust.status === "done" ? "failed" : ""}`}
-        >
-          {trust.sentences.map((s) => (
-            <p key={s}>{s}</p>
-          ))}
-        </div>
-      ) : (periods?.length || 0) < 2 ? (
-        <p className="small">{t("trust_needs_two")}</p>
-      ) : (
-        <p>
-          <button type="button" className="primary" id="run-trust" disabled={busy} onClick={onRun}>
-            {t("trust_run")}
-          </button>
-        </p>
-      )}
-      <HowWeKnow report={report} />
-    </>
-  );
-}
-
-function Months({ report }) {
+export function Months({ report }) {
   const { t, n } = useT();
   if (!report) return <Empty />;
   const cell = (v) => (v == null ? "—" : n(v));
