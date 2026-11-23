@@ -72,7 +72,7 @@ watt three blocks downstream.
 
 ## Datasets
 
-{func}`~otwin.io.load` fetches a registered dataset as a DataFrame,
+{func}`~otwin.io.load` reads a registered dataset as a DataFrame, and says where to download it when it is not there yet,
 {func}`~otwin.io.describe` gives its licence and citation,
 {func}`~otwin.io.verify` checks a local file against its registered checksum,
 and {func}`~otwin.io.path_for` says where it would be cached whether or not it

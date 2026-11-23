@@ -1,13 +1,14 @@
 """The dataset registry.
 
-Raw data does not belong in git. A 21 MB CSV in version control makes every
-clone slow forever, and the file is not even ours to redistribute — it is the
-NASA Ames Prognostics Center's.
+The package stores **identity, not bytes**: where each dataset comes from,
+what it should hash to, and how to load it. The installed wheel carries no data.
+A file is checked against its checksum before it is read, so a truncated or
+substituted file fails loudly rather than producing quietly wrong science.
 
-So this package stores **identity, not bytes**: where each dataset comes from,
-what it should hash to, and how to load it. The download is on first use and is
-verified against the checksum, so a truncated or substituted file fails loudly
-rather than producing quietly wrong science.
+The repository does carry the data the example notebooks need, in
+``examples/data/``, so that they run in one click. That is possible only for
+data whose licence allows it: the NASA battery data is a US Government work in
+the public domain. The sdist excludes ``examples/data/``.
 """
 
 from __future__ import annotations
@@ -56,13 +57,17 @@ DATASETS: dict[str, Dataset] = {
         ),
         source=(
             "NASA Ames Prognostics Center of Excellence, Li-ion Battery Aging "
-            "Dataset (B0005-B0018). Redistributed here unmodified."
+            "Dataset, cells B0005, B0006, B0007 and B0018, as one CSV in "
+            "examples/data/ of the otwin repository."
         ),
         license=(
             "US Government work, public domain. Cite the source; do not imply "
             "NASA endorsement."
         ),
-        url=("https://phm-datasets.s3.amazonaws.com/NASA/5.+Battery+Data+Set.zip"),
+        url=(
+            "https://raw.githubusercontent.com/otwin-core/otwin/main/"
+            "examples/data/nasa_battery_discharge.csv"
+        ),
         sha256="42067a9d7422b8a680ac4ae6562e87f38961a3c50b0da27e2d4fde78af9459e5",
         size_bytes=21568242,
         citation=(

@@ -93,6 +93,8 @@ packages = ["src/otwin"]
 # not carry the README artwork: every image in README.md is referenced by an
 # absolute raw.githubusercontent.com URL, so the 2.1 MB of PNGs under assets/
 # were downloaded by everyone installing from source and displayed to nobody.
+# Nor does it carry the 21 MB of example data in examples/data/, which the
+# notebooks read from the repository or download from GitHub.
 [tool.hatch.build.targets.sdist]
 # The first four are things a reader of the sdist does not need. The last four
 # are things a *local* build picks up that a CI build never sees: run the suite
@@ -101,6 +103,7 @@ packages = ["src/otwin"]
 # worth pinning rather than relying on.
 exclude = [
     "assets/",
+    "examples/data/",
     ".github/",
     "docs/_build/",
     "*.patch",

@@ -1,0 +1,8 @@
+This work was produced by the United States Government (NASA Ames Research
+Center, Prognostics Center of Excellence) and is not subject to copyright
+protection in the United States (17 U.S.C. 105). It is in the public domain.
+
+Cite the source when you use it, and do not imply endorsement by NASA:
+
+Saha, B. & Goebel, K. (2007). Battery Data Set. NASA Ames Prognostics Data
+Repository, NASA Ames Research Center, Moffett Field, CA.
