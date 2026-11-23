@@ -65,7 +65,10 @@ from cryptography.hazmat.primitives import hashes, serialization  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID  # noqa: E402
 
-from otwin.io import create_self_signed_certificate, validate_server_certificate  # noqa: E402
+from otwin.io import (  # noqa: E402
+    create_self_signed_certificate,
+    validate_server_certificate,
+)
 
 DER = serialization.Encoding.DER
 

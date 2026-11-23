@@ -21,7 +21,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
-from matplotlib.patches import Circle, Ellipse, FancyBboxPatch, Polygon, Rectangle  # noqa: E402
+from matplotlib.patches import (  # noqa: E402
+    Circle,
+    Ellipse,
+    FancyBboxPatch,
+    Polygon,
+    Rectangle,
+)
 
 OUT = Path(__file__).resolve().parents[2] / "tutorials" / "images"
 
