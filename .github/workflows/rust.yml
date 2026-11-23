@@ -52,5 +52,3 @@ jobs:
           python -c "import otwin; assert otwin.engine_available()"
       - name: Test
         run: pytest -q
-      - name: Benchmark, for the log
-        run: python benchmarks/bench_engine.py

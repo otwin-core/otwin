@@ -49,6 +49,8 @@ explicit about the limits of what it has demonstrated. The first two are the
 | Validate | out of sample, against a baseline, with no leakage | [Leakage-free evaluation](validation.md) |
 | Record | what was fitted, validated and calibrated, and how | [The twin manifest](manifest.md) |
 | Decide or refuse | answer only inside what was demonstrated | [Validity envelopes](envelopes.md), [Advise](advise.md) |
+| Audit the range | observed coverage, bias and width, overall or by horizon | [Coverage audit](coverage-audit.md) |
+| Promise a margin | how far above a reference curve, at what risk of falling short | [Margin risk](margin-risk.md) |
 
 The module layout follows the six data-processing blocks of ISO 13374, the standard
 for condition monitoring and diagnostics of machines, so that a number can be traced
@@ -93,4 +95,6 @@ validation
 manifest
 envelopes
 advise
+coverage-audit
+margin-risk
 ```

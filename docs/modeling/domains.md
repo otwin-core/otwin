@@ -135,6 +135,60 @@ A tank clamps at empty: a step that overshoots below zero reads a pressure of
 zero, so the tank cannot be drained past empty and the energy cannot read back
 as an increase.
 
+## Chemical
+
+The across variable is a concentration [mol/m^3], the through variable a molar
+flow [mol/s]. `Species` is an amount of one substance in a volume; its port
+sits at the concentration. `Reaction` has one port per species and draws from
+or delivers to each at the mass-action rate of its reactants (elementary by
+default: `A -> B` first order, `A + B -> P` second order; give `order=` to
+override, or `rate=` for your own law). `Dose` is a molar flow in, an input
+when its value is `None`. `MixedReactor` holds species, reactions and a liquid
+flow that carries every species out; `TanksInSeries` chains `n` of them, the
+classical approximation of a plug-flow reactor. `Accumulator` counts what
+flows into it. Every `out_<species>` port must be connected: to the next
+reactor, an `Accumulator`, or a `Ground`.
+
+```python
+import otwin
+from otwin.components.chemical import Reaction, MixedReactor, Dose, Accumulator
+
+# A -> B, first order, in a stirred tank fed with 3 mol/m^3 of A at 1 m^3/s
+decay = Reaction({"A": -1, "B": 1}, rate_constant=0.5, name="decay")      # 1/s
+tank = MixedReactor(volume=2.0, flow=1.0, concentrations={"A": 0.0, "B": 0.0},
+                    reactions=[decay], name="tank")
+feed, out_a, out_b = Dose(None, name="feed"), Accumulator(name="out_a"), Accumulator(name="out_b")
+s = otwin.System(tank, feed, out_a, out_b)
+s.connect(feed.port, tank.in_A).connect(tank.out_A, out_a.port).connect(tank.out_B, out_b.port)
+
+m = otwin.compile(s)
+print(m.representation)
+run = m.simulate(t_span=(0, 30), dt=0.01, inputs={"feed": 3.0}, solver="patankar")
+tau = 2.0 / 1.0
+print(f"A at the outlet: {run['tank.A.concentration'][-1]:.3f} mol/m^3 "
+      f"(closed form c_in / (1 + k tau) = {3.0 / (1 + 0.5 * tau):.3f}); "
+      f"B discharged in 30 s: {run['out_b.amount'][-1]:.2f} mol")
+```
+
+```text
+pseudo-port-hamiltonian
+A at the outlet: 1.500 mol/m^3 (closed form c_in / (1 + k tau) = 1.500); B discharged in 30 s: 40.50 mol
+```
+
+Three things to know. Concentration is not a thermodynamic potential: the
+"energy" a species stores is a bookkeeping device, so the model is
+`pseudo-port-hamiltonian`, the mass balances are exact and the energy audit is
+not a first-law statement. Reactions and outflows are one-way: an outflow
+carries `Q c` downstream whatever the downstream concentration is. And
+simulate chemistry with `solver="patankar"`: a modified Patankar step that
+keeps every amount non-negative and every mass balance exact at any step size
+(Euler goes negative at `k dt > 1`, the implicit midpoint at `k dt > 2`, and
+the energy audit does not notice because the storage function is even in
+`n`). It is first order; a step of a tenth of the fastest time constant gives
+about one per cent. Temperature, reaction enthalpy, a spatially resolved plug-flow
+reactor and Monod kinetics for biological treatment are on the
+[roadmap](https://github.com/otwin-core/otwin/blob/main/ROADMAP.md).
+
 ## Coupling domains
 
 `Transformer` and `Gyrator` are lossless two-ports with ports `p1, n1` on

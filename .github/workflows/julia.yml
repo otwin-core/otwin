@@ -1,0 +1,69 @@
+name: Julia
+
+# Otwin.jl wraps the Python implementation, so it is tested against the Python
+# in this checkout rather than the last release on PyPI. That way a change to
+# otwin that breaks the Julia surface fails here, in the same pull request.
+on:
+  push:
+    branches: [main]
+    paths: ["julia/**", "src/otwin/**", "pyproject.toml", ".github/workflows/julia.yml"]
+  pull_request:
+    paths: ["julia/**", "src/otwin/**", "pyproject.toml", ".github/workflows/julia.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  otwin-jl:
+    name: Otwin.jl / julia ${{ matrix.julia }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # 1.10 is the LTS and the lower bound in Project.toml: the wrapper's
+        # tests run there. The examples need 1.11+ for `[sources]`.
+        julia: ["1.10", "1.12"]
+    defaults:
+      run:
+        working-directory: julia/Otwin.jl
+    env:
+      # Use the Python set up below instead of letting CondaPkg build its own,
+      # which is what an end user gets on first load.
+      JULIA_CONDAPKG_BACKEND: "Null"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install otwin from this checkout
+        working-directory: .
+        run: |
+          pip install -e .
+          echo "JULIA_PYTHONCALL_EXE=$(which python)" >> "$GITHUB_ENV"
+      - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
+        with:
+          version: ${{ matrix.julia }}
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+
+      - name: Test the wrapper
+        run: julia --project=. -e 'using Pkg; Pkg.test()'
+
+      # ModelingToolkit and OrdinaryDiffEq are compiled once here, so the time
+      # each example step reports is the example's own.
+      - name: Install the examples' environment
+        if: matrix.julia != '1.10'
+        run: julia --project=examples -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: "Example: the water tank"
+        if: matrix.julia != '1.10'
+        run: julia --project=examples examples/water_tank.jl
+
+      - name: "Example: the same tank in ModelingToolkit, audited with Otwin.jl"
+        if: matrix.julia != '1.10'
+        run: julia --project=examples examples/mtk_comparison.jl

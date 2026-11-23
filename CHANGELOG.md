@@ -12,6 +12,117 @@ version in anything you depend on.
 
 ### Added
 
+- **Ten tutorials** in `tutorials/`, covering every component in the library
+  on a real piece of equipment each: a battery container, a DC feeder, a
+  vehicle suspension, a wind turbine drivetrain, a water supply, a chlorine
+  contact tank, a heated building, a motor-driven pump, a flywheel store, and
+  the twin workflow on a water tower. Each page has a rendered illustration,
+  a process diagram in the notation of its domain, the question, and every
+  step with its code, printed output and seaborn plots. The same tutorials
+  are the notebooks in `examples/`, written by `tutorials/build.py` from one
+  source and run by the test suite. The artwork is drawn by
+  `assets/tutorials/make_art.py`. New extra `otwin[tutorials]`.
+- A new README: what Otwin is, how it works, how to install it, what to keep
+  in mind, and the tutorials.
+- `otwin.components.chemical`: chemistry in the component library, isothermal
+  and well-mixed. `Species` (an across storage whose port is at the
+  concentration), `Reaction` (mass action with any stoichiometry, elementary
+  order by default, `order=` or a custom `rate=` law), `Dose` (a molar flow
+  in, an input when `None`), `Outflow` (carries a species downstream at
+  `Q c`), `Accumulator` (the integral of a molar flow), `MixedReactor` and
+  `TanksInSeries`. Every case is checked against a closed form. Models are
+  `pseudo-port-hamiltonian`: the mass balances are exact, the energy audit is
+  not a first-law one.
+- `solver="patankar"`: a positivity-preserving integrator for chemical
+  models. A modified Patankar step scales every reaction and outflow by one
+  implicit factor, the smallest `n_new / n_old` over the species it draws
+  from, so no amount goes negative at any step size and the stoichiometry,
+  hence every mass balance, is exact (Patankar 1980; Burchard, Deleersnijder
+  and Meister 2003). First order. The factors solve a piecewise-linear fixed
+  point directly. Runs on the NumPy backend; the Rust backend delegates to
+  it. The compiler records the one-way flows it needs as
+  `PHSIR.rate_groups`, which survive save and load.
+- `otwin.components.base.RateBranch`: a one-way branch whose through variable
+  is a stated function of the port across variables, kept out of `J` and `R`
+  like heat generation. The `chemical` domain (concentration across, molar
+  flow through, not power-conjugate).
+
+### Fixed
+
+- A composite inside a composite now has its parts renamed with the full
+  prefix (`train.tank0.A`), as the documentation says. Before, only the
+  outer part was renamed.
+
+
+
+- `otwin.io.OpcUaSource`, a read-only OPC UA client, behind the new extra
+  `otwin[opcua]` (asyncua, LGPL-3.0-or-later). It is left out of `field` and
+  `all`, so it is only installed when asked for by name.
+  - **What it does:** it browses a server, maps a stated list of node ids to
+    named channels, and polls or subscribes them into the same `Sample` series
+    the Modbus sources produce.
+  - **It never writes:** it has no write or call API, it refuses any
+    configuration that asks to write (`ReadOnlyViolation`), and every request
+    passes an allow-list of read-only OPC UA services.
+  - **Secured by default** (Parts 4, 6 and 7):
+    - **Policy:** Basic256Sha256 with SignAndEncrypt is the default. The
+      deprecated policies are refused, and policy None only works through
+      `OpcUaSecurity.insecure()`.
+    - **Server certificate:** it is validated against the trust list or CA
+      chain, its validity, ApplicationUri, host name, key usage, key size,
+      digest and the CA's CRL, then pinned for the session.
+    - **Passwords:** a password is never sent readable.
+    - **Credentials:** they are refused in endpoint URLs and configuration files.
+  - **Server checks:** it checks units against the server's EngineeringUnits,
+    and refuses nodes that are not readable numeric scalars.
+  - **Helpers:** `create_self_signed_certificate()` writes a Part 6
+    application instance certificate.
+  - **Without the extra:** the configuration objects work, and a live
+    connection says how to install it and what to do instead.
+- `TwinManifest.acquisition` and `TwinManifest.acquired_by()`: the endpoint,
+  how the connection was secured and the node or register mapping.
+  `OpcUaSource.acquisition()` fills it in. Credentials are refused, and a
+  manifest without an acquisition record serialises exactly as before.
+- `otwin.io.samples_to_arrays()`: Samples from any source, stacked into the
+  `(t, Y)` arrays `otwin.signal` takes. Only `good` values are kept by
+  default, so a stale value becomes a gap rather than data.
+- `julia/Otwin.jl`, a Julia package that wraps this Python implementation
+  through PythonCall. It covers building or loading a model, fitting it to
+  measurement vectors, calibrated forecasts, and the audit
+  (`coverage_audit`, `margin_risk`, `transfer_validation`). Julia types go in
+  and out, with optional DataFrames. CondaPkg installs the Python side on
+  first use. The package adds no numerics. There are two examples: the
+  storage tank, and the same tank written in ModelingToolkit and audited with
+  Otwin.jl. A new `Julia` workflow runs the package tests (Julia 1.10 and 1.12)
+  and both examples against the Python in the same commit.
+- `otwin.forecast.transfer_validation(units, fit, horizon_levels, level=...)`:
+  leave-one-unit-out validation across a fleet. For each unit, `fit` is called
+  on the remaining units only and the held-out unit is forecast from rolling
+  origins. Every contrast is recorded with its unit, origin, horizon, signed
+  error and interval membership. The table (`TransferContrasts`) feeds
+  `otwin.audit.coverage_audit`. The summary gives overall coverage, coverage
+  per horizon tranche and median bias. A held-out unit reaching its own
+  calibration set raises `AssertionError`, also under `python -O`. Units given
+  twice are rejected.
+- `otwin.audit.coverage_audit(observed, prediction, lower, upper, level=...)`.
+  It gives the coverage actually observed, with a Clopper-Pearson confidence
+  interval, the median signed error (bias) and the mean width of the range,
+  with the number of contrasts behind each. By default this is one overall
+  row. `tranches=[b0, b1, ...]` with `horizons` adds one row per horizon
+  tranche `(b_{i-1}, b_i]`, and counts the contrasts that fall outside every
+  tranche. A row with fewer contrasts than `min_contrasts` (default
+  `ceil(1 / (1 - level))`, 10 at 90 %) is refused, and the refusal names the
+  count. A range that covers more than it states is reported as wider than
+  stated. `CoverageAudit.to_dict()` and `CoverageAudit.to_html()` produce the
+  report section.
+- `otwin.audit.margin_risk(residuals, reference, margins)`. For each margin
+  above a reference curve, it gives the probability of not delivering it,
+  computed from the empirical distribution of the residuals with no
+  distribution assumed, and the number of residuals behind each probability.
+  It also gives the margin that can be promised at 5, 10 and 20 % risk.
+  Fewer residuals than the minimum (19 at 5 %, or a stated `min_residuals`)
+  return a refusal that gives the count, never a number. `MarginRisk.to_dict()`
+  and `MarginRisk.to_html()` produce the section an audit report embeds.
 - The NASA battery data the example notebooks use ships in
   `examples/data/nasa_battery_discharge.csv`, with its source, licence and
   checksum in `examples/data/README.md`. Notebooks 03, 04 and 05 read it from
@@ -33,6 +144,12 @@ version in anything you depend on.
   and checked in CI.
 - A docstring on every public name (checked in CI with `interrogate`), and
   a one-line meaning on every component parameter.
+
+### Removed
+
+- `benchmarks/`, and the old example scripts and notebooks in `examples/`.
+  The tutorials replace them. The NASA data in `examples/data/` stays, as
+  `otwin.io.load` points to it.
 
 ### Changed
 

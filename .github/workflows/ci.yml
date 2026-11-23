@@ -32,10 +32,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install
         run: pip install -e ".[dev]"
-      - name: Test
+      - name: Test, including every tutorial notebook
         run: pytest -q
-      - name: Run the worked example
-        run: python examples/bess_end_to_end.py
 
   # The gate that matters. A fresh runner, a non-editable install, no source
   # checkout on the path, and the README quickstart copy-pasted verbatim.
@@ -126,8 +124,6 @@ jobs:
           python -c "import otwin; assert otwin.engine_available()"
       - name: Test
         run: pytest -q
-      - name: Benchmark, for the log
-        run: python benchmarks/bench_engine.py
 
   lint:
     runs-on: ubuntu-latest
@@ -136,8 +132,8 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with: { python-version: "3.12" }
       - run: pip install --require-hashes -r .github/requirements/lint.txt
-      - run: ruff check src tests examples assets
-      - run: ruff format --check src tests examples assets
+      - run: ruff check src tests examples assets tutorials
+      - run: ruff format --check src tests examples assets tutorials
       # The README diagrams are SVGs rendered from assets/diagrams/*.mmd, so
       # they show on PyPI too. Each SVG carries the hash of its source; a
       # stale one means someone edited the .mmd without re-rendering.

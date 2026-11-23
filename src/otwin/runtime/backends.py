@@ -31,7 +31,7 @@ __all__ = [
 ]
 
 Array = npt.NDArray[np.floating]
-SOLVERS = ("euler", "rk4", "rk45", "midpoint")
+SOLVERS = ("euler", "rk4", "rk45", "midpoint", "patankar")
 
 
 class EngineNotAvailable(UserWarning):
@@ -199,10 +199,21 @@ class RustBackend(Backend):
         """
         return float(self._m.supplied_power(_c(x), _c(u), float(t)))
 
+    def _numpy(self) -> NumpyBackend:
+        """A NumPy twin of this backend, for the solvers the engine does not have."""
+        twin = getattr(self, "_numpy_twin", None)
+        if twin is None:
+            twin = NumpyBackend(self.ir)
+            self._numpy_twin = twin
+        twin.set_params(self.get_params())
+        return twin
+
     def step(
         self, x: Array, u: Array, t: float, dt: float, method: str, **opts: Any
     ) -> Array:
         """One integration step on the Rust engine; see :meth:`Backend.step`."""
+        if method == "patankar":
+            return self._numpy().step(x, u, t, dt, method, **opts)
         return self._m.step(
             _c(x), _c(u), float(t), float(dt), method=method, **_engine_opts(opts)
         )
@@ -211,6 +222,8 @@ class RustBackend(Backend):
         self, x0: Array, t: Array, u: Array | None, method: str, interp: str, **opts: Any
     ) -> dict[str, Any]:
         """Full simulation on the Rust engine; see :meth:`Backend.simulate`."""
+        if method == "patankar":
+            return self._numpy().simulate(x0, t, u, method, interp, **opts)
         uu = None if u is None else np.ascontiguousarray(u, dtype=float)
         out = self._m.simulate(
             _c(x0),
@@ -234,6 +247,8 @@ class RustBackend(Backend):
         **opts: Any,
     ) -> dict[str, Any]:
         """Batched simulation on the Rust engine; see :meth:`Backend.simulate_batch`."""
+        if method == "patankar":
+            return self._numpy().simulate_batch(x0s, t, u, params, method, interp, **opts)
         uu = None if u is None else np.ascontiguousarray(u, dtype=float)
         pp = None if params is None else np.ascontiguousarray(params, dtype=float)
         out = self._m.simulate_batch(
@@ -406,6 +421,24 @@ class NumpyBackend(Backend):
         )
         self._ports = _compile_vector(ir.port_outputs, order)
         self._port_vals = _compile_vector(ir.port_values, order)
+        self._groups = [
+            (
+                [(i, j) for i, j, _ in g.flows],
+                _compile_vector([e for _, _, e in g.flows], order),
+            )
+            for g in ir.rate_groups
+        ]
+
+    def rate_flows(
+        self, x: Array, u: Array, t: float
+    ) -> list[list[tuple[int | None, int | None, float]]]:
+        """The one-way flows of every rate group at ``(x, u, t)``, as
+        ``(from_state, to_state, value)`` triples. Read by the ``patankar`` solver."""
+        v = self._table(x, u, t)
+        return [
+            [(i, j, float(r)) for (i, j), r in zip(ends, fn(v), strict=True)]
+            for ends, fn in self._groups
+        ]
 
     # table
     def _table(self, x: Array, u: Array | None, t: float) -> list[float]:
@@ -507,6 +540,8 @@ class NumpyBackend(Backend):
         f = self.rhs
         x = np.asarray(x, dtype=float)
         u = np.asarray(u, dtype=float)
+        if method == "patankar":
+            opts = {**opts, "_rate_flows": self.rate_flows}
         return _step(f, self.jacobian, x, lambda th: u, t, dt, method, opts)
 
     def simulate(
@@ -514,6 +549,8 @@ class NumpyBackend(Backend):
     ) -> dict[str, Any]:
         """Full simulation with the generic integrators; see :meth:`Backend.simulate`."""
         _engine_opts(opts, sim=True)
+        if method == "patankar":
+            opts = {**opts, "_rate_flows": self.rate_flows}
         return _simulate_generic(
             self.rhs,
             self.jacobian,
@@ -626,7 +663,167 @@ def _step(
         )
     if method == "midpoint":
         return _midpoint_halving(f, jac, x, u_of(0.5), t, h, opts, st, 0)
+    if method == "patankar":
+        return _patankar_halving(f, opts["_rate_flows"], x, u_of(0.0), t, h, opts, st, 0)
     raise ValueError(f"unknown solver {method!r}; choose one of {SOLVERS}")
+
+
+def _patankar_halving(
+    f: Callable[[Array, Array, float], Array],
+    flows: Callable[
+        [Array, Array, float], list[list[tuple[int | None, int | None, float]]]
+    ],
+    x: Array,
+    u0: Array,
+    t: float,
+    h: float,
+    opts: dict[str, Any],
+    st: dict[str, int],
+    depth: int,
+) -> Array:
+    """A Patankar step that halves ``h`` and retries when its iteration fails.
+
+    Up to ten levels of halving are tried before the error propagates. Every
+    sub-step keeps the amounts non-negative and the mass balance exact, so
+    halving changes the accuracy, not the guarantees.
+    """
+    try:
+        return _patankar(f, flows, x, u0, t, h, opts, st)
+    except RuntimeError:
+        if depth >= 10:
+            raise
+        st["rejected_steps"] = st.get("rejected_steps", 0) + 1
+        half = 0.5 * h
+        x1 = _patankar_halving(f, flows, x, u0, t, half, opts, st, depth + 1)
+        return _patankar_halving(f, flows, x1, u0, t + half, half, opts, st, depth + 1)
+
+
+def _patankar(
+    f: Callable[[Array, Array, float], Array],
+    flows: Callable[
+        [Array, Array, float], list[list[tuple[int | None, int | None, float]]]
+    ],
+    x: Array,
+    u0: Array,
+    t: float,
+    h: float,
+    opts: dict[str, Any],
+    st: dict[str, int],
+) -> Array:
+    """One modified Patankar step: positive for any ``h``, mass exact, first order.
+
+    The right-hand side is split into the contribution of each rate group
+    (a reaction, an outflow), evaluated at the start of the step, plus a
+    remainder (doses, any ordinary branch). Each group ``g`` is scaled by one
+    factor ``w_g``, the smallest ``x_i(new) / x_i(old)`` over the states the
+    group draws from::
+
+        x(new) = x + h * sum_g w_g c_g,     w_g = min over drawn i of x_i(new) / x_i
+
+    The factor is implicit, so a group can never draw more than its source
+    holds, and it is common to the group's flows, so a reaction's
+    stoichiometry, and with it every linear invariant of the mass balance,
+    is kept exactly (Patankar 1980; Burchard, Deleersnijder & Meister 2003,
+    for the conservative form). The remainder is treated the same way, state
+    by state, which is the classical Patankar trick. A group drawing from a
+    state that is already empty gets ``w_g = 0``: nothing comes out of an
+    empty store.
+
+    The factors solve a piecewise-linear fixed point: for a given set of
+    binding states (the one that limits each group) they are the solution of
+    a small linear system, and the set settles in a few rounds. A damped
+    fixed-point iteration (``patankar_tol``, ``max_patankar`` in ``opts``) is
+    the fallback, and the caller halves the step if that fails too. With
+    inputs, the value at the start of the step is used.
+    """
+    tol = float(opts.get("patankar_tol", 1e-12))
+    max_it = int(opts.get("max_patankar", 200))
+    n = x.shape[0]
+    contributions = []
+    for group in flows(x, u0, t):
+        c = np.zeros(n)
+        for i, j, r in group:
+            if i is not None:
+                c[i] -= r
+            if j is not None:
+                c[j] += r
+        contributions.append(c)
+    total = f(x, u0, t)
+    st["rhs_evals"] = st.get("rhs_evals", 0) + 1
+    rest = total - (np.sum(contributions, axis=0) if contributions else 0.0)
+    # the remainder, state by state: each state's own destruction is a group
+    for i in np.flatnonzero(rest < 0):
+        c = np.zeros(n)
+        c[i] = rest[i]
+        contributions.append(c)
+    production = np.where(rest > 0, rest, 0.0)
+    if not contributions:
+        return x + h * production
+    C = np.array(contributions)  # groups x states
+    draws = C < 0
+    positive = x > 0
+    empty = np.any(draws & ~positive, axis=1)  # drawing from an empty store
+    fixed = np.where(empty, 0.0, 1.0)
+
+    def factors(xn: Array) -> tuple[Array, list[int]]:
+        """The factor of every group at a candidate ``xn``, and the state that binds it."""
+        w_new = fixed.copy()
+        binding = [-1] * C.shape[0]
+        for g in range(C.shape[0]):
+            if empty[g]:
+                continue
+            idx = np.flatnonzero(draws[g] & positive)
+            if idx.size:
+                ratios = xn[idx] / x[idx]
+                a = int(np.argmin(ratios))
+                if ratios[a] < 1.0:
+                    w_new[g] = max(0.0, float(ratios[a]))
+                    binding[g] = int(idx[a])
+        return w_new, binding
+
+    # The fixed point is piecewise linear in w: once the binding state of each
+    # group is known, the factors solve a linear system. Iterate on the set of
+    # binding states; it settles in a few rounds.
+    w = fixed.copy()
+    active = [-1] * C.shape[0]
+    settled = False
+    for _ in range(50):
+        M = np.eye(C.shape[0])
+        rhs = fixed.copy()
+        for g, a in enumerate(active):
+            if a >= 0:
+                M[g, :] -= h * C[:, a] / x[a]
+                rhs[g] = 1.0 + h * production[a] / x[a]
+        try:
+            w = np.clip(np.linalg.solve(M, rhs), 0.0, 1.0)
+        except np.linalg.LinAlgError:
+            break
+        st["patankar_iterations"] = st.get("patankar_iterations", 0) + 1
+        w_new, binding = factors(x + h * (production + w @ C))
+        if float(np.max(np.abs(w_new - w))) <= tol:
+            settled = True
+            break
+        if binding == active:
+            break
+        active = binding
+    if not settled:
+        # damped fixed-point iteration from the best guess so far
+        for it in range(max_it + 1):
+            w_new, _ = factors(x + h * (production + w @ C))
+            st["patankar_iterations"] = st.get("patankar_iterations", 0) + 1
+            if float(np.max(np.abs(w_new - w))) <= tol:
+                w = w_new
+                break
+            if it == max_it:
+                raise RuntimeError(
+                    f"the Patankar factors at t = {t} did not settle in {max_it} iterations"
+                )
+            w = 0.5 * (w + w_new)
+    xn = x + h * (production + w @ C)
+    floor = -1e-9 * (1.0 + np.abs(x))
+    if np.any(xn < floor):
+        raise RuntimeError(f"the Patankar step at t = {t} left a negative amount")
+    return np.where(xn < 0, 0.0, xn)
 
 
 def _rk45(

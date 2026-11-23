@@ -785,7 +785,9 @@ class Model:
                 of time ``f(t)``, or a feedback law ``f(t, x)``. A bare array of
                 shape ``(len(t), n_inputs)`` also works. Inputs left out are zero.
             solver: ``"midpoint"`` (implicit, structure-preserving, default),
-                ``"rk45"`` (adaptive), ``"rk4"``, ``"euler"``.
+                ``"rk45"`` (adaptive), ``"rk4"``, ``"euler"``, or ``"patankar"``
+                (first order; keeps every amount non-negative and every mass
+                balance exact, for chemical models with any step size).
             interp: how inputs vary inside a step: ``"hold"`` or ``"linear"``.
             record: record the named outputs along the trajectory.
             options: ``rtol``, ``atol`` (rk45); ``newton_tol``, ``max_newton`` (midpoint).

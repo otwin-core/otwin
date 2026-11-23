@@ -59,7 +59,11 @@ Components, ports and connections: what exists and what touches what.
 - {mod}`otwin.io`: {class}`~otwin.io.source.Source`, {class}`~otwin.io.source.Sample`,
   {class}`~otwin.io.source.TagSpec`; the SunSpec and Modbus sources
   ({mod}`~otwin.io.sunspec`, {mod}`~otwin.io.modbus`) and their simulators
-  ({mod}`~otwin.io.simulator`); {func}`~otwin.io.loader.load` and the dataset registry.
+  ({mod}`~otwin.io.simulator`); the read-only OPC UA client
+  {class}`~otwin.io.opcua.OpcUaSource` with {class}`~otwin.io.opcua.OpcUaChannel`
+  and {class}`~otwin.io.opcua.OpcUaSecurity` ({mod}`~otwin.io.opcua`, needs `otwin[opcua]`);
+  {func}`~otwin.io.source.samples_to_arrays` to turn any source's samples into arrays;
+  {func}`~otwin.io.loader.load` and the dataset registry.
 - {mod}`otwin.signal`: {func}`~otwin.signal.condition.resample`, {func}`~otwin.signal.condition.find_gaps`,
   {func}`~otwin.signal.condition.coverage`: irregular samples onto a grid, with the gaps named.
 
@@ -104,6 +108,8 @@ Components, ports and connections: what exists and what touches what.
   {func}`~otwin.forecast.conformal.horizon_conformal`, {class}`~otwin.forecast.conformal.ConformalBand`,
   {class}`~otwin.forecast.conformal.AdaptiveConformal`,
   {func}`~otwin.forecast.conformal.rolling_origin_residuals`; {class}`~otwin.forecast.ensemble.Ensemble`;
+  leave-one-unit-out validation across a fleet with {func}`~otwin.forecast.transfer.transfer_validation`,
+  {class}`~otwin.forecast.transfer.TransferValidation` and {class}`~otwin.forecast.transfer.TransferContrasts`;
   calibration diagnostics {func}`~otwin.forecast.calibration.pit_values`,
   {func}`~otwin.forecast.calibration.coverage_curve`, {func}`~otwin.forecast.calibration.expected_calibration_error`,
   {func}`~otwin.forecast.calibration.recalibrate`, {func}`~otwin.forecast.calibration.sharpness`.
@@ -115,6 +121,14 @@ Components, ports and connections: what exists and what touches what.
 - {class}`~otwin.advise.envelope.Envelope`, {class}`~otwin.advise.envelope.Verdict`,
   {class}`~otwin.advise.envelope.Breach`, {class}`~otwin.advise.envelope.OutsideEnvelope`: the
   validity envelope and the refusal it returns with a reason.
+- {func}`~otwin.audit.coverage.coverage_audit`, {class}`~otwin.audit.coverage.CoverageAudit`
+  and {class}`~otwin.audit.coverage.CoverageRow`: whether a forecast range
+  holds the coverage it states, with a confidence interval, the bias and the
+  mean width, overall or by horizon tranche.
+- {func}`~otwin.audit.margin.margin_risk` and {class}`~otwin.audit.margin.MarginRisk`
+  ({mod}`otwin.audit`): how much margin above a reference curve can be
+  promised at 5, 10 and 20 % risk, from the residuals alone, or a refusal
+  that gives the count when there are too few of them.
 - {class}`~otwin.interfaces.manifest.TwinManifest` and {class}`~otwin.interfaces.manifest.Provenance`
   ({mod}`otwin.interfaces.manifest`): how a twin was built, fitted, validated
   and calibrated.
@@ -148,6 +162,7 @@ The complete, generated listing, one page per module.
    otwin.model
    otwin.forecast
    otwin.advise
+   otwin.audit
    otwin.interfaces
 ```
 

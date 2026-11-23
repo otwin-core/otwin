@@ -28,6 +28,7 @@ components in use.
 - **Rotational**: [`Inertia`](#inertia), [`TorsionSpring`](#torsionspring), [`RotationalDamper`](#rotationaldamper), [`TorqueSource`](#torquesource), [`SpeedSource`](#speedsource), [`Housing`](#housing)
 - **Hydraulic**: [`Tank`](#tank), [`Orifice`](#orifice), [`Pipe`](#pipe), [`FluidInertance`](#fluidinertance), [`FlowSource`](#flowsource), [`PressureSource`](#pressuresource), [`Filter`](#filter), [`Pump`](#pump), [`Atmosphere`](#atmosphere)
 - **Thermal**: [`ThermalMass`](#thermalmass), [`ThermalResistance`](#thermalresistance), [`Convection`](#convection), [`HeatSource`](#heatsource), [`Losses`](#losses), [`Ambient`](#ambient)
+- **Chemical**: [`Species`](#species), [`Reaction`](#reaction), [`Dose`](#dose), [`Outflow`](#outflow), [`Accumulator`](#accumulator), [`MixedReactor`](#mixedreactor), [`TanksInSeries`](#tanksinseries)
 - **Two-ports**: [`Transformer`](#transformer), [`Gyrator`](#gyrator)
 - **Composites**: [`DCMotor`](#dcmotor), [`Battery`](#battery)
 - **Fundamental (any domain)**: [`Storage`](#storage), [`Dissipator`](#dissipator), [`Source`](#source), [`Reference`](#reference), [`Transformer`](#transformer-any-domain), [`Gyrator`](#gyrator-any-domain)
@@ -1101,6 +1102,320 @@ makes the ambient temperature an input.
 | `ambient.temperature` | K |
 | `ambient.heat_flow` | W |
 | `ambient.power` | W |
+
+## Chemical
+
+Concentration across, molar flow through. `Species` has a single `port`; a `Reaction` has one port per species; reactors expose `in_<species>` and `out_<species>`. Isothermal; see [Domains](../modeling/domains.md#chemical).
+
+### Species
+
+`otwin.components.chemical.Species(volume=1.0, concentration=0.0, name=None)`
+
+An amount of one species in a well-mixed volume.
+
+State: the amount ``n`` [mol]. The concentration at the port is
+``max(n, 0) / volume``: clamped at zero, so an overshoot below empty (only
+possible with a solver other than ``patankar``) cannot drive a negative
+reaction rate. Extra output: ``concentration`` [mol/m^3], unclamped, so a
+negative amount is visible if a step produced one.
+
+**Kind:** across storage.
+
+**Ports**
+
+| port | domain |
+|---|---|
+| `port` | chemical |
+
+**Parameters** (as the compiled model names them; the value column is the example's)
+
+| parameter | unit | value | valid | meaning |
+|---|---|---|---|---|
+| `species.volume` | m^3 | 1 | > 0 | volume of the mixture |
+
+**States**
+
+| state | unit | initial |
+|---|---|---|
+| `species.amount` | mol | 0 |
+
+**Outputs**
+
+| output | unit |
+|---|---|
+| `species.amount` | mol |
+| `species.energy` | J |
+| `species.concentration` | mol/m^3 |
+| `species.molar_flow` | mol/s |
+| `species.power` | W |
+
+### Reaction
+
+`otwin.components.chemical.Reaction(stoichiometry=None, rate_constant=1.0, order=None, volume=1.0, rate=None, name=None)`
+
+A reaction among species, at a mass-action rate.
+
+One port per species named in ``stoichiometry``, to be connected to that
+species' port (a :class:`MixedReactor` does this for you). Negative
+coefficients are reactants, positive ones products. The molar rate is
+
+    ``R = k * volume * prod(c_s ** order_s)``
+
+and species ``s`` changes at ``nu_s * R``. By default the reaction is
+elementary: ``order_s = -nu_s`` for every reactant. ``A -> B`` is first
+order, ``A + B -> P`` second order, ``2A -> P`` second order in ``A``.
+
+**Kind:** reference (the zero of its domain).
+
+**Ports**
+
+| port | domain |
+|---|---|
+| `A` | chemical |
+| `B` | chemical |
+
+**Parameters** (as the compiled model names them; the value column is the example's)
+
+| parameter | unit | value | valid | meaning |
+|---|---|---|---|---|
+| `reaction.k` | 1/s | 0.5 | > 0 | rate constant, mass action |
+| `reaction.volume` | m^3 | 1 | > 0 | volume the reaction happens in |
+
+**Outputs**
+
+| output | unit |
+|---|---|
+| `reaction.A.concentration` | mol/m^3 |
+| `reaction.A.molar_flow` | mol/s |
+| `reaction.A.power` | W |
+| `reaction.B.concentration` | mol/m^3 |
+| `reaction.B.molar_flow` | mol/s |
+| `reaction.B.power` | W |
+| `reaction.rate` | mol/s |
+
+### Dose
+
+`otwin.components.chemical.Dose(rate=None, name=None)`
+
+A molar flow of one species into a port: a feed, a dosing pump.
+
+``rate=None`` makes it an input of the compiled model, named after the
+component, in mol/s. A number makes it a constant.
+
+**Kind:** through source (input).
+
+**Ports**
+
+| port | domain |
+|---|---|
+| `port` | chemical |
+
+**Inputs** when the value is `None`
+
+| input | unit |
+|---|---|
+| `dose` | mol/s |
+
+**Outputs**
+
+| output | unit |
+|---|---|
+| `dose.concentration` | mol/m^3 |
+| `dose.molar_flow` | mol/s |
+| `dose.power` | W |
+
+### Outflow
+
+`otwin.components.chemical.Outflow(flow=1.0, name=None)`
+
+The liquid leaving a volume carries a species with it: ``Q c_a`` from ``a`` to ``b``.
+
+One-way: the concentration at ``b`` does not enter. ``b`` must be
+connected to something that takes the flow, such as the next reactor's
+inlet, an :class:`Accumulator` or a :class:`~otwin.components.base.Ground`.
+
+**Kind:** reference (the zero of its domain). In a `>>` chain it is entered at `a` and left at `b`.
+
+**Ports**
+
+| port | domain |
+|---|---|
+| `a` | chemical |
+| `b` | chemical |
+
+**Parameters** (as the compiled model names them; the value column is the example's)
+
+| parameter | unit | value | valid | meaning |
+|---|---|---|---|---|
+| `outflow.flow` | m^3/s | 1 | > 0 | volumetric flow carrying the species |
+
+**Outputs**
+
+| output | unit |
+|---|---|
+| `outflow.concentration` | mol/m^3 |
+| `outflow.molar_flow` | mol/s |
+| `outflow.power` | W |
+
+### Accumulator
+
+`otwin.components.chemical.Accumulator(name=None)`
+
+The amount of a species that has flowed into it: the integral of a molar flow.
+
+It holds its port at zero concentration (it is a sink) and counts what
+arrives. State: ``amount`` [mol]. Put one on the outlet of a reactor to
+get the cumulative discharge; connect a :class:`Dose` to one to integrate
+a dosing schedule.
+
+**Kind:** across storage.
+
+**Ports**
+
+| port | domain |
+|---|---|
+| `port` | chemical |
+
+**States**
+
+| state | unit | initial |
+|---|---|---|
+| `accumulator.amount` | mol | 0 |
+
+**Outputs**
+
+| output | unit |
+|---|---|
+| `accumulator.amount` | mol |
+| `accumulator.energy` | J |
+| `accumulator.concentration` | mol/m^3 |
+| `accumulator.molar_flow` | mol/s |
+| `accumulator.power` | W |
+
+### MixedReactor
+
+`otwin.components.chemical.MixedReactor(volume=1.0, flow=1.0, concentrations=None, reactions=(), name=None)`
+
+A continuously stirred tank: species in one volume, reactions among
+them, and a liquid flow that carries every species out.
+
+Ports: ``in_<species>`` (connect a :class:`Dose` or an upstream reactor's
+``out_<species>``) and ``out_<species>`` (connect the next reactor's
+``in_<species>``, an :class:`Accumulator` or a ``Ground``). Every outlet
+must be connected.
+
+States: ``<name>.<species>.amount``. Outputs include
+``<name>.<species>.concentration`` and ``<name>.<reaction>.rate``.
+
+**Kind:** composite of `mixedreactor.A` (Species), `mixedreactor.B` (Species), `mixedreactor.out_A` (Outflow), `mixedreactor.out_B` (Outflow).
+
+**Ports**
+
+| port | domain |
+|---|---|
+| `in_A` | chemical |
+| `out_A` | chemical |
+| `in_B` | chemical |
+| `out_B` | chemical |
+
+**Parameters** (as the compiled model names them; the value column is the example's)
+
+| parameter | unit | value | valid | meaning |
+|---|---|---|---|---|
+| `mixedreactor.A.volume` | m^3 | 2 | > 0 | volume of the mixture |
+| `mixedreactor.B.volume` | m^3 | 2 | > 0 | volume of the mixture |
+| `mixedreactor.out_A.flow` | m^3/s | 1 | > 0 | volumetric flow carrying the species |
+| `mixedreactor.out_B.flow` | m^3/s | 1 | > 0 | volumetric flow carrying the species |
+
+**States**
+
+| state | unit | initial |
+|---|---|---|
+| `mixedreactor.A.amount` | mol | 2 |
+| `mixedreactor.B.amount` | mol | 0 |
+
+**Outputs**
+
+| output | unit |
+|---|---|
+| `mixedreactor.A.amount` | mol |
+| `mixedreactor.A.energy` | J |
+| `mixedreactor.A.concentration` | mol/m^3 |
+| `mixedreactor.A.molar_flow` | mol/s |
+| `mixedreactor.A.power` | W |
+| `mixedreactor.B.amount` | mol |
+| `mixedreactor.B.energy` | J |
+| `mixedreactor.B.concentration` | mol/m^3 |
+| `mixedreactor.B.molar_flow` | mol/s |
+| `mixedreactor.B.power` | W |
+| `mixedreactor.out_A.concentration` | mol/m^3 |
+| `mixedreactor.out_A.molar_flow` | mol/s |
+| `mixedreactor.out_A.power` | W |
+| `mixedreactor.out_B.concentration` | mol/m^3 |
+| `mixedreactor.out_B.molar_flow` | mol/s |
+| `mixedreactor.out_B.power` | W |
+
+### TanksInSeries
+
+`otwin.components.chemical.TanksInSeries(n=2, volume=1.0, flow=1.0, concentrations=None, reactions=(), name=None)`
+
+``n`` identical mixed reactors in a line, the classical approximation of
+a plug-flow reactor. The total volume is shared equally; the outflow of
+each tank is the inflow of the next.
+
+With ``n = 1`` this is a :class:`MixedReactor`; as ``n`` grows the outlet
+concentration of a first-order reaction approaches ``c_in exp(-k tau)``,
+the plug-flow value, as ``(1 + k tau / n)^-n``. A spatially resolved
+plug-flow reactor (dispersion, a PDE) is on the roadmap.
+
+Ports: ``in_<species>`` of the first tank and ``out_<species>`` of the
+last. States: ``<name>.tank<i>.<species>.amount``.
+
+**Kind:** composite of `tanksinseries.tank0` (MixedReactor), `tanksinseries.tank1` (MixedReactor).
+
+**Ports**
+
+| port | domain |
+|---|---|
+| `in_A` | chemical |
+| `out_A` | chemical |
+
+**Parameters** (as the compiled model names them; the value column is the example's)
+
+| parameter | unit | value | valid | meaning |
+|---|---|---|---|---|
+| `tanksinseries.tank0.A.volume` | m^3 | 1 | > 0 | volume of the mixture |
+| `tanksinseries.tank0.out_A.flow` | m^3/s | 1 | > 0 | volumetric flow carrying the species |
+| `tanksinseries.tank1.A.volume` | m^3 | 1 | > 0 | volume of the mixture |
+| `tanksinseries.tank1.out_A.flow` | m^3/s | 1 | > 0 | volumetric flow carrying the species |
+
+**States**
+
+| state | unit | initial |
+|---|---|---|
+| `tanksinseries.tank0.A.amount` | mol | 1 |
+| `tanksinseries.tank1.A.amount` | mol | 1 |
+
+**Outputs**
+
+| output | unit |
+|---|---|
+| `tanksinseries.tank0.A.amount` | mol |
+| `tanksinseries.tank0.A.energy` | J |
+| `tanksinseries.tank0.A.concentration` | mol/m^3 |
+| `tanksinseries.tank0.A.molar_flow` | mol/s |
+| `tanksinseries.tank0.A.power` | W |
+| `tanksinseries.tank0.out_A.concentration` | mol/m^3 |
+| `tanksinseries.tank0.out_A.molar_flow` | mol/s |
+| `tanksinseries.tank0.out_A.power` | W |
+| `tanksinseries.tank1.A.amount` | mol |
+| `tanksinseries.tank1.A.energy` | J |
+| `tanksinseries.tank1.A.concentration` | mol/m^3 |
+| `tanksinseries.tank1.A.molar_flow` | mol/s |
+| `tanksinseries.tank1.A.power` | W |
+| `tanksinseries.tank1.out_A.concentration` | mol/m^3 |
+| `tanksinseries.tank1.out_A.molar_flow` | mol/s |
+| `tanksinseries.tank1.out_A.power` | W |
 
 ## Two-ports
 

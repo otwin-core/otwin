@@ -107,8 +107,7 @@ classical RK4, Dormand-Prince 5(4) with error control, and explicit Euler.
 refusals), golden models against closed forms, regression against the 0.4
 hand-written models, Rust/NumPy parity, property tests on random passive
 networks, the model API and the grey-box layer. `cargo test -p otwin-core`
-covers the expression VM and the solvers on their own. `benchmarks/bench_engine.py`
-times the 0.4 integrator against both backends.
+covers the expression VM and the solvers on their own.
 
 ## Building
 

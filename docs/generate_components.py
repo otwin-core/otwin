@@ -65,6 +65,12 @@ SECTIONS: list[tuple[str, str, str]] = [
         "Temperature across, heat flow through. Ports `a`, `b` or a single `port`.",
     ),
     (
+        "chemical",
+        "Chemical",
+        "Concentration across, molar flow through. `Species` has a single `port`; a `Reaction` has one port per species; "
+        "reactors expose `in_<species>` and `out_<species>`. Isothermal; see [Domains](../modeling/domains.md#chemical).",
+    ),
+    (
         "twoport",
         "Two-ports",
         "Lossless couplings between two branches, in one domain or across two.",
@@ -96,6 +102,19 @@ EXAMPLES: dict[str, dict[str, Any]] = {
     "fundamental.Storage": {"domain": "electrical"},
     "fundamental.Dissipator": {"domain": "electrical"},
     "fundamental.Source": {"domain": "electrical"},
+    "chemical.Reaction": {"stoichiometry": {"A": -1, "B": 1}, "rate_constant": 0.5},
+    "chemical.MixedReactor": {
+        "volume": 2.0,
+        "flow": 1.0,
+        "concentrations": {"A": 1.0, "B": 0.0},
+        "reactions": [],
+    },
+    "chemical.TanksInSeries": {
+        "n": 2,
+        "volume": 2.0,
+        "flow": 1.0,
+        "concentrations": {"A": 1.0},
+    },
 }
 
 

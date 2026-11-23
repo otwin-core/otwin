@@ -46,6 +46,7 @@ from .metrics import crps, mae, mase, mpiw, nrmse, picp, rmse, skill_score, thei
 from .protocol import ForecastInterfaceError, evaluate
 from .report import EvalReport
 from .splitters import random_split, rolling_origin, temporal_holdout
+from .transfer import TransferContrasts, TransferValidation, transfer_validation
 
 __all__ = [
     "evaluate",
@@ -81,6 +82,9 @@ __all__ = [
     "AdaptiveConformal",
     "ConformalBand",
     "rolling_origin_residuals",
+    "transfer_validation",
+    "TransferValidation",
+    "TransferContrasts",
 ]
 
 

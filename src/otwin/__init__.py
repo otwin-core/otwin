@@ -35,6 +35,7 @@ The layers:
     otwin.estimate     correct the state from measurements (EKF, MHE, energy observer)
     otwin.forecast     predict and score it, leakage-free, with calibrated bands
     otwin.advise       the validated envelope: an answer, or a refusal with a reason
+    otwin.audit        what a forecast can be held to: coverage by horizon, margin and its risk
     otwin.io, otwin.signal   field data acquisition and conditioning
     otwin.model        the advanced API: PortHamiltonianSystem and friends, written by hand
 

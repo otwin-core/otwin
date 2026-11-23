@@ -1,0 +1,14 @@
+# The Python side of Otwin.jl. CondaPkg reads this the first time Otwin is
+# loaded, creates a private Python environment under the project and installs
+# what is listed here. Nothing is installed into a Python you already have.
+#
+# To use a Python you manage yourself instead (for example a checkout of otwin
+# installed with `pip install -e .`), set before starting Julia:
+#     JULIA_CONDAPKG_BACKEND=Null
+#     JULIA_PYTHONCALL_EXE=/path/to/that/python
+
+[deps]
+python = ">=3.10,<3.14"
+
+[pip.deps]
+otwin = ">=2.0.1,<3"

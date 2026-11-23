@@ -100,9 +100,9 @@ print(f"with R0 up 50 %: voltage {aged.outputs(state)['cell.voltage']:.3f} V, "
 with R0 up 50 %: voltage 3.127 V, heat 7.00 W
 ```
 
-[`examples/battery_that_runs_hot.py`](https://github.com/otwin-core/otwin/blob/main/examples/battery_that_runs_hot.py)
-takes this module through a day of duty and separates aged cells from a
-clogged air filter with the two sensors the module already has.
+[Tutorial 1](https://github.com/otwin-core/otwin/blob/main/tutorials/01_battery_energy_storage.md)
+takes a container of these modules through a day of dispatch, electrical and
+thermal sides together.
 
 ## A pump line
 

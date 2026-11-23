@@ -5,6 +5,10 @@ Import the domain you need::
     from otwin.components.mechanical import Mass, Spring, Damper, Fixed
     from otwin.components.electrical import Resistor, Capacitor, VoltageSource, Ground
 
+Chemistry: species, reactions and reactors, in ``chemical``::
+
+    from otwin.components.chemical import Species, Reaction, Dose, MixedReactor
+
 Devices built from the primitives live next to them::
 
     from otwin.components.battery import Battery
@@ -20,6 +24,7 @@ from . import (
     base,
     battery,
     catalogue,
+    chemical,
     composite,
     electrical,
     fundamental,
@@ -44,6 +49,7 @@ __all__ = [
     "rotational",
     "hydraulic",
     "thermal",
+    "chemical",
     "twoport",
     "composite",
     "catalogue",

@@ -22,15 +22,16 @@ nothing written here runs inside the numerical loop.
 
 Every domain uses the same two variables:
 
-==========  =====================  ================
-domain      across                 through
-==========  =====================  ================
-electrical  voltage [V]            current [A]
-mechanical  velocity [m/s]         force [N]
-rotational  angular vel. [rad/s]   torque [N m]
-hydraulic   pressure [Pa]          flow [m^3/s]
-thermal     temperature [K]        heat flow [W]
-==========  =====================  ================
+==========  ========================  ===================
+domain      across                    through
+==========  ========================  ===================
+electrical  voltage [V]               current [A]
+mechanical  velocity [m/s]            force [N]
+rotational  angular vel. [rad/s]      torque [N m]
+hydraulic   pressure [Pa]             flow [m^3/s]
+thermal     temperature [K]           heat flow [W]
+chemical    concentration [mol/m^3]   molar flow [mol/s]
+==========  ========================  ===================
 
 The across variable is shared by every port joined into a node; the
 through variables of the branches meeting there sum to zero. That single rule
@@ -65,6 +66,7 @@ __all__ = [
     "SourceBranch",
     "TwoPortBranch",
     "HeatBranch",
+    "RateBranch",
     "Component",
     "Composite",
     "Ground",
@@ -95,6 +97,11 @@ DOMAINS: dict[str, Domain] = {
     "rotational": Domain("rotational", "angular_velocity", "rad/s", "torque", "N m"),
     "hydraulic": Domain("hydraulic", "pressure", "Pa", "flow", "m^3/s"),
     "thermal": Domain("thermal", "temperature", "K", "heat_flow", "W", False),
+    # Concentration times molar flow is not a power either: a chemical model is
+    # a set of exact mass balances whose energy audit is not a first-law one.
+    "chemical": Domain(
+        "chemical", "concentration", "mol/m^3", "molar_flow", "mol/s", False
+    ),
 }
 
 
@@ -339,6 +346,27 @@ class HeatBranch(Branch):
     sources: list[Component] = field(default_factory=list)
 
 
+@dataclass(eq=False)
+class RateBranch(Branch):
+    """A one-way flow at a stated rate: ``through (a -> b) = rate(potentials)``.
+
+    ``rate`` is called with a mapping from each port name of the owning
+    component to the across variable at that port, and returns the through
+    variable from ``a`` to ``b`` as an expression. Nothing flows back: the
+    potential at ``b`` does not enter the rate unless the law reads it. This
+    is a chemical reaction consuming a species at the mass-action rate of its
+    reactants, or the outflow of a reactor carrying a species downstream at
+    ``Q c``.
+
+    A rate branch is not a resistor. The compiler keeps it out of ``J`` and
+    ``R`` (the way it keeps heat generation out) and marks the model
+    ``pseudo-port-hamiltonian``: the balances are exact, the energy audit is
+    not a first-law statement.
+    """
+
+    rate: Callable[[dict[str, Expr]], Expr] = field(default=lambda c: ex.const(0.0))
+
+
 class Component:
     """Base class of every physical primitive.
 
@@ -477,9 +505,13 @@ class Composite(Component):
         self.aliases: dict[Port, Port] = {}
 
     def add(self, *parts: Component) -> None:
-        """Take ownership of parts; they are renamed ``<self>.<part>``."""
+        """Take ownership of parts; they are renamed ``<self>.<part>``.
+
+        A part that is itself a composite has its own parts renamed too, so a
+        reactor inside a train of reactors reads ``train.tank0.A``.
+        """
         for p in parts:
-            p.name = f"{self.name}.{p.name}"
+            _prefix_name(p, self.name)
             self.parts.append(p)
 
     def connect(self, *ports: Port) -> Connection:
@@ -506,6 +538,14 @@ class Composite(Component):
     def branches(self) -> list[Branch]:
         """None of its own: the physics lives in the parts."""
         return []
+
+
+def _prefix_name(part: Component, prefix: str) -> None:
+    """Rename ``part`` to ``<prefix>.<part>``, and its parts if it is a composite."""
+    part.name = f"{prefix}.{part.name}"
+    if isinstance(part, Composite):
+        for inner in part.parts:
+            _prefix_name(inner, prefix)
 
 
 class Ground(Component):

@@ -116,6 +116,11 @@ class TwinManifest:
             noise; recording that is what lets an envelope refuse on it. Build
             it with :meth:`identified_by`, typically from an
             :class:`~otwin.estimate.IdentifiabilityReport`.
+        acquisition: Where the measurements came from: the protocol, the
+            endpoint, how the connection was secured, and which device node
+            became which named channel. Build it with :meth:`acquired_by`, or
+            take it from a live source (``OpcUaSource.acquisition()``).
+            Credentials are never recorded.
         provenance: See :class:`Provenance`.
         extra: Fields from a newer manifest version, preserved so that a
             round-trip through an older reader is lossless.
@@ -167,6 +172,7 @@ class TwinManifest:
     validation: dict[str, Any] | None = None
     calibration: dict[str, Any] | None = None
     identification: dict[str, Any] | None = None
+    acquisition: dict[str, Any] | None = None
     manifest_version: str = MANIFEST_VERSION
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -320,6 +326,61 @@ class TwinManifest:
                 f"identification verdicts must be booleans; got non-boolean for {bad}"
             )
         return {"method": method, "parameters": dict(parameters), **fields}
+
+    @staticmethod
+    def acquired_by(
+        protocol: str,
+        *,
+        endpoint: str,
+        channels: list[dict[str, Any]],
+        **fields: Any,
+    ) -> dict[str, Any]:
+        """Build an ``acquisition`` dict: the endpoint and the channel mapping.
+
+        A fitted twin is only as reproducible as the measurements it was fitted
+        on. This records which device was read, over what, and which node or
+        register became which named channel, so the same data can be read again.
+
+        Args:
+            protocol: ``"opc-ua"``, ``"modbus-tcp"``, ...
+            endpoint: The address that was read, without credentials.
+            channels: One dict per channel, each with at least ``name``.
+            **fields: Anything else, such as how the channel was secured or the
+                sampling interval.
+
+        Returns:
+            A dict suitable for ``TwinManifest(acquisition=...)``.
+
+        Raises:
+            ValueError: If ``endpoint`` carries credentials (``user:pass@host``).
+                A manifest is meant to be shared, and a password written into
+                one is a published password. A channel without a name, or a
+                repeated name, is also rejected.
+
+        Example:
+            >>> TwinManifest.acquired_by(
+            ...     "opc-ua", endpoint="opc.tcp://plc:4840",
+            ...     channels=[{"name": "level", "node_id": "ns=2;s=Tank.Level"}],
+            ... )["channels"][0]["name"]
+            'level'
+        """
+        netloc = endpoint.split("://", 1)[-1].split("/", 1)[0]
+        if "@" in netloc:
+            raise ValueError(
+                "endpoint carries credentials; record the address only. A manifest "
+                "is meant to be shared, and must never contain a password."
+            )
+        names = [c.get("name") for c in channels]
+        if any(not n for n in names):
+            raise ValueError("every channel needs a non-empty 'name'")
+        if len(set(names)) != len(names):
+            raise ValueError(f"channel names repeat: {names}")
+        return {
+            "protocol": protocol,
+            "endpoint": endpoint,
+            "channels": [dict(c) for c in channels],
+            **fields,
+        }
 
     @property
     def is_identified(self) -> bool:

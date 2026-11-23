@@ -14,7 +14,7 @@ Two sources of numbers
 registry of public datasets stored as identity and checksum rather than bytes,
 fetched on demand and verified before use.
 
-**Live data** — exactly two protocols, on purpose:
+**Live data** — three protocols:
 
 * **Modbus TCP/RTU** (:class:`ModbusSource`, via the optional ``pymodbus``
   extra, BSD-3-Clause). The lowest common denominator: every PCS, BMS and
@@ -22,8 +22,12 @@ fetched on demand and verified before use.
 * **SunSpec Modbus** (:class:`SunSpecSource`, via the optional ``pysunspec2``
   extra, Apache-2.0). Self-describing DER models, and one of the three
   interfaces IEEE 1547-2018 permits for distributed energy resources.
+* **OPC UA** (:class:`OpcUaSource`, via the optional ``asyncua`` extra,
+  ``otwin[opcua]``, LGPL-3.0-or-later). Read-only by construction and
+  secured by default: see :mod:`otwin.io.opcua`. Its configuration objects
+  work without the extra. A live connection needs it.
 
-Both optional packages are genuinely optional. This package imports, and its
+The optional packages are genuinely optional. This package imports, and its
 entire test suite runs, with neither installed — see :class:`ModbusSimulator`
 and :class:`SunSpecSimulator`, which serve real register images in-process so
 that the decoding, scale-factor and unit logic is exercised rather than
@@ -52,9 +56,11 @@ package then reads. That keeps the licence boundary at a process boundary
 where it is enforceable, and keeps a protocol stack that must be certified out
 of a library that must not be.
 
-OPC UA and MQTT are also absent, for a different reason: they are transports
-rather than instrument protocols, and adding them here would make this package
-a general-purpose integration layer instead of a data-acquisition block.
+MQTT is also absent, for a different reason: it is a transport rather than an
+instrument protocol, and adding it here would make this package a
+general-purpose integration layer instead of a data-acquisition block. OPC UA
+is here, but only as a reader. It maps a stated list of nodes to named
+channels, exactly as a register map does for Modbus. It never writes.
 """
 
 from __future__ import annotations
@@ -70,6 +76,22 @@ from .modbus import (
     encode_value,
     load_register_map,
 )
+from .opcua import (
+    READ_ONLY_SERVICES,
+    SECURITY_POLICIES,
+    BrowseEntry,
+    InsecureConnectionWarning,
+    OpcUaChannel,
+    OpcUaConfigurationError,
+    OpcUaSecurity,
+    OpcUaSecurityError,
+    OpcUaSource,
+    ReadOnlyViolation,
+    create_self_signed_certificate,
+    load_opcua_config,
+    parse_node_id,
+    validate_server_certificate,
+)
 from .registry import DATASETS, Dataset
 from .simulator import ModbusSimulator, SimulatedFault, SunSpecSimulator
 from .source import (
@@ -84,6 +106,7 @@ from .source import (
     TransportError,
     UnknownUnitError,
     normalise,
+    samples_to_arrays,
     si_unit,
     to_si,
 )
@@ -122,6 +145,7 @@ __all__ = [
     "to_si",
     "si_unit",
     "normalise",
+    "samples_to_arrays",
     "KNOWN_UNITS",
     # raw Modbus
     "ModbusSource",
@@ -143,6 +167,21 @@ __all__ = [
     "SUNSPEC_BASE_ADDRESSES",
     "SUPPORTED_MODELS",
     "MODEL_NAMES",
+    # OPC UA, read-only
+    "OpcUaSource",
+    "OpcUaChannel",
+    "OpcUaSecurity",
+    "BrowseEntry",
+    "ReadOnlyViolation",
+    "OpcUaSecurityError",
+    "OpcUaConfigurationError",
+    "InsecureConnectionWarning",
+    "load_opcua_config",
+    "validate_server_certificate",
+    "create_self_signed_certificate",
+    "parse_node_id",
+    "READ_ONLY_SERVICES",
+    "SECURITY_POLICIES",
     # simulators
     "ModbusSimulator",
     "SunSpecSimulator",

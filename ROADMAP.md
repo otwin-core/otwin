@@ -105,9 +105,83 @@ flow-first laws in the compiler. Two examples from real maintenance problems:
 a battery module that runs hot and a pump station that asks for more every
 month.
 
+### 4. What a forecast can be held to
+
+`otwin.audit`: `coverage_audit` reports the coverage a forecast range
+actually delivered, with a Clopper-Pearson interval, the bias and the mean
+width, overall and by horizon tranche, and refuses a tranche with too few
+contrasts, naming the count. `margin_risk` gives the probability of not
+delivering each margin above a reference curve from the empirical
+distribution of the residuals, and the margin at 5, 10 and 20 % risk.
+`otwin.forecast.transfer_validation` holds out each unit of a fleet, calibrates
+on the rest, and feeds the contrasts to the same report; no unit reaches its
+own calibration, and that is asserted.
+
+### 5. Reading the asset
+
+`otwin.io.OpcUaSource`, behind `otwin[opcua]`: a read-only OPC UA client that
+maps node ids to named channels and polls or subscribes them into the same
+samples the Modbus sources produce. It has no write path and refuses a
+configuration that asks for one; the connection is secured by default
+(Basic256Sha256, SignAndEncrypt, server certificate validated against a trust
+list); the endpoint and the node mapping are recorded in the manifest.
+
+### 6. Other languages
+
+`julia/Otwin.jl` wraps the Python implementation through PythonCall, with
+Julia types in and out and the two reactor and ModelingToolkit examples run in
+CI. `otwin-spec` has `julia/OtwinSpec.jl`, which runs every golden fixture
+through OrdinaryDiffEq and judges it in Julia; CI checks that its verdicts
+agree with the Python runner's, check by check, including the mutants.
+
+### 7. Chemistry, part one: well-mixed, isothermal
+
+`otwin.components.chemical`: `Species`, `Reaction` (mass action, first and
+second order, any stoichiometry, or a custom law), `Dose`, `Outflow`,
+`Accumulator`, `MixedReactor` and `TanksInSeries`. Two compiler additions
+made it fit: a one-way `RateBranch` whose through variable is a stated rate
+of the port concentrations, kept out of `J` and `R` like heat generation, and
+recursive renaming of nested composites. Every case is checked against a
+closed form: batch kinetics, consecutive reactions, the stirred-tank steady
+state, and tanks in series tending to plug flow as `(1 + k tau / n)^-n`. The
+`patankar` solver, a modified Patankar step scaling each reaction by one
+implicit factor, keeps every amount non-negative and every mass balance exact
+at any step size; the general integrators do neither for `k dt` above 1.
+
 ## Next
 
-### 4. The components a twin needs
+### 8. Chemistry, part two: towards a biological treatment plant
+
+What the exploration showed works is in; what it showed does not is here,
+in order. Each item is done when its example matches a closed form or a
+published reference.
+
+- **Temperature.** A reaction enthalpy delivered to a thermal port, and rate
+  constants with Arrhenius or `theta^(T - 20)` correction. `HeatBranch`
+  cannot carry it: it injects `across * through`, which for a species is
+  `c * r`, not `dH_r * r`. This needs a rate branch into the thermal domain.
+- **A thermodynamic potential.** With the Gibbs energy of an ideal solution
+  the across variable is the chemical potential and mass action is the
+  Marcelin-de Donder form, so dissipation becomes affinity times rate and the
+  energy audit means something. The exploration got the kinetics right this
+  way but not the sign of the dissipation against a bare reference, and
+  `log(0)` at an empty species is unresolved.
+- **Stiff kinetics.** Activated-sludge models with dissolved oxygen are stiff,
+  and tanks in series multiply the states. The runtime has no implicit
+  multistep integrator; scipy's BDF with a banded Jacobian is the candidate,
+  as an option on `simulate`.
+- **A spatially resolved plug-flow reactor.** One-dimensional finite volumes
+  with upwind advection, central dispersion and Danckwerts boundaries, checked
+  against the Wehner-Wilhelm solution and a pulse against Ogata-Banks.
+  `TanksInSeries` covers the dispersion-free case until then.
+- **Biology.** Monod kinetics (the custom `rate=` law already takes it),
+  aeration as a dose with a `K_L a` transfer, ASM1 from the published IWA
+  matrix, the Takacs settler on the finite-volume layer, and the BSM1 layout
+  with its recycles. Validated against the published BSM1 steady state. Before
+  this starts, the survey in rule 1 covers QSDsan and the Modelica WasteWater
+  library, to import what already exists.
+
+### 9. The components a twin needs
 
 Devices are added when a twin of a water, process or energy system needs them
 and no open model already covers the case. Each one is built from primitives
@@ -136,9 +210,9 @@ and ships with a hand-checked example. The first two items:
 Further devices, such as heat exchangers, membranes, converters and
 compressors, each start with the survey in rule 1. Otwin's components are
 lumped: one state per store. Models distributed in space, such as long pipes
-or the profile along a heat exchanger, are imported (phase 8).
+or the profile along a heat exchanger, are imported (phase 13).
 
-### 5. Identification
+### 10. Identification
 
 Fitting the parameters a data sheet does not give, from measurements, with
 identifiability as a first-class result: `fit_parameters` on any compiled or
@@ -153,7 +227,7 @@ Next in this phase:
   the history, for parameters that drift, such as filter fouling or grid
   inertia.
 
-### 6. Learned residuals
+### 11. Learned residuals
 
 What the physics leaves out, learned from data and kept separate from the
 structure, so the learned part never touches the model's energy bookkeeping.
@@ -163,7 +237,7 @@ differential equations in SciML, the hybrid models in Dyad, and the
 residual-learning tools in the battery projects. The phase is reshaped by
 what that survey finds.
 
-### 7. The Digital Twin runtime
+### 12. The Digital Twin runtime
 
 Measurements in, state estimation, forecasts with measured coverage,
 validation, validity envelopes and refusal, on the model of a real asset,
@@ -182,13 +256,12 @@ Next in this phase:
   notice asked for goes beyond the horizon the twin was validated on, refuse.
 - **Fleets.** Calibrate on many units of the same equipment and test on a
   batch the twin never saw, with no unit in both.
-- **A calibration audit.** Given forecasts, ranges and observations from Otwin
-  or from any other tool, report for each stated level the coverage actually
-  observed, with its own confidence interval, the mean width of the range, and
-  the point where coverage started to drift. A range that covers more than it
-  states is reported as wider than it needs to be, not as a success.
+- **A calibration audit, continued.** `coverage_audit` reports observed
+  coverage with its interval, the bias and the mean width, by horizon tranche.
+  Still to do: the point where coverage started to drift, and an interval that
+  accounts for the dependence between contrasts from one forecast origin.
 
-### 8. Working with the tools engineers already use
+### 13. Working with the tools engineers already use
 
 Most industrial models already exist. They were built in Modelica tools,
 often with commercial libraries, and they represent years of work. Otwin
