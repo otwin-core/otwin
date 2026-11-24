@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/otwin_wm.png" width="35%">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/brand/logo-2400.png" width="35%">
 
 # Otwin: An open-source physics engine and Digital Twin framework for engineering systems
 

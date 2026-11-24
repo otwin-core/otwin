@@ -29,6 +29,16 @@ never saw, it audits what the model promised against what the machine did, and
 it refuses to answer when it has no basis to. Models built elsewhere, in
 Modelica or Julia, enter the same workflow as forecast functions.
 
+<br>
+
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/brand/otwin-battery-twin.gif" width="90%" alt="A cell cycler with six lithium iron phosphate cells, one highlighted, beside live charts and a cell dashboard: the twin follows the measured capacity, forecasts with a 90 % band, and orders the replacement 77 cycles before end of life.">
+
+<sub>Real data from 44 cells the twin had never seen (Severson et al., 2019). On every one of them the replacement order came before end of life, a median of 76 cycles ahead.</sub>
+
+</div>
+
 ## How it works
 
 **Components and connections.** Every domain uses two variables at a port: an

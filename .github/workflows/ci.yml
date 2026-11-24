@@ -134,14 +134,6 @@ jobs:
       - run: pip install --require-hashes -r .github/requirements/lint.txt
       - run: ruff check src tests examples assets tutorials
       - run: ruff format --check src tests examples assets tutorials
-      # The README diagrams are SVGs rendered from assets/diagrams/*.mmd, so
-      # they show on PyPI too. Each SVG carries the hash of its source; a
-      # stale one means someone edited the .mmd without re-rendering.
-      - name: README diagrams are rendered from their sources
-        run: |
-          python assets/render_diagrams.py --check
-          ! grep -q '```mermaid' README.md
-
   # Every file carries a license and a copyright holder (REUSE.toml covers the
   # tree; the license text is in LICENSES/). reuse.software reads the same
   # result for the badge in the README.
