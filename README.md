@@ -1,12 +1,13 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/readme/otwin-header.png" width="100%" alt="otwin: digital twins of real equipment. Build the model from components, or bring it from Modelica or Julia. Fit it to the machine, forecast with a range that has been measured, and audit what the model promised against what the machine did.">
+<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/brand/otwin-header.png" width="100%" alt="otwin: open digital twins of real equipment. A battery plant at dusk with a live dashboard over it: state of health 87.4 %, coverage 91 %, and a warning that the band width is trending up.">
 
 <br>
 
-[![License](https://img.shields.io/github/license/otwin-core/otwin?color=0000FF\&cacheSeconds=86400)](https://github.com/otwin-core/otwin/blob/main/LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/otwin?color=4169E1\&cacheSeconds=3600)](https://pypi.org/project/otwin/)
-[![crates.io](https://img.shields.io/crates/v/otwin-core?color=1E90FF&logo=rust&label=crates.io)](https://crates.io/crates/otwin-core)
+[![License](https://img.shields.io/github/license/otwin-core/otwin?color=7a2ffc\&cacheSeconds=86400)](https://github.com/otwin-core/otwin/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/otwin?color=7a2ffc\&cacheSeconds=3600)](https://pypi.org/project/otwin/)
+[![crates.io](https://img.shields.io/crates/v/otwin-core?color=7a2ffc&logo=rust&label=crates.io)](https://crates.io/crates/otwin-core)
+[![Julia](https://github.com/otwin-core/otwin/actions/workflows/julia.yml/badge.svg)](https://github.com/otwin-core/otwin/actions/workflows/julia.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/otwin-core/otwin/badge)](https://scorecard.dev/viewer/?uri=github.com/otwin-core/otwin)
 [![REUSE status](https://api.reuse.software/badge/github.com/otwin-core/otwin)](https://api.reuse.software/info/github.com/otwin-core/otwin)
 
@@ -165,4 +166,7 @@ agrees with the Python runner check by check. The full documentation is at
 
 ## Licence
 
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The visual identity —
+colours, logo, charts, tables — is defined in [DESIGN.md](DESIGN.md), and
+anything produced for the project follows it. OPC UA® is a trademark of the
+OPC Foundation; Otwin's connector is an independent implementation.
