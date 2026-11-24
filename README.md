@@ -4,15 +4,12 @@
 
 <br><br>
 
-[![License](https://img.shields.io/github/license/otwin-core/otwin?color=7a2ffc\&cacheSeconds=86400)](https://github.com/otwin-core/otwin/blob/main/LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/otwin?color=7a2ffc\&cacheSeconds=3600)](https://pypi.org/project/otwin/)
-[![crates.io](https://img.shields.io/crates/v/otwin-core?color=7a2ffc&logo=rust&label=crates.io)](https://crates.io/crates/otwin-core)
-
-[![Python](https://github.com/otwin-core/otwin/actions/workflows/ci.yml/badge.svg)](https://github.com/otwin-core/otwin/actions/workflows/ci.yml)
-[![Julia](https://github.com/otwin-core/otwin/actions/workflows/julia.yml/badge.svg)](https://github.com/otwin-core/otwin/actions/workflows/julia.yml)
-
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/otwin-core/otwin/badge)](https://scorecard.dev/viewer/?uri=github.com/otwin-core/otwin)
-[![REUSE status](https://api.reuse.software/badge/github.com/otwin-core/otwin)](https://api.reuse.software/info/github.com/otwin-core/otwin)
+[![PyPI](https://img.shields.io/pypi/v/otwin?style=flat-square&logo=pypi&logoColor=white&label=PyPI&labelColor=1d1d1f&color=7a2ffc)](https://pypi.org/project/otwin/)
+[![crates.io](https://img.shields.io/crates/v/otwin-core?style=flat-square&logo=rust&logoColor=white&label=crates.io&labelColor=1d1d1f&color=7a2ffc)](https://crates.io/crates/otwin-core)
+[![PyPI provenance](https://img.shields.io/badge/provenance-verified%20by%20PyPI-7a2ffc?style=flat-square&logo=pypi&logoColor=white&labelColor=1d1d1f)](https://pypi.org/project/otwin/#files)
+[![SLSA 3](https://img.shields.io/badge/SLSA-Build%20L3-7a2ffc?style=flat-square&labelColor=1d1d1f)](https://github.com/otwin-core/otwin/attestations)
+[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/otwin-core/otwin?style=flat-square&label=OpenSSF%20Scorecard&labelColor=1d1d1f&color=7a2ffc)](https://scorecard.dev/viewer/?uri=github.com/otwin-core/otwin)
+[![License](https://img.shields.io/badge/license-Apache--2.0-7a2ffc?style=flat-square&logo=apache&logoColor=white&labelColor=1d1d1f)](https://github.com/otwin-core/otwin/blob/main/LICENSE)
 
 </div>
 
