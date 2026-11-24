@@ -1,13 +1,16 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/otwin-core/otwin/main/assets/brand/otwin-header.png" width="100%" alt="otwin: open digital twins of real equipment. A battery plant at dusk with a live dashboard over it: state of health 87.4 %, coverage 91 %, and a warning that the band width is trending up.">
+<img src="https://github.com/otwin-core/otwin/blob/8cb34fda06b087cf42c16cb95de3545d6bc4f11f/assets/brand/logo-2400.png" width="65%">
 
-<br>
+<br><br>
 
 [![License](https://img.shields.io/github/license/otwin-core/otwin?color=7a2ffc\&cacheSeconds=86400)](https://github.com/otwin-core/otwin/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/otwin?color=7a2ffc\&cacheSeconds=3600)](https://pypi.org/project/otwin/)
 [![crates.io](https://img.shields.io/crates/v/otwin-core?color=7a2ffc&logo=rust&label=crates.io)](https://crates.io/crates/otwin-core)
+
+[![Python](https://github.com/otwin-core/otwin/actions/workflows/ci.yml/badge.svg)](https://github.com/otwin-core/otwin/actions/workflows/ci.yml)
 [![Julia](https://github.com/otwin-core/otwin/actions/workflows/julia.yml/badge.svg)](https://github.com/otwin-core/otwin/actions/workflows/julia.yml)
+
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/otwin-core/otwin/badge)](https://scorecard.dev/viewer/?uri=github.com/otwin-core/otwin)
 [![REUSE status](https://api.reuse.software/badge/github.com/otwin-core/otwin)](https://api.reuse.software/info/github.com/otwin-core/otwin)
 
