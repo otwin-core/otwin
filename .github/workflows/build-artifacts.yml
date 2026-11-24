@@ -1,0 +1,121 @@
+# Build the distributions and attest them, as a reusable workflow.
+#
+# This exists for one reason: SLSA v1.0 Build Level 3. Attestations made in
+# an ordinary job reach Build Level 2; when the build and its attestation
+# run inside a reusable workflow, the provenance names this file as the
+# builder, isolated from the calling workflow, which is what Level 3 asks
+# for. Verify a download with
+#
+#   gh attestation verify dist/otwin-*.whl --repo otwin-core/otwin \
+#     --signer-workflow otwin-core/otwin/.github/workflows/build-artifacts.yml
+#
+# The jobs are the ones that lived in release.yml, unchanged: the sdist and
+# wheel with their attestation bundle, and one engine wheel per platform,
+# each attested where it is built.
+name: Build and attest
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build and attest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Provenance is generated where the artifact is produced, not where it
+      # is uploaded. This job can mint an OIDC token for attestation, but it
+      # cannot publish: the PyPI trusted publisher is bound to the `pypi`
+      # environment, which only the publish job below runs in.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the build tooling
+        # Hashes, not just versions. Scorecard flags `pip install build==1.5.0`
+        # exactly as it flags an unpinned one, and it is right to: a version tag
+        # can be re-pointed at different bytes, a hash cannot.
+        run: pip install --require-hashes -r .github/requirements/build.txt
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Refuse to release if the tag and the package version disagree
+        # A tag that does not match pyproject.toml produces a release whose
+        # filename says one thing and whose metadata says another. Cheap to
+        # check here, confusing forever if it ships.
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(ls dist/*.tar.gz | sed -E 's|.*/otwin-(.*)\.tar\.gz|\1|')
+          echo "tag=$TAG  package=$PKG"
+          test "$TAG" = "$PKG"
+
+      - name: Check the metadata renders on PyPI
+        run: twine check --strict dist/*
+
+      - name: Generate build provenance
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: "dist/*"
+
+      - name: Keep the attestation bundle alongside the artifacts
+        run: cp "${{ steps.attest.outputs.bundle-path }}" "dist/otwin-${GITHUB_REF_NAME#v}.intoto.jsonl"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  # The engine wheel, one per platform. otwin-engine is its own distribution
+  # on PyPI; the trusted publisher for it must be registered for this
+  # workflow and the `pypi` environment, exactly like otwin's.
+  engine-wheels:
+    name: engine wheel / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    permissions:
+      contents: read
+      # Signed provenance for every engine wheel, like the pure-Python
+      # distribution above: built on a hosted runner, attested where built.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - name: Refuse to release if the tag and the engine version disagree
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          ENG=$(grep -m1 '^version = ' crates/otwin-engine/pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          echo "tag=$TAG  engine=$ENG"
+          test "$TAG" = "$ENG"
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          command: build
+          args: --release -m crates/otwin-engine/Cargo.toml -o wheels
+          manylinux: auto
+      - name: Generate build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: "wheels/*.whl"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-wheels-${{ matrix.os }}
+          path: wheels/
+          retention-days: 7
