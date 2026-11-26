@@ -17,8 +17,12 @@ second, Sphinx reads the first, and both render the same way.
 
 from __future__ import annotations
 
+import json
 import os
 from importlib.metadata import version as _version
+from pathlib import Path
+
+BRAND = Path(__file__).resolve().parents[1] / "assets" / "brand"
 
 project = "otwin"
 copyright = "2026, otwin-core"
@@ -119,7 +123,34 @@ html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 html_title = f"otwin {release}"
 
+# The brand masters live in assets/brand and are referenced from there, never
+# copied: Sphinx copies the logo and favicon into the build itself. The
+# wordmark is a drawing and is placed, never typed (DESIGN.md).
+html_logo = "../assets/brand/logo.svg"
+html_favicon = "../assets/brand/favicon.svg"
+
+
+# Diagrams take the brand Mermaid configuration: white nodes with an ink
+# outline, straight edges, the brand font.
+# A custom init replaces the extension's own, import line included, so the
+# import is written here with the version pinned next to it.
+_MERMAID = json.loads((BRAND / "mermaid-config.json").read_text())
+mermaid_version = "11.2.0"
+mermaid_init_js = (
+    f'import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@{mermaid_version}'
+    '/dist/mermaid.esm.min.mjs";'
+    f"mermaid.initialize({{startOnLoad: false, ...{json.dumps(_MERMAID)}}});"
+)
+
 html_theme_options = {
+    "logo": {
+        "image_light": "../assets/brand/logo.svg",
+        "image_dark": "../assets/brand/logo-white.svg",
+        "alt_text": "otwin",
+    },
+    # Syntax colour would be colour without meaning; code reads in the grey scale.
+    "pygments_light_style": "friendly_grayscale",
+    "pygments_dark_style": "native",
     "github_url": "https://github.com/otwin-core/otwin",
     "show_prev_next": True,
     "navigation_with_keys": False,
@@ -134,6 +165,17 @@ html_theme_options = {
     "footer_start": ["copyright"],
     "footer_end": ["sphinx-version"],
 }
+
+# Read the Docs serves two builds: "stable" from the latest release tag, which
+# is what pip installs, and "latest" from main. The second documents work that
+# is not on PyPI yet, so it says so on every page.
+if os.environ.get("READTHEDOCS_VERSION") == "latest":
+    html_theme_options["announcement"] = (
+        "These pages follow the main branch and can describe features that "
+        "are not on PyPI yet. For the release that <code>pip install</code> "
+        'gives you, read the <a href="https://otwin.readthedocs.io/en/stable/">'
+        "stable documentation</a>."
+    )
 
 html_context = {
     "github_user": "otwin-core",

@@ -8,8 +8,9 @@ the [examples directory](https://github.com/otwin-core/otwin/tree/main/examples)
 that runs as part of the test suite. The pages and the notebooks cannot drift:
 `tutorials/build.py` writes both.
 
-Each page has a rendered illustration of the asset, a process diagram in the
-engineering notation of its domain (ISA-5.1 for process, IEC 60617 for
+Each page has a technical drawing of the asset (an elevation, a section or a
+plan, with its real dimensions and the parameters the model uses), a process
+diagram in the engineering notation of its domain (ISA-5.1 for process, IEC 60617 for
 electrical, free-body schematics for mechanical), the engineering question, and
 the steps with their code, their printed output and their plots.
 

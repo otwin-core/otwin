@@ -21,6 +21,11 @@ the point: a model that does not expose this raises
 {class}`~otwin.forecast.ForecastInterfaceError` rather than falling back to
 something that might leak.
 
+Nothing else is asked of the model, so it does not have to be an Otwin model.
+One built elsewhere, in Modelica, in Julia or in your own code, enters the same
+evaluation, the same calibrated intervals and the same audit once it is wrapped
+in an object with that one method.
+
 ## Splitting
 
 | | |
