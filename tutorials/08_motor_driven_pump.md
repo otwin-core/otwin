@@ -40,7 +40,7 @@ from otwin.components.hydraulic import Atmosphere, Pipe, Tank
 from otwin.components.rotational import Housing
 from otwin.components.twoport import Gyrator
 
-sns.set_theme(style="whitegrid", palette=["#201E1D", "#EC3013", "#4D86A6", "#8A8886"])
+sns.set_theme(style="whitegrid", palette=["#1d1d1f", "#7a2ffc", "#52525b", "#6e6e73"])
 
 DISPLACEMENT = 20e-6 / (2 * np.pi)  # m3/rad: 20 cm3 per revolution
 supply = VoltageSource(None, name="supply")  # V, an input
@@ -184,7 +184,7 @@ g = sns.relplot(
     height=1.8,
     aspect=4.5,
     facet_kws={"sharey": False},
-    color="#201E1D",
+    color="#1d1d1f",
 )
 g.set_titles("{row_name}")
 g.set(xlim=(0, 1.0))
@@ -252,7 +252,7 @@ g = sns.relplot(
     height=1.8,
     aspect=4.5,
     facet_kws={"sharey": False},
-    color="#201E1D",
+    color="#1d1d1f",
 )
 g.set_titles("{row_name}")
 g.figure.suptitle("Filling the head tank", y=1.02)

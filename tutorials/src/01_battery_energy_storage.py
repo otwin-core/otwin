@@ -51,7 +51,7 @@ from otwin.components.thermal import (
     ThermalResistance,
 )
 
-sns.set_theme(style="whitegrid", palette=["#201E1D", "#EC3013", "#4D86A6", "#8A8886"])
+sns.set_theme(style="whitegrid", palette=["#1d1d1f", "#7a2ffc", "#52525b", "#6e6e73"])
 
 N_CELLS = 240
 cell_ocv = [
@@ -194,7 +194,7 @@ g = sns.relplot(
     height=2.0,
     aspect=4.2,
     facet_kws={"sharey": False},
-    color="#201E1D",
+    color="#1d1d1f",
 )
 g.set_titles("{row_name}")
 g.set_axis_labels("hour of the day", "")
@@ -216,8 +216,8 @@ thermal = pd.DataFrame(
     }
 ).melt("hour", var_name="where", value_name="temperature (degC)")
 ax = sns.lineplot(data=thermal, x="hour", y="temperature (degC)", hue="where")
-ax.axhline(35, color="#EC3013", ls="--", lw=1)
-ax.text(0.3, 35.2, "ageing threshold", color="#EC3013", fontsize=9)
+ax.axhline(35, color="#b45309", ls="--", lw=1)
+ax.text(0.3, 35.2, "ageing threshold", color="#b45309", fontsize=9)
 ax.set_title("Thermal day of the container")
 ax.set_xlabel("hour of the day")
 

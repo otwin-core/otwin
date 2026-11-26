@@ -43,7 +43,7 @@ from otwin.components.rotational import (
 )
 from otwin.components.twoport import Transformer
 
-sns.set_theme(style="whitegrid", palette=["#201E1D", "#EC3013", "#4D86A6", "#8A8886"])
+sns.set_theme(style="whitegrid", palette=["#1d1d1f", "#7a2ffc", "#52525b", "#6e6e73"])
 
 RATIO = 90.0
 W_GRID = 2 * np.pi * 1500 / 60  # rad/s, 1500 rpm on the high-speed side
@@ -146,7 +146,7 @@ g = sns.relplot(
     height=1.8,
     aspect=4.5,
     facet_kws={"sharey": False},
-    color="#201E1D",
+    color="#1d1d1f",
 )
 g.set_titles("{row_name}")
 g.figure.suptitle("A 40 % gust on the rated turbine", y=1.02)

@@ -40,7 +40,7 @@ from otwin.components.mechanical import (
     VelocitySource,
 )
 
-sns.set_theme(style="whitegrid", palette=["#201E1D", "#EC3013", "#4D86A6", "#8A8886"])
+sns.set_theme(style="whitegrid", palette=["#1d1d1f", "#7a2ffc", "#52525b", "#6e6e73"])
 
 M_S, M_U, K_S, C_S, K_T = 300.0, 40.0, 20e3, 1.5e3, 180e3  # kg, kg, N/m, N s/m, N/m
 
@@ -250,7 +250,7 @@ g = sns.relplot(
     height=1.9,
     aspect=4.2,
     facet_kws={"sharey": False},
-    color="#201E1D",
+    color="#1d1d1f",
 )
 g.set_titles("{row_name}")
 g.set(xlim=(0, 2.0))

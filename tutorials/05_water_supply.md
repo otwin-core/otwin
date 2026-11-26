@@ -46,7 +46,7 @@ from otwin.components.hydraulic import (
     Tank,
 )
 
-sns.set_theme(style="whitegrid", palette=["#201E1D", "#EC3013", "#4D86A6", "#8A8886"])
+sns.set_theme(style="whitegrid", palette=["#1d1d1f", "#7a2ffc", "#52525b", "#6e6e73"])
 
 RHO_G = 1000.0 * 9.81
 
@@ -240,7 +240,7 @@ g = sns.relplot(
     height=2.0,
     aspect=4.2,
     facet_kws={"sharey": False},
-    color="#201E1D",
+    color="#1d1d1f",
 )
 g.set_titles("{row_name}")
 g.figure.suptitle("Day 2: the tower buffers the demand", y=1.02)
@@ -297,7 +297,7 @@ filter half fouled                       1.86                 48.41             
 ax = sns.lineplot(
     data=pd.concat(traces), x="hour of day 2", y="tower level (m)", hue="case"
 )
-ax.axhline(2.0, color="#EC3013", ls="--", lw=1)
+ax.axhline(2.0, color="#b45309", ls="--", lw=1)
 ax.set_title("Tower level under fouling and a leak")
 ```
 
