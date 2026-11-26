@@ -1,9 +1,189 @@
-/* Equations sit in their own space rather than crowding the prose above them. */
-div.math {
-  margin: 1.2em 0;
-  overflow-x: auto;
+/* The otwin identity on top of pydata-sphinx-theme.
+ *
+ * Every value here is a token from DESIGN.md; nothing is chosen for this page
+ * alone. The theme is kept for its structure (navigation, search, the dark
+ * switch); its colours, type and depth are replaced.
+ */
+
+/* ------------------------------------------------------------- tokens */
+
+html[data-theme="light"] {
+  --pst-color-background: #ffffff;          /* surface */
+  --pst-color-on-background: #ffffff;
+  --pst-color-surface: #f5f5f7;             /* surface-raised */
+  --pst-color-on-surface: #1d1d1f;
+  --pst-color-border: #d2d2d7;              /* hairline */
+  --pst-color-border-muted: #d2d2d7;
+  --pst-color-text-base: #1d1d1f;           /* ink */
+  --pst-color-text-muted: #6e6e73;          /* muted */
+  --pst-color-heading: #1d1d1f;
+  --pst-color-primary: #7a2ffc;             /* brand */
+  --pst-color-primary-bg: #efe6ff;          /* band-model */
+  --pst-color-primary-highlight: #6319e0;
+  --pst-color-secondary: #7a2ffc;
+  --pst-color-secondary-bg: #efe6ff;
+  --pst-color-accent: #7a2ffc;
+  --pst-color-link: #6319e0;                /* violet deep: 7.6:1 on white */
+  --pst-color-link-hover: #1d1d1f;
+  --pst-color-link-higher-contrast: #6319e0;
+  --pst-color-inline-code: #515154;         /* text-secondary, not a hue */
+  --pst-color-inline-code-links: #6319e0;
+  --pst-color-target: #efe6ff;
+  --pst-color-info: #7a2ffc;
+  --pst-color-info-bg: #efe6ff;
+  --pst-color-success: #1d1d1f;             /* green is a chip fill, never text */
+  --pst-color-success-bg: #c6ff3d;
+  --pst-color-warning: #b45309;             /* warn */
+  --pst-color-warning-bg: #fdf3e7;
+  --pst-color-attention: #b45309;
+  --pst-color-attention-bg: #fdf3e7;
+  --pst-color-danger: #b8102e;              /* alarm */
+  --pst-color-danger-bg: #fbe9ec;
+  --pst-color-shadow: transparent;          /* no drop shadows */
+  --pst-color-table-heading-bg: transparent;
+  --pst-color-table-row-zebra-low-bg: transparent;
+  --pst-color-table-row-zebra-high-bg: transparent;
+  --pst-color-table-row-hover-bg: #f5f5f7;
+  --pst-color-table-outer-border: transparent;
+  --pst-color-table-inner-border: #d2d2d7;
+  --pst-color-blockquote-notch: #86868b;    /* border */
 }
 
+html[data-theme="dark"] {
+  --pst-color-background: #0e0e12;
+  --pst-color-on-background: #0e0e12;
+  --pst-color-surface: #1a1a20;
+  --pst-color-on-surface: #f5f5f7;
+  --pst-color-border: #35353c;
+  --pst-color-border-muted: #35353c;
+  --pst-color-text-base: #f5f5f7;
+  --pst-color-text-muted: #98989f;
+  --pst-color-heading: #f5f5f7;
+  --pst-color-primary: #a07bff;
+  --pst-color-primary-bg: #221440;
+  --pst-color-primary-highlight: #b79bff;
+  --pst-color-secondary: #a07bff;
+  --pst-color-secondary-bg: #221440;
+  --pst-color-accent: #a07bff;
+  --pst-color-link: #b79bff;
+  --pst-color-link-hover: #f5f5f7;
+  --pst-color-link-higher-contrast: #b79bff;
+  --pst-color-inline-code: #c6c6cc;
+  --pst-color-inline-code-links: #b79bff;
+  --pst-color-target: #221440;
+  --pst-color-info: #a07bff;
+  --pst-color-info-bg: #221440;
+  --pst-color-success: #c6ff3d;             /* full colour on dark is allowed */
+  --pst-color-success-bg: #1a1a20;
+  --pst-color-warning: #e08a3c;
+  --pst-color-warning-bg: #2a1d10;
+  --pst-color-attention: #e08a3c;
+  --pst-color-attention-bg: #2a1d10;
+  --pst-color-danger: #ff5c6a;
+  --pst-color-danger-bg: #2c1015;
+  --pst-color-shadow: transparent;
+  --pst-color-table-heading-bg: transparent;
+  --pst-color-table-row-zebra-low-bg: transparent;
+  --pst-color-table-row-zebra-high-bg: transparent;
+  --pst-color-table-row-hover-bg: #1a1a20;
+  --pst-color-table-outer-border: transparent;
+  --pst-color-table-inner-border: #35353c;
+  --pst-color-blockquote-notch: #7b7b82;
+}
+
+/* --------------------------------------------------------- typography */
+
+html {
+  --pst-font-family-base: "Helvetica Neue", Helvetica, "Liberation Sans", Arial, sans-serif;
+  --pst-font-family-heading: "Helvetica Neue", Helvetica, "Liberation Sans", Arial, sans-serif;
+  --pst-font-family-monospace: ui-monospace, "SF Mono", Menlo, "Liberation Mono", Consolas, monospace;
+  --pst-font-weight-heading: 700;
+}
+
+h1, h2, h3, h4 {
+  letter-spacing: -0.01em;
+}
+
+/* Inline code reads as a name, not as a highlight: no fill, no box. */
+code.literal,
+code.docutils.literal.notranslate {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 0.92em;
+}
+
+/* ------------------------------------------------------------- shapes */
+
+/* Code blocks: square, raised, one hairline. */
+div.highlight,
+div.highlight pre,
+.highlight {
+  border-radius: 0;
+  box-shadow: none !important;
+}
+div.highlight pre {
+  border: 1px solid var(--pst-color-border);
+  background-color: var(--pst-color-surface);
+}
+
+/* Buttons 6 px; cards 10 px; nothing casts a shadow. */
+.btn,
+.copybtn,
+.search-button-field {
+  border-radius: 6px !important;
+}
+.sd-card {
+  border-radius: 10px !important;
+  border: 1px solid var(--pst-color-border) !important;
+  box-shadow: none !important;
+}
+.sd-card:hover {
+  border-color: var(--pst-color-primary) !important;
+}
+.sd-shadow-sm, .sd-shadow-md, .sd-shadow-lg {
+  box-shadow: none !important;
+}
+
+/* Images and figures are square-cornered. */
+img, figure img {
+  border-radius: 0;
+}
+
+/* -------------------------------------------------------------- tables */
+
+/* No vertical rules, no zebra; rows separated by hairline; the header in
+ * 700 over a border rule. */
+table.table,
+table.docutils {
+  border: none;
+}
+table.table th,
+table.table td,
+table.docutils th,
+table.docutils td {
+  border-left: none !important;
+  border-right: none !important;
+  border-top: none;
+  border-bottom: 1px solid var(--pst-color-border);
+  background: transparent;
+}
+table.table thead th,
+table.docutils thead th,
+table.table thead tr,
+table.docutils thead tr {
+  font-weight: 700;
+  border-bottom: 1px solid #86868b !important;
+}
+/* A Markdown table written with an empty header row gets no header at all,
+ * rather than an empty bar. */
+table thead:not(:has(th > p:not(:empty))) {
+  display: none;
+}
+html[data-theme="dark"] table.table thead th,
+html[data-theme="dark"] table.docutils thead th {
+  border-bottom-color: #7b7b82;
+}
 /* Wide API tables scroll inside their own box; the page never scrolls sideways. */
 table.docutils {
   display: block;
@@ -11,8 +191,69 @@ table.docutils {
   max-width: 100%;
 }
 
+/* --------------------------------------------------------- admonitions */
+
+/* A block's border is the same on all four sides: no coloured side margin.
+ * The kind of note is carried by its title, in the token's colour. */
+.admonition,
+div.admonition {
+  border: 1px solid var(--pst-color-border) !important;
+  border-radius: 10px;
+  box-shadow: none !important;
+  background-color: var(--pst-color-background);
+}
+.admonition > .admonition-title,
+div.admonition > .admonition-title {
+  background-color: transparent !important;
+  font-weight: 700;
+}
+.admonition > .admonition-title::after,
+div.admonition > .admonition-title::after {
+  background-color: transparent;
+}
+.admonition.note > .admonition-title, .admonition.tip > .admonition-title,
+.admonition.hint > .admonition-title, .admonition.seealso > .admonition-title,
+.admonition.important > .admonition-title {
+  color: var(--pst-color-primary);
+}
+.admonition.warning > .admonition-title, .admonition.caution > .admonition-title,
+.admonition.attention > .admonition-title {
+  color: var(--pst-color-warning);
+}
+.admonition.danger > .admonition-title, .admonition.error > .admonition-title {
+  color: var(--pst-color-danger);
+}
+
+/* ------------------------------------------------------------ diagrams */
+
+/* Mermaid draws on a transparent background with ink outlines. On the dark
+ * theme the theme inverts the drawing, so white nodes with ink lines become
+ * dark nodes with light lines; no panel is added around it. */
+pre.mermaid, div.mermaid,
+html[data-theme="light"] pre.mermaid,
+html[data-theme="dark"] pre.mermaid {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Equations sit in their own space rather than crowding the prose above them. */
+div.math {
+  margin: 1.2em 0;
+  overflow-x: auto;
+}
+
 /* An expected-output block reads as a result, not as more code to copy. */
 div.highlight-text pre {
   opacity: 0.85;
   font-size: 0.92em;
+}
+
+/* ----------------------------------------------------------- the header */
+
+.navbar-brand img {
+  height: 26px;
+}
+.bd-header {
+  box-shadow: none !important;
+  border-bottom: 1px solid var(--pst-color-border);
 }

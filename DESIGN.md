@@ -117,6 +117,9 @@ right.
 
 No vertical rules, no zebra; rows separated by `hairline`, the header in 700
 over a `border` rule, units in `muted`. Figures in mono, right-aligned.
+A block's border is the same on all four sides: a coloured margin on one side
+of a card, a note or a table row is not used. The kind of a note is carried by
+its title, in the colour of its token.
 States: "validated" as a `success` chip with `ink` text; "warning" as a word
 in `warn`; "rejected" or "failure" as a word in `alarm`. Never a fully
 coloured cell.
@@ -131,9 +134,30 @@ be highlighted in `brand`. Corners at 6 px at most.
 
 Otwin's image is the result over the real equipment: a chart with its band,
 or a technical photograph or render of the equipment with the measurement
-layer on top. Banned: flat infographic illustration, generic stock,
-gradients, emojis. Without a real photograph, a chart alone is a better image
-than any drawing.
+layer on top. Banned: flat infographic illustration, isometric toy drawings,
+generic stock, gradients, emojis. Without a real photograph, a chart alone is
+a better image than any illustration.
+
+When a page needs the equipment itself, as the tutorials do, it is a
+technical drawing, the kind an engineer would get from a CAD drawing sheet:
+an elevation, a section or a plan on a white sheet with a title block.
+Centerlines are dash-dot, material cut by the section is hatched at 45°,
+dimensions are real and the parameters the model uses are written as
+callouts with their values. Lines are `ink`, fills `surface-raised`; one ISA
+instrument bubble in `brand` marks what is measured, and it is the only
+colour on the sheet. All of them are drawn from code, in
+`assets/tutorials/make_art.py`.
+
+## Documentation site
+
+The documentation at otwin.readthedocs.io keeps the structure of
+pydata-sphinx-theme (navigation, search, the light and dark switch) and takes
+everything visual from these tokens, in `docs/_static/custom.css`: the
+surfaces, ink and grey scale, the brand violet for links and the active
+section, the type, square code blocks and tables, cards at 10 px without
+shadows. The logo and favicon are referenced from `assets/brand`, never
+copied. Code is highlighted in the grey scale, because syntax colour would be
+colour without meaning. Diagrams take `assets/brand/mermaid-config.json`.
 
 ## Voice
 

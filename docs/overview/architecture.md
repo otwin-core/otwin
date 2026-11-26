@@ -141,8 +141,11 @@ specification](../specification/index.md).
 | [otwin](https://github.com/otwin-core/otwin) | The framework, the compiler and the engine. This documentation. |
 | [otwin-spec](https://github.com/otwin-core/otwin-spec) | The normative specification and the conformance suite |
 | [otwin-hybrid](https://github.com/otwin-core/otwin-hybrid) | A worked case in Python, Julia and R: end of life of a lithium-ion cell from the first 40 % of its life |
+| [otwin-home](https://github.com/otwin-core/otwin-home) | The engine pointed at a house: a digital copy of a home built in the browser from its bills, with nothing uploaded. [Open it](https://otwin-core.github.io/otwin-home/) |
 
-The engine lives in this repository under `crates/`. `otwin-core` is a plain Rust
+[Otwin.jl](https://github.com/otwin-core/otwin/tree/main/julia/Otwin.jl), the
+Julia package, lives in this repository under `julia/`. The engine lives here
+too, under `crates/`. `otwin-core` is a plain Rust
 crate with no Python in it, and `otwin-engine` provides the bindings and is
 published as its own wheel. [Internals](../developer/internals.md) is the code-level
 map for anyone working on either.
