@@ -42,7 +42,7 @@ from otwin.components.thermal import (
     ThermalResistance,
 )
 
-sns.set_theme(style="whitegrid", palette=["#201E1D", "#EC3013", "#4D86A6", "#8A8886"])
+sns.set_theme(style="whitegrid", palette=["#1d1d1f", "#7a2ffc", "#52525b", "#6e6e73"])
 
 P_BOILER, U_MAINS = 12_000.0, 230.0
 mains = VoltageSource(None, name="mains")  # V, an input: 230 on, 0 off
@@ -226,7 +226,7 @@ g = sns.relplot(
     height=1.9,
     aspect=4.4,
     facet_kws={"sharey": False},
-    color="#201E1D",
+    color="#1d1d1f",
 )
 g.set_titles("{row_name}")
 g.figure.suptitle("Where the heat goes", y=1.02)

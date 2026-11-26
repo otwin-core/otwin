@@ -28,15 +28,16 @@ from matplotlib.patches import (  # noqa: E402
     Polygon,
     Rectangle,
 )
+from matplotlib.transforms import Affine2D  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[2] / "tutorials" / "images"
 
-INK, RED, GREY, LIGHT, PAPER = "#201E1D", "#EC3013", "#8A8886", "#D9D5D0", "#F6F4F0"
-STEEL = ("#B9BDC2", "#8F949A", "#6A6F75")  # top, light side, dark side
-CONCRETE = ("#D5D1CA", "#B4AFA6", "#8E8A82")
-WATER = ("#9CC6DE", "#6FA6C4", "#4D86A6")
-RUST = ("#F29B8B", "#EC3013", "#A32109")
-DARK = ("#5E6268", "#3E4146", "#26282B")
+INK, RED, GREY, LIGHT, PAPER = "#1d1d1f", "#7a2ffc", "#6e6e73", "#ececf0", "#ffffff"
+STEEL = ("#babac0", "#8f8f96", "#6a6a71")  # top, light side, dark side
+CONCRETE = ("#d6d6db", "#b2b2b8", "#8e8e95")
+WATER = ("#d8c6ff", "#b795ff", "#9065e8")
+RUST = ("#a07bff", "#7a2ffc", "#6319e0")
+DARK = ("#5e5e65", "#3f3f46", "#27272c")
 for name in ("Helvetica Neue", "Helvetica", "Arial", "Liberation Sans", "DejaVu Sans"):
     if any(name == f.name for f in matplotlib.font_manager.fontManager.ttflist):
         plt.rcParams["font.family"] = name
@@ -244,7 +245,7 @@ def pipe(ax, pts, width=7, color=STEEL[1], ox=0.0, oy=0.0, s=1.0, zorder=4):
     )
 
 
-def ground_plane(ax, ox, oy, s, size=8.0, shade="#E7E3DD"):
+def ground_plane(ax, ox, oy, s, size=8.0, shade="#e4e4e8"):
     p = [
         iso(0, 0, 0, ox, oy, s),
         iso(size, 0, 0, ox, oy, s),
@@ -254,9 +255,9 @@ def ground_plane(ax, ox, oy, s, size=8.0, shade="#E7E3DD"):
     ax.add_patch(Polygon(p, closed=True, fc=shade, ec=GREY, lw=0.6, zorder=1))
     for k in np.arange(0, size + 0.01, 1.0):
         a, b = iso(k, 0, 0, ox, oy, s), iso(k, size, 0, ox, oy, s)
-        ax.plot([a[0], b[0]], [a[1], b[1]], color="#D3CFC8", lw=0.4, zorder=1.1)
+        ax.plot([a[0], b[0]], [a[1], b[1]], color="#d2d2d7", lw=0.4, zorder=1.1)
         a, b = iso(0, k, 0, ox, oy, s), iso(size, k, 0, ox, oy, s)
-        ax.plot([a[0], b[0]], [a[1], b[1]], color="#D3CFC8", lw=0.4, zorder=1.1)
+        ax.plot([a[0], b[0]], [a[1], b[1]], color="#d2d2d7", lw=0.4, zorder=1.1)
 
 
 def callout(ax, xy, text, dxy=(1.2, 0.8)):
@@ -280,172 +281,6 @@ def water_surface(ax, x, y, z, r, ox, oy, s, n=48):
 
 
 # ---------------------------------------------------------------- hero scenes
-
-
-def hero_bess():
-    fig, ax = sheet(
-        "Battery energy storage container",
-        "2 MWh LFP, HVAC on the roof, MV transformer",
-        "T01",
-    )
-
-    def scene(ax, ox, oy, s):
-        ground_plane(ax, ox, oy, s, 9)
-        box(
-            ax,
-            1,
-            2,
-            0,
-            6.1,
-            2.4,
-            2.9,
-            shades=("#DDDAD4", "#C6C1B9", "#A29D95"),
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # container
-        for k in range(5):  # door panels on the long face
-            a, b = (
-                iso(1.35 + k * 1.15, 2, 0.15, ox, oy, s),
-                iso(1.35 + k * 1.15, 2, 2.75, ox, oy, s),
-            )
-            ax.plot([a[0], b[0]], [a[1], b[1]], color=GREY, lw=0.6, zorder=3.2)
-            p = [
-                iso(1.4 + k * 1.15, 2, 0.3, ox, oy, s),
-                iso(2.3 + k * 1.15, 2, 0.3, ox, oy, s),
-                iso(2.3 + k * 1.15, 2, 2.6, ox, oy, s),
-                iso(1.4 + k * 1.15, 2, 2.6, ox, oy, s),
-            ]
-            ax.add_patch(
-                Polygon(p, closed=True, fc="#BBB6AE", ec=GREY, lw=0.4, zorder=3.2)
-            )
-        for k in range(3):  # HVAC units on the roof
-            box(
-                ax,
-                1.6 + k * 1.9,
-                2.5,
-                2.9,
-                1.2,
-                1.4,
-                0.7,
-                shades=STEEL,
-                ox=ox,
-                oy=oy,
-                s=s,
-                zorder=3.5,
-            )
-            c = iso(2.2 + k * 1.9, 3.2, 3.6, ox, oy, s)
-            ax.add_patch(
-                Ellipse(c, 0.55 * s, 0.3 * s, fc=DARK[1], ec=INK, lw=0.5, zorder=3.7)
-            )
-        box(ax, 8.0, 2.4, 0, 1.4, 1.6, 1.7, shades=DARK, ox=ox, oy=oy, s=s)  # transformer
-        for k in range(6):  # radiator fins
-            a = iso(8.0, 2.45 + k * 0.25, 0.1, ox, oy, s)
-            b = iso(8.0, 2.45 + k * 0.25, 1.6, ox, oy, s)
-            ax.plot([a[0], b[0]], [a[1], b[1]], color="#1A1B1D", lw=1.8, zorder=3.6)
-        for k in range(3):  # bushings
-            c = iso(8.3 + k * 0.4, 3.2, 1.9, ox, oy, s)
-            ax.add_patch(
-                Ellipse(c, 0.18 * s, 0.1 * s, fc=STEEL[0], ec=INK, lw=0.4, zorder=3.8)
-            )
-            ax.plot([c[0], c[0]], [c[1] - 0.2 * s, c[1]], color=INK, lw=1.2, zorder=3.7)
-        pipe(
-            ax,
-            [(7.1, 3.2, 0.4), (8.0, 3.2, 0.4)],
-            width=4,
-            color=RUST[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # DC/AC cable
-        pipe(
-            ax,
-            [(9.4, 3.2, 1.5), (10.8, 3.2, 3.6)],
-            width=2.5,
-            color=INK,
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # line to the grid
-        box(ax, 10.8, 3.0, 0, 0.3, 0.3, 3.8, shades=STEEL, ox=ox, oy=oy, s=s)  # pole
-        callout(ax, iso(4, 2, 2.9, ox, oy, s), "battery racks: 2 MWh LFP", (0.6, 1.3))
-        callout(ax, iso(8.7, 2.4, 1.7, ox, oy, s), "MV transformer", (0.9, 0.9))
-        callout(
-            ax, iso(2.2, 3.2, 3.6, ox, oy, s), "HVAC: the heat has to leave", (-3.2, 1.0)
-        )
-
-    fit_scene(ax, scene)
-    save(fig, "t01_hero.png")
-
-
-def hero_feeder():
-    fig, ax = sheet(
-        "DC distribution feeder",
-        "Substation, 2 km cable, a converter and its loads",
-        "T02",
-    )
-
-    def scene(ax, ox, oy, s):
-        ground_plane(ax, ox, oy, s, 10)
-        box(
-            ax, 0.8, 1.0, 0, 2.2, 1.6, 1.9, shades=DARK, ox=ox, oy=oy, s=s
-        )  # substation transformer
-        for k in range(8):
-            a, b = (
-                iso(0.8, 1.05 + k * 0.19, 0.1, ox, oy, s),
-                iso(0.8, 1.05 + k * 0.19, 1.8, ox, oy, s),
-            )
-            ax.plot([a[0], b[0]], [a[1], b[1]], color="#1A1B1D", lw=1.6, zorder=3.6)
-        box(ax, 3.4, 1.2, 0, 1.0, 1.2, 1.4, shades=STEEL, ox=ox, oy=oy, s=s)  # switchgear
-        pipe(
-            ax,
-            [(3.0, 1.8, 0.4), (3.4, 1.8, 0.4)],
-            width=3,
-            color=RUST[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        pipe(
-            ax,
-            [(4.4, 1.8, 0.25), (6.5, 1.8, 0.25), (6.5, 5.5, 0.25), (8.8, 5.5, 0.25)],
-            width=3.2,
-            color=RUST[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        for k, (bx, by) in enumerate(
-            [(6.9, 6.0), (8.3, 6.0), (5.4, 3.2)]
-        ):  # buildings with loads
-            box(
-                ax, bx, by, 0, 1.0, 1.0, 1.2 + 0.3 * k, shades=CONCRETE, ox=ox, oy=oy, s=s
-            )
-        pipe(
-            ax,
-            [(6.5, 3.7, 0.25), (5.4, 3.7, 0.25)],
-            width=2.4,
-            color=RUST[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        box(
-            ax, 8.9, 5.3, 0, 0.7, 0.6, 0.9, shades=DARK, ox=ox, oy=oy, s=s
-        )  # DC/DC converter cabinet
-        callout(
-            ax, iso(1.9, 1.0, 1.9, ox, oy, s), "11 kV / 750 V substation", (-2.6, 1.1)
-        )
-        callout(
-            ax,
-            iso(6.5, 3.5, 0.25, ox, oy, s),
-            "2 km cable: resistance and inductance",
-            (1.4, -0.9),
-        )
-        callout(ax, iso(9.2, 5.3, 0.9, ox, oy, s), "DC/DC converter to 48 V", (0.8, 1.2))
-
-    fit_scene(ax, scene)
-    save(fig, "t02_hero.png")
 
 
 def wheel(ax, cx, cy, r, ox, oy, s, zorder=4):
@@ -503,730 +338,6 @@ def zigzag(ax, p0, p1, n=7, amp=0.12, color=INK, lw=1.4, zorder=5):
     )
 
 
-def hero_suspension():
-    fig, ax = sheet(
-        "Vehicle suspension", "Quarter-car: body, suspension, wheel, tyre and road", "T03"
-    )
-
-    def scene(ax, ox, oy, s):
-        ground_plane(ax, ox, oy, s, 8)
-        # road bump profile on the ground
-        xs = np.linspace(0.5, 7.5, 80)
-        bump = 0.25 * np.exp(-((xs - 4.0) ** 2) / 0.4)
-        road = [iso(x, 2.2, b, ox, oy, s) for x, b in zip(xs, bump, strict=True)] + [
-            iso(x, 3.2, b, ox, oy, s) for x, b in zip(xs[::-1], bump[::-1], strict=True)
-        ]
-        ax.add_patch(Polygon(road, closed=True, fc=DARK[1], ec=INK, lw=0.5, zorder=1.5))
-        # body
-        box(ax, 1.5, 2.0, 2.2, 4.6, 1.5, 0.9, shades=RUST, ox=ox, oy=oy, s=s, zorder=5)
-        box(
-            ax,
-            2.6,
-            2.1,
-            3.1,
-            2.2,
-            1.3,
-            0.7,
-            shades=("#DCE6EC", "#B8CBD6", "#8FA6B3"),
-            ox=ox,
-            oy=oy,
-            s=s,
-            zorder=5.2,
-        )  # cabin
-        # wheels and springs
-        for wx in (2.2, 5.4):
-            c = iso(wx, 2.3, 0.75, ox, oy, s)
-            wheel(ax, c[0], c[1], 0.75 * s, ox, oy, s, zorder=4)
-            top, bot = iso(wx, 2.2, 2.2, ox, oy, s), iso(wx, 2.2, 1.2, ox, oy, s)
-            zigzag(ax, bot, top, n=6, amp=0.1, color=INK, lw=1.6, zorder=4.5)
-            d0, d1 = (
-                iso(wx + 0.35, 2.2, 1.2, ox, oy, s),
-                iso(wx + 0.35, 2.2, 2.2, ox, oy, s),
-            )
-            ax.plot(
-                [d0[0], d1[0]],
-                [d0[1], d1[1]],
-                color=INK,
-                lw=4.5,
-                zorder=4.4,
-                solid_capstyle="butt",
-            )
-            ax.plot([d0[0], d1[0]], [d0[1], d1[1]], color=STEEL[0], lw=2.2, zorder=4.5)
-        callout(
-            ax, iso(4, 2.0, 3.1, ox, oy, s), "sprung mass: 1/4 of the body", (1.6, 1.0)
-        )
-        callout(ax, iso(2.2, 2.2, 1.7, ox, oy, s), "spring and damper", (-3.0, 0.6))
-        callout(
-            ax, iso(4.0, 2.7, 0.25, ox, oy, s), "road profile: the input", (1.2, -1.1)
-        )
-
-    fit_scene(ax, scene)
-    save(fig, "t03_hero.png")
-
-
-def hero_turbine():
-    fig, ax = sheet(
-        "Wind turbine drivetrain", "Rotor, main shaft, gearbox, generator", "T04"
-    )
-
-    def scene(ax, ox, oy, s):
-        ground_plane(ax, ox, oy, s, 8)
-        # tower
-        cylinder(
-            ax,
-            3.0,
-            3.0,
-            0,
-            0.5,
-            6.3,
-            shades=("#E6E6E6", "#CFCFCF", "#9F9F9F"),
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        # nacelle (cutaway): outer shell as light box, drivetrain inside
-        box(
-            ax,
-            1.6,
-            2.55,
-            6.3,
-            3.6,
-            0.9,
-            0.8,
-            shades=("#EEEEEE", "#D5D5D5", "#B3B3B3"),
-            ox=ox,
-            oy=oy,
-            s=s,
-            zorder=5,
-        )
-        # hub and blades
-        hub = iso(1.5, 3.0, 6.75, ox, oy, s)
-        ax.add_patch(Circle(hub, 0.32 * s, fc=STEEL[0], ec=INK, lw=0.7, zorder=6))
-        for ang in (90, 210, 330):
-            a = math.radians(ang)
-            tip = (hub[0] + 3.3 * s * math.cos(a), hub[1] + 3.3 * s * math.sin(a))
-            w = 0.22 * s
-            n = (-math.sin(a) * w, math.cos(a) * w)
-            poly = [
-                (hub[0] + n[0], hub[1] + n[1]),
-                (hub[0] - n[0], hub[1] - n[1]),
-                (tip[0] - n[0] * 0.15, tip[1] - n[1] * 0.15),
-                tip,
-            ]
-            ax.add_patch(
-                Polygon(poly, closed=True, fc="#F2F2F2", ec=INK, lw=0.7, zorder=5.9)
-            )
-        # drivetrain drawn as an exploded strip in front
-        y0 = 1.9
-        pipe(
-            ax,
-            [(7.0, y0, 1.2), (8.6, y0, 1.2)],
-            width=5,
-            color=STEEL[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # main shaft
-        box(
-            ax, 8.6, y0 - 0.5, 0.5, 1.2, 1.0, 1.4, shades=DARK, ox=ox, oy=oy, s=s
-        )  # gearbox
-        pipe(
-            ax,
-            [(9.8, y0, 1.2), (10.6, y0, 1.2)],
-            width=3.2,
-            color=STEEL[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # high-speed shaft
-        # generator as a horizontal cylinder: approximate with a box
-        box(
-            ax,
-            10.6,
-            y0 - 0.45,
-            0.6,
-            1.5,
-            0.9,
-            1.2,
-            shades=("#D7DEE4", "#A9B5BE", "#7E8A93"),
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        callout(ax, iso(7.6, y0, 1.2, ox, oy, s), "main shaft: torsion", (-0.9, -0.9))
-        callout(ax, iso(9.2, y0, 1.9, ox, oy, s), "gearbox 1:90", (0.0, 1.1))
-        callout(
-            ax, iso(11.3, y0, 1.8, ox, oy, s), "generator held at grid speed", (0.4, 1.2)
-        )
-        callout(
-            ax,
-            iso(1.5, 3.0, 8.3, ox, oy, s),
-            "aerodynamic torque: the input",
-            (-3.4, 0.4),
-        )
-
-    fit_scene(ax, scene)
-    save(fig, "t04_hero.png")
-
-
-def hero_water():
-    fig, ax = sheet(
-        "Municipal water supply",
-        "Reservoir, pump station, rising main, elevated tank",
-        "T05",
-    )
-
-    def scene(ax, ox, oy, s):
-        ground_plane(ax, ox, oy, s, 11)
-        cylinder(
-            ax, 2.0, 2.0, 0, 1.5, 1.6, shades=CONCRETE, ox=ox, oy=oy, s=s
-        )  # reservoir
-        water_surface(ax, 2.0, 2.0, 1.45, 1.42, ox, oy, s)
-        box(
-            ax,
-            4.2,
-            1.6,
-            0,
-            1.6,
-            1.3,
-            1.1,
-            shades=("#E4DED4", "#CFC7BA", "#A89F91"),
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # pump house
-        box(
-            ax, 4.1, 1.5, 1.1, 1.8, 1.5, 0.35, shades=RUST, ox=ox, oy=oy, s=s, zorder=3.6
-        )  # roof
-        pipe(
-            ax,
-            [(3.5, 2.0, 0.3), (4.2, 2.0, 0.3)],
-            width=5,
-            color=WATER[2],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        pipe(
-            ax,
-            [
-                (5.8, 2.2, 0.3),
-                (7.2, 2.2, 0.3),
-                (7.2, 6.2, 0.3),
-                (9.0, 6.2, 0.3),
-                (9.0, 6.2, 4.2),
-            ],
-            width=5,
-            color=WATER[2],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        # elevated tank on a tower
-        for lx, ly in ((8.6, 5.8), (9.4, 5.8), (8.6, 6.6), (9.4, 6.6)):
-            box(
-                ax,
-                lx,
-                ly,
-                0,
-                0.15,
-                0.15,
-                4.2,
-                shades=STEEL,
-                ox=ox,
-                oy=oy,
-                s=s,
-                zorder=3.4,
-            )
-        cylinder(
-            ax,
-            9.0,
-            6.2,
-            4.2,
-            1.1,
-            1.3,
-            shades=("#E8EEF2", "#BCC8D0", "#8C9BA6"),
-            ox=ox,
-            oy=oy,
-            s=s,
-            zorder=4,
-        )
-        # consumers
-        for bx, by, h in ((4.0, 6.5, 0.8), (5.2, 7.4, 1.0), (3.2, 7.8, 0.7)):
-            box(ax, bx, by, 0, 0.8, 0.8, h, shades=CONCRETE, ox=ox, oy=oy, s=s)
-        pipe(
-            ax,
-            [(8.6, 6.2, 0.3), (5.6, 6.9, 0.3), (4.4, 6.9, 0.3)],
-            width=3,
-            color=WATER[2],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        callout(ax, iso(2.0, 2.0, 1.6, ox, oy, s), "raw-water reservoir", (-2.2, 1.0))
-        callout(
-            ax, iso(5.0, 1.6, 1.4, ox, oy, s), "pump station: pump, filter", (0.3, -1.3)
-        )
-        callout(ax, iso(9.0, 6.2, 5.5, ox, oy, s), "elevated tank, 30 m head", (0.8, 0.6))
-        callout(
-            ax,
-            iso(7.2, 4.2, 0.3, ox, oy, s),
-            "rising main: friction and inertia",
-            (1.6, -0.9),
-        )
-
-    fit_scene(ax, scene)
-    save(fig, "t05_hero.png")
-
-
-def hero_wastewater():
-    fig, ax = sheet(
-        "Wastewater disinfection",
-        "Chlorine contact tank: dosing, contact basins, outfall",
-        "T06",
-    )
-
-    def scene(ax, ox, oy, s):
-        ground_plane(ax, ox, oy, s, 10)
-        # contact basin: serpentine of 4 channels (open boxes)
-        for k in range(4):
-            box(
-                ax,
-                2.0,
-                1.5 + k * 1.1,
-                0,
-                5.0,
-                0.95,
-                1.0,
-                shades=CONCRETE,
-                ox=ox,
-                oy=oy,
-                s=s,
-            )
-            top = [
-                iso(2.1, 1.55 + k * 1.1, 0.85, ox, oy, s),
-                iso(6.9, 1.55 + k * 1.1, 0.85, ox, oy, s),
-                iso(6.9, 2.4 + k * 1.1, 0.85, ox, oy, s),
-                iso(2.1, 2.4 + k * 1.1, 0.85, ox, oy, s),
-            ]
-            ax.add_patch(
-                Polygon(top, closed=True, fc=WATER[0], ec=WATER[2], lw=0.5, zorder=3.3)
-            )
-        # dosing: chlorine tank + metering pump
-        cylinder(
-            ax,
-            0.6,
-            1.2,
-            0,
-            0.5,
-            1.4,
-            shades=("#F3E6B8", "#D9C77E", "#A8944F"),
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        box(ax, 0.3, 2.2, 0, 0.5, 0.5, 0.5, shades=DARK, ox=ox, oy=oy, s=s)
-        pipe(
-            ax,
-            [(0.6, 1.2, 1.5), (0.6, 2.45, 1.5), (0.6, 2.45, 0.6), (2.0, 1.9, 0.6)],
-            width=2.2,
-            color=RUST[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        # inlet and outfall channels
-        pipe(
-            ax,
-            [(0.0, 1.9, 0.5), (2.0, 1.9, 0.5)],
-            width=5,
-            color=WATER[2],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        pipe(
-            ax,
-            [(7.0, 5.3, 0.5), (9.4, 5.3, 0.5), (9.4, 5.3, -0.2)],
-            width=5,
-            color=WATER[2],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        callout(ax, iso(0.6, 1.2, 1.5, ox, oy, s), "hypochlorite dosing", (-2.4, 0.9))
-        callout(
-            ax,
-            iso(4.5, 1.5, 1.0, ox, oy, s),
-            "serpentine contact tank: near plug flow",
-            (1.2, -1.0),
-        )
-        callout(
-            ax,
-            iso(9.4, 5.3, 0.5, ox, oy, s),
-            "outfall: residual chlorine limit",
-            (0.6, 1.0),
-        )
-
-    fit_scene(ax, scene)
-    save(fig, "t06_hero.png")
-
-
-def hero_building():
-    fig, ax = sheet(
-        "Heated building", "Electric boiler, envelope, ventilation, weather", "T07"
-    )
-
-    def scene(ax, ox, oy, s):
-        ground_plane(ax, ox, oy, s, 9)
-        box(
-            ax,
-            2.0,
-            2.0,
-            0,
-            4.0,
-            3.0,
-            2.6,
-            shades=("#EDE5D6", "#D6CBB6", "#B3A68F"),
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        # roof: two slopes
-        r1 = [
-            iso(1.8, 1.8, 2.6, ox, oy, s),
-            iso(6.2, 1.8, 2.6, ox, oy, s),
-            iso(6.2, 3.5, 3.9, ox, oy, s),
-            iso(1.8, 3.5, 3.9, ox, oy, s),
-        ]
-        r2 = [
-            iso(6.2, 1.8, 2.6, ox, oy, s),
-            iso(6.2, 5.2, 2.6, ox, oy, s),
-            iso(6.2, 3.5, 3.9, ox, oy, s),
-        ]
-        ax.add_patch(Polygon(r1, closed=True, fc=RUST[1], ec=INK, lw=0.6, zorder=4))
-        ax.add_patch(Polygon(r2, closed=True, fc=RUST[2], ec=INK, lw=0.6, zorder=4))
-        for k in range(3):  # windows
-            p = [
-                iso(2.6 + k * 1.2, 2.0, 0.9, ox, oy, s),
-                iso(3.3 + k * 1.2, 2.0, 0.9, ox, oy, s),
-                iso(3.3 + k * 1.2, 2.0, 1.9, ox, oy, s),
-                iso(2.6 + k * 1.2, 2.0, 1.9, ox, oy, s),
-            ]
-            ax.add_patch(
-                Polygon(p, closed=True, fc="#C9DCE8", ec=INK, lw=0.5, zorder=3.5)
-            )
-        box(
-            ax, 6.4, 2.2, 0, 0.9, 0.8, 1.3, shades=STEEL, ox=ox, oy=oy, s=s
-        )  # boiler outside wall
-        pipe(
-            ax,
-            [(6.4, 2.6, 0.9), (6.0, 2.6, 0.9)],
-            width=3,
-            color=RUST[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        pipe(
-            ax,
-            [(6.4, 2.9, 0.4), (6.0, 2.9, 0.4)],
-            width=3,
-            color=WATER[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        box(
-            ax, 7.6, 2.0, 0, 0.4, 0.4, 2.2, shades=DARK, ox=ox, oy=oy, s=s
-        )  # weather mast
-        callout(
-            ax,
-            iso(4.0, 2.0, 2.0, ox, oy, s),
-            "envelope: walls, windows, air change",
-            (-3.6, 1.4),
-        )
-        callout(
-            ax,
-            iso(6.85, 2.2, 1.3, ox, oy, s),
-            "electric boiler: losses become heat",
-            (0.9, 1.0),
-        )
-        callout(
-            ax,
-            iso(7.8, 2.0, 2.2, ox, oy, s),
-            "outdoor temperature: the input",
-            (0.6, 0.0),
-        )
-
-    fit_scene(ax, scene)
-    save(fig, "t07_hero.png")
-
-
-def hero_pumpdrive():
-    fig, ax = sheet(
-        "Motor-driven pump set", "DC machine, coupling, positive-displacement pump", "T08"
-    )
-
-    def scene(ax, ox, oy, s):
-        ground_plane(ax, ox, oy, s, 8)
-        box(ax, 1.0, 2.0, 0, 6.0, 1.4, 0.3, shades=STEEL, ox=ox, oy=oy, s=s)  # baseplate
-        box(
-            ax,
-            1.4,
-            2.25,
-            0.3,
-            2.4,
-            0.9,
-            1.1,
-            shades=("#D7DEE4", "#A9B5BE", "#7E8A93"),
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # motor
-        for k in range(6):  # cooling fins
-            a, b = (
-                iso(1.5 + k * 0.38, 2.25, 0.4, ox, oy, s),
-                iso(1.5 + k * 0.38, 2.25, 1.3, ox, oy, s),
-            )
-            ax.plot([a[0], b[0]], [a[1], b[1]], color="#5F6B74", lw=1.2, zorder=3.4)
-        box(
-            ax, 2.2, 2.45, 1.4, 0.8, 0.5, 0.35, shades=DARK, ox=ox, oy=oy, s=s
-        )  # terminal box
-        pipe(
-            ax,
-            [(3.8, 2.7, 0.85), (4.6, 2.7, 0.85)],
-            width=4,
-            color=STEEL[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # coupling/shaft
-        box(ax, 4.6, 2.3, 0.3, 1.6, 0.8, 1.0, shades=RUST, ox=ox, oy=oy, s=s)  # pump
-        pipe(
-            ax,
-            [(5.4, 3.1, 1.3), (5.4, 3.1, 2.4), (5.4, 5.0, 2.4)],
-            width=5,
-            color=WATER[2],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # discharge
-        pipe(
-            ax,
-            [(6.2, 2.7, 0.7), (7.6, 2.7, 0.7)],
-            width=5,
-            color=WATER[2],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # suction
-        pipe(
-            ax,
-            [(1.0, 2.6, 1.55), (2.2, 2.6, 1.55)],
-            width=2,
-            color=RUST[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # supply cable
-        callout(
-            ax, iso(2.6, 2.25, 1.4, ox, oy, s), "DC machine: a transformer", (-2.8, 1.3)
-        )
-        callout(ax, iso(5.4, 2.3, 1.3, ox, oy, s), "gear pump: a gyrator", (1.4, 1.0))
-        callout(ax, iso(5.4, 4.2, 2.4, ox, oy, s), "discharge to the tank", (0.8, 0.5))
-
-    fit_scene(ax, scene)
-    save(fig, "t08_hero.png")
-
-
-def hero_flywheel():
-    fig, ax = sheet(
-        "Flywheel energy storage",
-        "Steel rotor in a vacuum housing, motor-generator, converter",
-        "T09",
-    )
-
-    def scene(ax, ox, oy, s):
-        ground_plane(ax, ox, oy, s, 8)
-        cylinder(
-            ax,
-            3.0,
-            3.0,
-            0,
-            1.6,
-            3.0,
-            shades=("#E3E6E9", "#B9BFC5", "#858C93"),
-            ox=ox,
-            oy=oy,
-            s=s,
-        )  # housing
-        # cutaway: rotor disc visible as a dark ellipse on top
-        top = iso(3.0, 3.0, 3.0, ox, oy, s)
-        ax.add_patch(
-            Ellipse(top, 2.4 * s, 1.38 * s, fc="#4A4E53", ec=INK, lw=0.6, zorder=4.2)
-        )
-        ax.add_patch(
-            Ellipse(top, 0.5 * s, 0.29 * s, fc=STEEL[0], ec=INK, lw=0.5, zorder=4.3)
-        )
-        box(
-            ax, 5.6, 2.4, 0, 1.2, 1.2, 1.9, shades=DARK, ox=ox, oy=oy, s=s
-        )  # converter cabinet
-        pipe(
-            ax,
-            [(4.6, 3.0, 0.5), (5.6, 3.0, 0.5)],
-            width=3,
-            color=RUST[1],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        pipe(
-            ax,
-            [(6.8, 3.0, 0.5), (8.2, 3.0, 0.5), (8.2, 3.0, 2.8)],
-            width=2.5,
-            color=INK,
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        box(ax, 8.2, 2.85, 0, 0.3, 0.3, 3.0, shades=STEEL, ox=ox, oy=oy, s=s)
-        callout(
-            ax,
-            iso(3.0, 3.0, 3.0, ox, oy, s),
-            "rotor: 36 000 rpm, energy ½ J ω²",
-            (-3.6, 1.2),
-        )
-        callout(
-            ax, iso(6.2, 2.4, 1.9, ox, oy, s), "motor-generator and converter", (0.9, 1.0)
-        )
-        callout(
-            ax,
-            iso(4.6, 3.0, 0.5, ox, oy, s),
-            "bearing losses: self-discharge",
-            (-1.0, -1.4),
-        )
-
-    fit_scene(ax, scene)
-    save(fig, "t09_hero.png")
-
-
-def hero_twin():
-    fig, ax = sheet(
-        "From a model to a digital twin",
-        "Elevated tank with level sensor, fitted, forecast and audited",
-        "T10",
-    )
-
-    def scene(ax, ox, oy, s):
-        ground_plane(ax, ox, oy, s, 9)
-        for lx, ly in ((2.6, 2.6), (3.4, 2.6), (2.6, 3.4), (3.4, 3.4)):
-            box(
-                ax,
-                lx,
-                ly,
-                0,
-                0.15,
-                0.15,
-                3.8,
-                shades=STEEL,
-                ox=ox,
-                oy=oy,
-                s=s,
-                zorder=3.4,
-            )
-        cylinder(
-            ax,
-            3.0,
-            3.0,
-            3.8,
-            1.1,
-            1.3,
-            shades=("#E8EEF2", "#BCC8D0", "#8C9BA6"),
-            ox=ox,
-            oy=oy,
-            s=s,
-            zorder=4,
-        )
-        box(
-            ax, 4.0, 3.3, 4.2, 0.25, 0.25, 0.5, shades=RUST, ox=ox, oy=oy, s=s, zorder=5
-        )  # level transmitter
-        pipe(
-            ax,
-            [(3.0, 3.0, 0.3), (3.0, 3.0, 3.8)],
-            width=4,
-            color=WATER[2],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        pipe(
-            ax,
-            [(3.0, 3.0, 0.3), (6.0, 3.0, 0.3)],
-            width=4,
-            color=WATER[2],
-            ox=ox,
-            oy=oy,
-            s=s,
-        )
-        # the dashboard: a panel with a chart
-        px, py, pw, ph = 9.6, 1.9, 5.2, 3.6
-        ax.add_patch(
-            FancyBboxPatch(
-                (px, py),
-                pw,
-                ph,
-                boxstyle="round,pad=0.05,rounding_size=0.12",
-                fc="#FFFFFF",
-                ec=INK,
-                lw=1.0,
-                zorder=6,
-            )
-        )
-        t = np.linspace(0, 1, 120)
-        y = 1.0 + 0.6 * np.sin(2 * np.pi * t * 1.5) * np.exp(-t)
-        band = 0.15 + 0.5 * t
-        xs = px + 0.4 + t * (pw - 0.8)
-        ys = py + 0.6 + y * 1.3
-        cut = 80
-        ax.fill_between(
-            xs[cut:],
-            ys[cut:] - band[cut:],
-            ys[cut:] + band[cut:],
-            color="#FBD9D2",
-            zorder=6.1,
-        )
-        ax.plot(xs[:cut], ys[:cut], color=INK, lw=1.6, zorder=6.2)
-        ax.plot(xs[cut:], ys[cut:], color=RED, lw=1.6, ls="--", zorder=6.2)
-        ax.plot(
-            [px + 0.4, px + pw - 0.4],
-            [py + 0.6, py + 0.6],
-            color=GREY,
-            lw=0.6,
-            zorder=6.1,
-        )
-        ax.text(
-            px + 0.4,
-            py + ph - 0.45,
-            "level  ·  measured, forecast, 90 % range",
-            fontsize=9,
-            color=INK,
-            zorder=6.3,
-        )
-        ax.text(
-            px + 0.4,
-            py + 0.2,
-            "coverage audit: 91 % delivered at the 90 % level",
-            fontsize=8,
-            color=GREY,
-            zorder=6.3,
-        )
-        callout(ax, iso(4.1, 3.3, 4.7, ox, oy, s), "LT: the measurement", (0.7, 0.9))
-
-    fit_scene(ax, scene)
-    save(fig, "t10_hero.png")
-
-
 def readme_header():
     fig = plt.figure(figsize=(16, 5.2), dpi=120)
     fig.patch.set_facecolor(PAPER)
@@ -1241,7 +352,7 @@ def readme_header():
         ax.plot([0.25, 15.75], [y, y], color=LIGHT, lw=0.3, zorder=0)
 
     def scene(ax, ox, oy, s):
-        ground_plane(ax, ox, oy, s, 10, shade="#ECE8E2")
+        ground_plane(ax, ox, oy, s, 10, shade="#ebebef")
         box(
             ax,
             0.5,
@@ -1250,7 +361,7 @@ def readme_header():
             3.6,
             1.5,
             1.8,
-            shades=("#DDDAD4", "#C6C1B9", "#A29D95"),
+            shades=("#d8d8dc", "#c2c2c7", "#a0a0a6"),
             ox=ox,
             oy=oy,
             s=s,
@@ -1291,7 +402,7 @@ def readme_header():
             3.0,
             0.8,
             0.9,
-            shades=("#E8EEF2", "#BCC8D0", "#8C9BA6"),
+            shades=("#f1eaff", "#c4c4ca", "#93939a"),
             ox=ox,
             oy=oy,
             s=s,
@@ -1304,7 +415,7 @@ def readme_header():
             0,
             0.3,
             4.5,
-            shades=("#E6E6E6", "#CFCFCF", "#9F9F9F"),
+            shades=("#e6e6e9", "#cfcfd4", "#9f9fa6"),
             ox=ox,
             oy=oy,
             s=s,
@@ -1320,7 +431,7 @@ def readme_header():
                 Polygon(
                     [(hub[0] + n[0], hub[1] + n[1]), (hub[0] - n[0], hub[1] - n[1]), tip],
                     closed=True,
-                    fc="#F2F2F2",
+                    fc="#f2f2f4",
                     ec=INK,
                     lw=0.6,
                     zorder=5.9,
@@ -1401,6 +512,1678 @@ def readme_header():
 
 # --------------------------------------------------------- process diagrams
 # ISA-5.1 and IEC 60617 style symbols on a sheet. Coordinates in sheet units.
+
+
+VIOLET = "#7a2ffc"
+HATCHC = "#9a9aa1"
+RAISED = "#f5f5f7"
+LIGHT = "#ebebef"
+DASHDOT = (0, (7, 2, 1.5, 2))
+plt.rcParams["hatch.linewidth"] = 0.5
+
+# ------------------------------------------------------ drafting toolkit
+
+
+def cl(ax, x0, y0, x1, y1, transform=None):
+    kw = dict(color=GREY, lw=0.65, ls=DASHDOT, zorder=2)
+    if transform is not None:
+        kw["transform"] = transform
+    ax.plot([x0, x1], [y0, y1], **kw)
+
+
+def srect(ax, x, y, w, h, fc=RAISED, lw=1.3, hatch="///", zorder=4):
+    """A rectangle cut by the section plane: filled and hatched."""
+    ax.add_patch(Rectangle((x, y), w, h, fc=fc, ec=INK, lw=lw, zorder=zorder))
+    if hatch:
+        ax.add_patch(
+            Rectangle(
+                (x, y), w, h, fc="none", ec=HATCHC, lw=0, hatch=hatch, zorder=zorder
+            )
+        )
+
+
+def dim_h(ax, x0, x1, y, text, ey0, ey1, fs=8.5):
+    for xx in (x0, x1):
+        ax.plot([xx, xx], [ey0, ey1], color=GREY, lw=0.55, zorder=3)
+    ax.annotate(
+        "",
+        (x0, y),
+        (x1, y),
+        arrowprops=dict(arrowstyle="<->", color=INK, lw=0.8, shrinkA=0, shrinkB=0),
+    )
+    ax.text(
+        (x0 + x1) / 2, y + 0.09, text, fontsize=fs, color=INK, ha="center", va="bottom"
+    )
+
+
+def dim_v(ax, y0, y1, x, text, ex0, ex1, fs=8.5):
+    for yy in (y0, y1):
+        ax.plot([ex0, ex1], [yy, yy], color=GREY, lw=0.55, zorder=3)
+    ax.annotate(
+        "",
+        (x, y0),
+        (x, y1),
+        arrowprops=dict(arrowstyle="<->", color=INK, lw=0.8, shrinkA=0, shrinkB=0),
+    )
+    ax.text(
+        x + 0.09,
+        (y0 + y1) / 2,
+        text,
+        fontsize=fs,
+        color=INK,
+        rotation=90,
+        va="center",
+        ha="left",
+    )
+
+
+def lead(ax, px, py, tx, ty, text, ha="left", fs=9.0, color=INK):
+    ax.plot([px, tx], [py, ty], color=GREY, lw=0.6, zorder=8)
+    ax.add_patch(Circle((px, py), 0.028, fc=GREY, ec="none", zorder=8))
+    ax.text(
+        tx + (0.08 if ha == "left" else -0.08),
+        ty,
+        text,
+        fontsize=fs,
+        color=color,
+        ha=ha,
+        va="center",
+        zorder=9,
+    )
+
+
+def tag_bubble(ax, x, y, top, bot, px, py, note=None):
+    """ISA instrument tag, the one violet element of a sheet."""
+    ax.plot([x, px], [y, py], color=VIOLET, lw=0.7, ls=(0, (4, 2.5)), zorder=9)
+    ax.add_patch(Circle((x, y), 0.21, fc="#ffffff", ec=VIOLET, lw=1.4, zorder=9))
+    ax.plot([x - 0.21, x + 0.21], [y, y], color=VIOLET, lw=0.8, zorder=10)
+    ax.text(
+        x,
+        y + 0.075,
+        top,
+        fontsize=7.0,
+        color=VIOLET,
+        ha="center",
+        va="center",
+        weight="bold",
+        zorder=10,
+    )
+    ax.text(
+        x, y - 0.075, bot, fontsize=6.5, color=VIOLET, ha="center", va="center", zorder=10
+    )
+    if note:
+        ax.text(
+            x, y - 0.36, note, fontsize=7.6, color=GREY, ha="center", va="top", zorder=9
+        )
+
+
+def ground(ax, x0, x1, y, step=0.17):
+    ax.plot([x0, x1], [y, y], color=INK, lw=1.5, zorder=3)
+    for gx in np.arange(x0 + 0.1, x1 - 0.02, step):
+        ax.plot([gx, gx - 0.11], [y, y - 0.11], color=GREY, lw=0.6, zorder=3)
+
+
+def brk(ax, x, y, angle=90, s=0.14):
+    """A drafting break: double zigzag across a run at (x, y)."""
+    a = math.radians(angle)
+    ux, uy = math.cos(a), math.sin(a)  # across the run
+    for off in (-0.045, 0.045):
+        ox, oy = -uy * off, ux * off
+        zx = [
+            x + ox - ux * s,
+            x + ox - ux * s * 0.25 + uy * s * 0.6,
+            x + ox + ux * s * 0.25 - uy * s * 0.6,
+            x + ox + ux * s,
+        ]
+        zy = [
+            y + oy - uy * s,
+            y + oy - uy * s * 0.25 - ux * s * 0.6,
+            y + oy + uy * s * 0.25 + ux * s * 0.6,
+            y + oy + uy * s,
+        ]
+        ax.plot(zx, zy, color=INK, lw=0.9, zorder=6)
+
+
+# ----------------------------------------------------------------- T01
+
+
+def hero_bess():
+    fig, ax = sheet(
+        "Battery energy storage container",
+        "2 MWh LFP, HVAC on the roof, MV transformer",
+        "T01",
+    )
+    GY = 1.8
+    # container, in section: 12 192 x 2 896
+    CX0, CX1, CY0, CY1 = 2.0, 8.6, GY, GY + 1.57
+    ax.add_patch(
+        Rectangle(
+            (CX0, CY0), CX1 - CX0, CY1 - CY0, fc="#ffffff", ec=INK, lw=1.5, zorder=4
+        )
+    )
+    ax.add_patch(
+        Rectangle(
+            (CX0 + 0.06, CY0 + 0.06),
+            CX1 - CX0 - 0.12,
+            CY1 - CY0 - 0.12,
+            fc="none",
+            ec=INK,
+            lw=0.7,
+            zorder=4,
+        )
+    )
+    # racks: six cabinets, four module shelves each
+    for i in range(6):
+        rx = CX0 + 0.42 + i * 1.0
+        ax.add_patch(
+            Rectangle((rx, CY0 + 0.12), 0.64, 1.18, fc=LIGHT, ec=INK, lw=1.0, zorder=5)
+        )
+        for j in range(4):
+            yy = CY0 + 0.12 + 0.236 * (j + 1)
+            ax.plot([rx, rx + 0.64], [yy, yy], color=INK, lw=0.6, zorder=6)
+    # HVAC on the roof: two units with louvres and a drop into the roof
+    for ux in (2.9, 6.1):
+        ax.add_patch(
+            Rectangle((ux, CY1), 1.05, 0.46, fc="#ffffff", ec=INK, lw=1.2, zorder=5)
+        )
+        for k in range(4):
+            lx = ux + 0.18 + k * 0.19
+            ax.plot([lx, lx], [CY1 + 0.08, CY1 + 0.38], color=INK, lw=0.6, zorder=6)
+        ax.plot([ux + 0.86, ux + 0.86], [CY1, CY1 + 0.46], color=INK, lw=0.7, zorder=6)
+    # MV transformer on a pad: tank, radiator fins, two bushings
+    ax.add_patch(Rectangle((9.55, GY), 2.0, 0.14, fc=RAISED, ec=INK, lw=1.1, zorder=4))
+    ax.add_patch(
+        Rectangle(
+            (9.55, GY), 2.0, 0.14, fc="none", ec=HATCHC, lw=0, hatch="///", zorder=4
+        )
+    )
+    ax.add_patch(
+        Rectangle((9.95, GY + 0.14), 1.3, 1.05, fc="#ffffff", ec=INK, lw=1.4, zorder=5)
+    )
+    for k in range(6):
+        fx = 9.68 + k * 0.047
+        ax.plot([fx, fx], [GY + 0.28, GY + 1.02], color=INK, lw=0.55, zorder=5)
+    ax.plot([9.66, 9.95], [GY + 0.24, GY + 0.24], color=INK, lw=0.8, zorder=5)
+    ax.plot([9.66, 9.95], [GY + 1.06, GY + 1.06], color=INK, lw=0.8, zorder=5)
+    for bxx in (10.35, 10.85):
+        ax.plot([bxx, bxx], [GY + 1.19, GY + 1.52], color=INK, lw=1.1, zorder=5)
+        for d in (0.08, 0.17, 0.26):
+            ax.plot(
+                [bxx - 0.07, bxx + 0.07],
+                [GY + 1.19 + d, GY + 1.19 + d],
+                color=INK,
+                lw=0.7,
+                zorder=5,
+            )
+    # LV cable run container -> transformer
+    ax.plot([CX1, 9.95], [GY + 0.55, GY + 0.55], color=INK, lw=0.8, zorder=3)
+    brk(ax, 9.25, GY + 0.55, angle=90, s=0.10)
+    ground(ax, 1.5, 12.2, GY)
+    # dimensions
+    dim_h(ax, CX0, CX1, CY1 + 0.95, "12 192", CY1 + 0.52, CY1 + 1.02)
+    dim_v(ax, CY0, CY1, CX0 - 0.42, "2 896", CX0 - 0.50, CX0 - 0.06)
+    # callouts
+    lead(ax, CX0 + 1.75, CY0 + 1.0, 2.6, 5.55, "battery racks: 240 LFP cells, 2 MWh")
+    lead(ax, 6.6, CY1 + 0.40, 7.9, 5.55, "HVAC: the heat has to leave")
+    lead(ax, 11.25, GY + 0.9, 12.15, 4.5, "MV transformer, to the park bus")
+    tag_bubble(
+        ax,
+        9.45,
+        4.55,
+        "TT",
+        "01",
+        8.0,
+        CY0 + 1.32,
+        note="pack temperature and state of\ncharge: the measurements",
+    )
+    save(fig, "t01_hero.png")
+
+
+# ----------------------------------------------------------------- T02
+
+
+def hero_feeder():
+    fig, ax = sheet(
+        "DC distribution feeder",
+        "750 V feeder, 2 km of cable, DC link and converter",
+        "T02",
+    )
+    GY = 2.3
+
+    def cabinet(x, label_plinth=True):
+        ax.add_patch(
+            Rectangle((x, GY), 1.15, 1.85, fc="#ffffff", ec=INK, lw=1.4, zorder=5)
+        )
+        ax.plot(
+            [x + 0.575, x + 0.575], [GY + 0.1, GY + 1.75], color=INK, lw=0.6, zorder=6
+        )
+        for yy in (GY + 1.45, GY + 1.58):
+            ax.plot([x + 0.12, x + 0.46], [yy, yy], color=INK, lw=0.5, zorder=6)
+        ax.add_patch(Circle((x + 0.50, GY + 0.95), 0.03, fc=INK, ec="none", zorder=6))
+        ax.add_patch(Circle((x + 0.65, GY + 0.95), 0.03, fc=INK, ec="none", zorder=6))
+        if label_plinth:
+            srect(ax, x - 0.08, GY - 0.16, 1.31, 0.16)
+
+    cabinet(2.0)
+    cabinet(7.9)
+    # buried cable: down, along, up
+    for dx in (-0.04, 0.04):
+        ax.plot(
+            [2.575 + dx, 2.575 + dx], [GY, 1.72 + 0.04 - dx], color=INK, lw=1.0, zorder=3
+        )
+    ax.plot([2.575, 8.475], [1.72, 1.72], color=INK, lw=1.0, zorder=3)
+    ax.plot([2.575, 8.475], [1.64, 1.64], color=INK, lw=1.0, zorder=3)
+    for dx in (-0.04, 0.04):
+        ax.plot(
+            [8.475 + dx, 8.475 + dx], [1.72 + 0.04 + dx, GY], color=INK, lw=1.0, zorder=3
+        )
+    brk(ax, 5.5, 1.68, angle=90, s=0.12)
+    ground(ax, 1.5, 9.65, GY)
+    # detail mark on the cable, and the enlarged section
+    ax.add_patch(Circle((6.6, 1.68), 0.16, fc="none", ec=INK, lw=0.8, zorder=6))
+    DC = (12.15, 4.95)
+    for r, lw_, ls_ in (
+        (0.98, 1.4, "-"),
+        (0.80, 0.8, "-"),
+        (0.62, 0.8, (0, (3, 2))),
+        (0.40, 1.0, "-"),
+    ):
+        ax.add_patch(Circle(DC, r, fc="none", ec=INK, lw=lw_, ls=ls_, zorder=6))
+    ax.add_patch(Circle(DC, 0.40, fc=LIGHT, ec=INK, lw=1.0, zorder=5))
+    ax.add_patch(Circle(DC, 0.40, fc="none", ec=HATCHC, lw=0, hatch="///", zorder=5))
+    ax.text(
+        DC[0],
+        DC[1] - 1.35,
+        "DETAIL A — the cable, from the run",
+        fontsize=8.5,
+        color=INK,
+        ha="center",
+        va="top",
+        weight="bold",
+    )
+    lead(
+        ax, DC[0] - 0.12, DC[1] + 0.12, 10.0, 6.25, "conductor: series R and L", ha="left"
+    )
+    lead(ax, DC[0] - 0.60, DC[1] - 0.45, 10.0, 3.95, "insulation", ha="left")
+    lead(ax, DC[0] + 0.52, DC[1] + 0.52, 13.3, 6.1, "screen", ha="left")
+    lead(ax, DC[0] + 0.93, DC[1] - 0.30, 13.55, 4.0, "sheath", ha="left")
+    ax.text(6.6, 1.38, "A", fontsize=8.5, color=INK, ha="center", va="top", weight="bold")
+    # run length
+    dim_h(ax, 2.575, 8.475, 5.15, "2 000 m", GY + 1.9, 5.25)
+    # labels
+    lead(ax, 2.575, GY + 1.87, 1.75, 5.9, "substation converter: 750 V DC")
+    lead(
+        ax,
+        8.475,
+        GY + 1.87,
+        6.9,
+        5.9,
+        "DC/DC converter and DC link: 48 V bus",
+        ha="right",
+    )
+    ax.annotate(
+        "",
+        (9.6, GY + 0.9),
+        (9.05, GY + 0.9),
+        arrowprops=dict(arrowstyle="->", color=INK, lw=1.0),
+    )
+    ax.text(9.33, GY + 1.14, "loads\n20 → 60 kW", fontsize=8.5, color=INK, ha="center")
+    tag_bubble(
+        ax, 8.475, 5.85, "EI", "02", 8.475, GY + 1.85, note="bus voltage: the measurement"
+    )
+    save(fig, "t02_hero.png")
+
+
+# ----------------------------------------------------------------- T04
+
+
+def hero_turbine():
+    fig, ax = sheet(
+        "Wind turbine drivetrain",
+        "Hub, main shaft, gearbox, generator on the bedplate",
+        "T04",
+    )
+    AX = 3.95  # shaft axis height
+    # tower top, in section, with a break at the bottom
+    tower = [(3.19, 1.48), (4.21, 1.48), (4.12, 2.95), (3.28, 2.95)]
+    ax.add_patch(Polygon(tower, closed=True, fc=RAISED, ec=INK, lw=1.3, zorder=4))
+    ax.add_patch(
+        Polygon(tower, closed=True, fc="none", ec=HATCHC, lw=0, hatch="///", zorder=4)
+    )
+    brk(ax, 3.7, 1.48, angle=0, s=0.18)
+    # bedplate on the yaw bearing
+    ax.plot([3.1, 4.3], [2.95, 2.95], color=INK, lw=1.0, zorder=5)
+    ax.add_patch(Rectangle((2.35, 3.0), 6.55, 0.26, fc=LIGHT, ec=INK, lw=1.3, zorder=4))
+    # nacelle cover, as a phantom outline
+    ax.add_patch(
+        FancyBboxPatch(
+            (2.5, 3.05),
+            6.6,
+            2.0,
+            boxstyle="round,pad=0.28",
+            fc="none",
+            ec="#c2c2c7",
+            lw=0.8,
+            ls=(0, (9, 4)),
+            zorder=2,
+        )
+    )
+    # hub and spinner, one blade up with a break
+    from matplotlib.patches import Ellipse
+
+    ax.add_patch(Ellipse((1.72, AX), 0.56, 1.0, fc="#ffffff", ec=INK, lw=1.3, zorder=5))
+    ax.add_patch(
+        Rectangle((1.72, AX - 0.5), 0.58, 1.0, fc="#ffffff", ec=INK, lw=1.4, zorder=5)
+    )
+    ax.add_patch(
+        Polygon(
+            [(1.86, AX + 0.5), (2.16, AX + 0.5), (2.10, 5.3), (1.94, 5.3)],
+            closed=True,
+            fc="#ffffff",
+            ec=INK,
+            lw=1.2,
+            zorder=4,
+        )
+    )
+    brk(ax, 2.01, 5.05, angle=0, s=0.14)
+    # main shaft and main bearing
+    ax.plot([2.3, 4.75], [AX + 0.09, AX + 0.09], color=INK, lw=1.2, zorder=5)
+    ax.plot([2.3, 4.75], [AX - 0.09, AX - 0.09], color=INK, lw=1.2, zorder=5)
+    ax.add_patch(Rectangle((3.0, 3.26), 0.62, 0.44, fc=LIGHT, ec=INK, lw=1.2, zorder=5))
+    ax.add_patch(Circle((3.31, AX), 0.22, fc="#ffffff", ec=INK, lw=1.1, zorder=6))
+    ax.add_patch(Circle((3.31, AX), 0.13, fc="#ffffff", ec=INK, lw=0.8, zorder=6))
+    # gearbox with the gear train as pitch circles
+    ax.add_patch(
+        Rectangle((4.75, 3.26), 1.5, 1.6, fc="#ffffff", ec=INK, lw=1.4, zorder=5)
+    )
+    ax.add_patch(Circle((5.15, AX), 0.48, fc="none", ec=INK, lw=0.9, zorder=6))
+    ax.add_patch(
+        Circle((5.15, AX), 0.40, fc="none", ec=GREY, lw=0.6, ls=(0, (3, 2)), zorder=6)
+    )
+    ax.add_patch(Circle((5.78, AX + 0.33), 0.26, fc="none", ec=INK, lw=0.9, zorder=6))
+    ax.add_patch(
+        Circle(
+            (5.78, AX + 0.33), 0.20, fc="none", ec=GREY, lw=0.6, ls=(0, (3, 2)), zorder=6
+        )
+    )
+    ax.add_patch(Circle((5.95, AX - 0.12), 0.15, fc="none", ec=INK, lw=0.9, zorder=6))
+    # high-speed shaft and brake disc
+    ax.plot([6.25, 7.1], [AX - 0.065, AX - 0.065], color=INK, lw=1.0, zorder=5)
+    ax.plot([6.25, 7.1], [AX - 0.185, AX - 0.185], color=INK, lw=1.0, zorder=5)
+    ax.add_patch(
+        Rectangle((6.55, AX - 0.47), 0.09, 0.70, fc="#ffffff", ec=INK, lw=1.1, zorder=6)
+    )
+    # generator with cooling fins and feet
+    ax.add_patch(
+        Rectangle((7.1, 3.35), 1.55, 1.15, fc="#ffffff", ec=INK, lw=1.4, zorder=5)
+    )
+    for k in range(7):
+        fx = 7.28 + k * 0.17
+        ax.plot([fx, fx], [4.5, 4.62], color=INK, lw=0.7, zorder=5)
+    ax.plot([7.22, 8.55], [4.62, 4.62], color=INK, lw=0.8, zorder=5)
+    ax.add_patch(Rectangle((7.3, 3.26), 0.28, 0.09, fc=INK, ec="none", zorder=5))
+    ax.add_patch(Rectangle((8.3, 3.26), 0.28, 0.09, fc=INK, ec="none", zorder=5))
+    # shaft centerline
+    cl(ax, 1.1, AX, 9.0, AX)
+    # callouts with the model's parameters
+    lead(ax, 1.72, AX - 0.52, 1.15, 2.6, "rotor and hub\nJ = 6.0×10$^6$ kg·m²")
+    lead(ax, 4.2, AX + 0.10, 3.6, 5.55, "main shaft\nk = 2.4×10$^8$ N·m/rad")
+    lead(ax, 5.5, 4.86, 5.3, 5.85, "gearbox 1 : 90")
+    lead(ax, 8.2, 4.5, 8.9, 5.55, "generator: J = 120 kg·m²\n1 500 rpm on this side")
+    tag_bubble(
+        ax, 10.3, 4.35, "ST", "04", 8.65, AX, note="generator speed:\nthe measurement"
+    )
+    save(fig, "t04_hero.png")
+
+
+# ----------------------------------------------------------------- T05
+
+
+def hero_water():
+    fig, ax = sheet(
+        "Municipal water supply",
+        "Reservoir, pump station, rising main, elevated tank",
+        "T05",
+    )
+    GY = 1.8
+    ground(ax, 1.4, 9.6, GY)
+    ground(ax, 11.9, 12.6, GY)
+    ax.plot([9.6, 11.9], [GY, GY], color=INK, lw=1.5, zorder=3)
+
+    def wlevel(x, y, s=0.12):
+        ax.add_patch(
+            Polygon(
+                [(x - s, y + s), (x + s, y + s), (x, y)],
+                closed=True,
+                fc="none",
+                ec=INK,
+                lw=0.8,
+                zorder=7,
+            )
+        )
+        ax.plot([x - s * 1.6, x + s * 1.6], [y + s, y + s], color=INK, lw=0.8, zorder=7)
+
+    # raw-water reservoir, excavated below grade
+    basin = [(1.6, GY), (1.95, 1.22), (3.45, 1.22), (3.8, GY)]
+    ax.plot(*zip(*basin, strict=True), color=INK, lw=1.3, zorder=4)
+    ax.add_patch(
+        Polygon(
+            [(1.73, 1.62), (3.67, 1.62), (3.45, 1.22), (1.95, 1.22)],
+            closed=True,
+            fc="#efe6ff",
+            ec="none",
+            zorder=3,
+        )
+    )
+    wlevel(2.7, 1.62)
+    ax.annotate(
+        "", (1.72, 1.5), (1.15, 1.5), arrowprops=dict(arrowstyle="->", color=INK, lw=0.9)
+    )
+    # pump station with pump and filter
+    ax.add_patch(Rectangle((4.3, GY), 1.25, 0.95, fc="#ffffff", ec=INK, lw=1.3, zorder=5))
+    ax.plot(
+        [4.2, 4.925, 5.65], [GY + 0.95, GY + 1.3, GY + 0.95], color=INK, lw=1.1, zorder=5
+    )
+    ax.add_patch(Circle((4.7, GY + 0.33), 0.19, fc="#ffffff", ec=INK, lw=1.1, zorder=6))
+    ax.add_patch(
+        Polygon(
+            [(4.7, GY + 0.52), (4.56, GY + 0.33), (4.84, GY + 0.33)],
+            closed=True,
+            fc=INK,
+            ec="none",
+            zorder=7,
+        )
+    )
+    ax.add_patch(
+        Rectangle((5.08, GY + 0.14), 0.26, 0.5, fc=LIGHT, ec=INK, lw=1.0, zorder=6)
+    )
+    for yy in (0.27, 0.39, 0.51):
+        ax.plot([5.08, 5.34], [GY + yy, GY + yy], color=HATCHC, lw=0.5, zorder=6)
+    # suction from the reservoir
+    ax.plot([3.45, 4.51], [1.35, GY + 0.33], color=INK, lw=0.9, zorder=4)
+    # rising main: out of the station, then up to the tank
+    x0, y0 = 5.55, GY + 0.45
+    ax.plot([x0, 6.3], [y0, y0], color=INK, lw=1.0, zorder=4)
+    ax.plot([x0, 6.3], [y0 - 0.08, y0 - 0.08], color=INK, lw=1.0, zorder=4)
+    ax.plot([6.3, 10.55], [y0, 4.72], color=INK, lw=1.0, zorder=4)
+    ax.plot([6.3 + 0.03, 10.58], [y0 - 0.08, 4.64], color=INK, lw=1.0, zorder=4)
+    brk(ax, 8.2, 3.62, angle=127, s=0.12)
+    # elevated tank on braced legs
+    TX0, TX1, TY0, TY1 = 9.85, 11.75, 4.6, 5.95
+    ax.add_patch(
+        Rectangle(
+            (TX0, TY0), TX1 - TX0, TY1 - TY0, fc="#ffffff", ec=INK, lw=1.5, zorder=5
+        )
+    )
+    ax.plot([TX0 - 0.1, TX1 + 0.1], [TY0, TY0], color=INK, lw=1.5, zorder=5)
+    ax.plot(
+        [TX0 + 0.25, TX1 - 0.25],
+        [5.52, 5.52],
+        color=INK,
+        lw=0.8,
+        ls=(0, (5, 3)),
+        zorder=6,
+    )
+    wlevel(10.45, 5.52)
+    for lx in (10.12, 11.48):
+        ax.plot([lx, lx], [GY, TY0], color=INK, lw=1.3, zorder=4)
+    ax.plot([10.12, 11.48], [GY + 0.3, TY0 - 0.25], color=INK, lw=0.7, zorder=3)
+    ax.plot([11.48, 10.12], [GY + 0.3, TY0 - 0.25], color=INK, lw=0.7, zorder=3)
+    # service line down and off to the town
+    ax.plot([11.3, 11.3], [TY0, 2.25], color=INK, lw=0.9, zorder=4)
+    ax.annotate(
+        "",
+        (12.45, 2.25),
+        (11.3, 2.25),
+        arrowprops=dict(arrowstyle="->", color=INK, lw=0.9),
+    )
+    ax.text(12.42, 2.44, "to the town", fontsize=8.5, color=INK, ha="right")
+    # the head, dimensioned
+    dim_v(ax, GY + 0.45, 5.52, 13.3, "30 m of head", 11.95, 13.4)
+    ax.text(11.88, GY + 0.40, "pump axis", fontsize=7.0, color=GREY, ha="right", va="top")
+    # callouts
+    lead(ax, 2.7, 1.3, 1.7, 3.3, "raw-water reservoir, river-fed")
+    lead(ax, 4.925, GY + 1.28, 4.1, 4.5, "pump station: pump and filter")
+    lead(ax, 8.35, 3.45, 6.7, 5.2, "rising main: 1 200 m, friction and inertia")
+    lead(ax, 10.8, TY1, 9.3, 6.35, "the tank smooths pump against demand")
+    tag_bubble(
+        ax, 12.45, 6.15, "LT", "05", TX1, 5.52, note="tank level:\nthe measurement"
+    )
+    save(fig, "t05_hero.png")
+
+
+# ----------------------------------------------------------------- T06
+
+
+def hero_wastewater():
+    fig, ax = sheet(
+        "Wastewater disinfection",
+        "Chlorine contact basin in plan: four cells in series",
+        "T06",
+    )
+    X0, X1, Y0, Y1, W = 2.3, 8.9, 2.0, 5.7, 0.2
+    # outer wall, in section
+    outer = Rectangle(
+        (X0 - W, Y0 - W),
+        X1 - X0 + 2 * W,
+        Y1 - Y0 + 2 * W,
+        fc=RAISED,
+        ec=INK,
+        lw=1.5,
+        zorder=3,
+    )
+    ax.add_patch(outer)
+    ax.add_patch(
+        Rectangle(
+            (X0 - W, Y0 - W),
+            X1 - X0 + 2 * W,
+            Y1 - Y0 + 2 * W,
+            fc="none",
+            ec=HATCHC,
+            lw=0,
+            hatch="///",
+            zorder=3,
+        )
+    )
+    ax.add_patch(
+        Rectangle((X0, Y0), X1 - X0, Y1 - Y0, fc="#ffffff", ec=INK, lw=1.2, zorder=4)
+    )
+    # three baffles -> four cells
+    GAP = 0.75
+    for i, bx in enumerate((3.95, 5.6, 7.25)):
+        if i % 2 == 0:
+            y0b, y1b = Y0, Y1 - GAP
+        else:
+            y0b, y1b = Y0 + GAP, Y1
+        ax.add_patch(
+            Rectangle(
+                (bx - 0.08, y0b), 0.16, y1b - y0b, fc=RAISED, ec=INK, lw=1.1, zorder=5
+            )
+        )
+        ax.add_patch(
+            Rectangle(
+                (bx - 0.08, y0b),
+                0.16,
+                y1b - y0b,
+                fc="none",
+                ec=HATCHC,
+                lw=0,
+                hatch="///",
+                zorder=5,
+            )
+        )
+    # the flow, as a dashed path with arrows
+    path = [
+        (1.45, 4.6),
+        (X0 + 0.45, 4.6),
+        (3.12, 5.2),
+        (3.12, 2.6),
+        (4.78, 2.6),
+        (4.78, 5.1),
+        (6.42, 5.1),
+        (6.42, 2.6),
+        (8.08, 2.6),
+        (8.08, 4.6),
+        (X1 - 0.1, 4.6),
+        (9.75, 4.6),
+    ]
+    for p0, p1 in zip(path[:-1], path[1:], strict=True):
+        ax.annotate(
+            "",
+            p1,
+            p0,
+            zorder=6,
+            arrowprops=dict(
+                arrowstyle="->",
+                color=GREY,
+                lw=1.0,
+                linestyle=(0, (5, 3)),
+                shrinkA=0,
+                shrinkB=0,
+            ),
+        )
+    # inlet with the dose, outlet to discharge
+    ax.plot([1.45, X0 - W], [4.42, 4.42], color=INK, lw=1.0, zorder=4)
+    ax.plot([1.45, X0 - W], [4.78, 4.78], color=INK, lw=1.0, zorder=4)
+    ax.plot([X1 + W, 9.75], [4.42, 4.42], color=INK, lw=1.0, zorder=4)
+    ax.plot([X1 + W, 9.75], [4.78, 4.78], color=INK, lw=1.0, zorder=4)
+    ax.add_patch(
+        Polygon(
+            [(1.86, 5.35), (1.76, 5.12), (1.96, 5.12)],
+            closed=True,
+            fc="#ffffff",
+            ec=INK,
+            lw=0.9,
+            zorder=6,
+        )
+    )
+    ax.plot([1.86, 1.86], [5.35, 4.8], color=INK, lw=0.9, zorder=5)
+    # cell numbers
+    for i, cx in enumerate((3.12, 4.78, 6.42, 8.08)):
+        ax.text(
+            cx,
+            3.82,
+            str(i + 1),
+            fontsize=11,
+            color=GREY,
+            ha="center",
+            va="center",
+            style="italic",
+            zorder=6,
+        )
+    # callouts
+    lead(ax, 1.86, 5.33, 2.6, 6.25, "chlorine dosed at the inlet")
+    lead(
+        ax,
+        5.6,
+        Y1 + W,
+        5.0,
+        6.35,
+        "three baffles: four cells in series,\ncloser to plug flow",
+    )
+    lead(
+        ax,
+        9.3,
+        4.42,
+        10.6,
+        3.4,
+        "to discharge: the residual must leave\nabove 0.2 mg/L — the permit",
+    )
+    ax.text(1.42, 4.2, "inlet", fontsize=8.5, color=INK, ha="left", va="top")
+    tag_bubble(
+        ax,
+        10.3,
+        5.35,
+        "AT",
+        "06",
+        9.6,
+        4.78,
+        note="residual chlorine at the outlet:\nthe measurement",
+    )
+    save(fig, "t06_hero.png")
+
+
+# ----------------------------------------------------------------- T07
+
+
+def hero_building():
+    fig, ax = sheet(
+        "Heated building",
+        "Section: envelope, electric boiler, radiator loop",
+        "T07",
+    )
+    GY = 1.8
+    ground(ax, 1.4, 10.3, GY)
+    X0, X1 = 2.5, 8.7
+    WALL, INS = 0.14, 0.12
+    H0, H1 = GY, 4.75
+    # floor slab
+    srect(ax, X0 - WALL - INS, H0, (X1 - X0) + 2 * (WALL + INS), 0.22)
+    # walls: structure plus insulation, the window on the right
+    for side in ("L", "R"):
+        if side == "L":
+            xs, xi = X0 - WALL - INS, X0 - INS
+            srect(ax, xs, H0 + 0.22, WALL, H1 - H0 - 0.22)
+            ax.add_patch(
+                Rectangle(
+                    (xi, H0 + 0.22),
+                    INS,
+                    H1 - H0 - 0.22,
+                    fc="#ffffff",
+                    ec=INK,
+                    lw=0.8,
+                    zorder=4,
+                )
+            )
+            ax.add_patch(
+                Rectangle(
+                    (xi, H0 + 0.22),
+                    INS,
+                    H1 - H0 - 0.22,
+                    fc="none",
+                    ec=HATCHC,
+                    lw=0,
+                    hatch="...",
+                    zorder=4,
+                )
+            )
+        else:
+            xs, xi = X1 + INS, X1
+            for ya, yb in ((H0 + 0.22, 3.05), (3.95, H1)):
+                srect(ax, xs, ya, WALL, yb - ya)
+                ax.add_patch(
+                    Rectangle(
+                        (xi, ya), INS, yb - ya, fc="#ffffff", ec=INK, lw=0.8, zorder=4
+                    )
+                )
+                ax.add_patch(
+                    Rectangle(
+                        (xi, ya),
+                        INS,
+                        yb - ya,
+                        fc="none",
+                        ec=HATCHC,
+                        lw=0,
+                        hatch="...",
+                        zorder=4,
+                    )
+                )
+    # the window: frame and double glazing
+    for gx in (X1 + 0.03, X1 + 0.11):
+        ax.plot([gx, gx], [3.05, 3.95], color=INK, lw=0.9, zorder=5)
+    ax.plot([X1 - 0.06, X1 + WALL + INS + 0.0], [3.05, 3.05], color=INK, lw=1.1, zorder=5)
+    ax.plot([X1 - 0.06, X1 + WALL + INS + 0.0], [3.95, 3.95], color=INK, lw=1.1, zorder=5)
+    # roof slab
+    srect(ax, X0 - WALL - INS - 0.15, H1, (X1 - X0) + 2 * (WALL + INS) + 0.3, 0.2)
+    # boiler, the loop, the radiator
+    ax.add_patch(
+        Rectangle((2.95, H0 + 0.22), 0.7, 1.05, fc="#ffffff", ec=INK, lw=1.3, zorder=5)
+    )
+    ax.plot([3.05, 3.55], [H0 + 1.05, H0 + 1.05], color=INK, lw=0.6, zorder=6)
+    ax.plot([3.3, 3.3], [H0 + 0.42, H0 + 0.88], color=INK, lw=0.6, zorder=6)
+    ax.plot([3.65, 7.9], [H0 + 0.52, H0 + 0.52], color=INK, lw=0.8, zorder=4)
+    ax.plot([3.65, 7.9], [H0 + 0.40, H0 + 0.40], color=INK, lw=0.8, zorder=4)
+    ax.annotate(
+        "",
+        (6.1, H0 + 0.52),
+        (5.9, H0 + 0.52),
+        zorder=6,
+        arrowprops=dict(arrowstyle="->", color=INK, lw=0.8),
+    )
+    rad_x = 7.9
+    ax.add_patch(
+        Rectangle((rad_x, H0 + 0.35), 0.5, 1.3, fc="#ffffff", ec=INK, lw=1.2, zorder=5)
+    )
+    for k in range(5):
+        rx = rad_x + 0.09 + k * 0.085
+        ax.plot([rx, rx], [H0 + 0.45, H0 + 1.55], color=INK, lw=0.55, zorder=6)
+    for axx in (rad_x + 0.1, rad_x + 0.4):
+        ax.annotate(
+            "",
+            (axx, H0 + 2.25),
+            (axx, H0 + 1.75),
+            zorder=6,
+            arrowprops=dict(arrowstyle="->", color=GREY, lw=0.8),
+        )
+    # temperatures and ventilation
+    ax.text(5.7, 3.6, "20 °C", fontsize=12, color=INK, ha="center", weight="bold")
+    ax.text(1.55, 3.6, "0 °C", fontsize=10, color=INK, ha="center")
+    ax.annotate(
+        "", (2.25, 3.3), (1.45, 3.3), arrowprops=dict(arrowstyle="->", color=GREY, lw=1.0)
+    )
+    ax.annotate(
+        "",
+        (6.9, 5.75),
+        (6.4, 4.98),
+        zorder=6,
+        arrowprops=dict(arrowstyle="->", color=GREY, lw=1.0),
+    )
+    ax.text(7.0, 5.8, "ventilation loss", fontsize=8.5, color=INK, ha="left")
+    # callouts
+    lead(ax, 3.3, H0 + 1.27, 2.95, 5.5, "electric boiler: 12 kW\nthrough a water loop")
+    lead(
+        ax,
+        X0 - WALL - INS + 0.07,
+        4.3,
+        1.45,
+        5.85,
+        "envelope: walls and\ninsulation lose heat",
+    )
+    lead(ax, rad_x + 0.42, H0 + 0.55, 9.35, 2.35, "radiator under the window")
+    tag_bubble(
+        ax,
+        9.9,
+        4.6,
+        "TT",
+        "07",
+        X1 - 0.12,
+        4.15,
+        note="indoor temperature:\nthe measurement",
+    )
+    save(fig, "t07_hero.png")
+
+
+# ----------------------------------------------------------------- T08
+
+
+def hero_pumpdrive():
+    fig, ax = sheet(
+        "Motor-driven pump set",
+        "DC motor, coupling, gear pump and head tank on one baseplate",
+        "T08",
+    )
+    GY = 1.8
+    ground(ax, 1.5, 10.6, GY)
+    AXY = 3.02
+    # foundation and baseplate
+    srect(ax, 2.2, GY, 6.4, 0.35)
+    ax.add_patch(
+        Rectangle((2.35, GY + 0.35), 6.1, 0.17, fc=LIGHT, ec=INK, lw=1.2, zorder=4)
+    )
+    for bx in (2.7, 4.4, 6.1, 8.1):
+        ax.plot([bx, bx], [GY + 0.05, GY + 0.52], color=INK, lw=0.8, zorder=5)
+        ax.plot(
+            [bx - 0.07, bx + 0.07], [GY + 0.52, GY + 0.52], color=INK, lw=0.8, zorder=5
+        )
+    # DC motor: fan cowl, body, terminal box, feet
+    ax.add_patch(
+        Rectangle((2.52, 2.52), 0.26, 1.0, fc="#ffffff", ec=INK, lw=1.2, zorder=5)
+    )
+    for k in range(4):
+        ax.plot(
+            [2.58 + k * 0.05, 2.58 + k * 0.05], [2.6, 3.44], color=INK, lw=0.5, zorder=6
+        )
+    ax.add_patch(
+        Rectangle((2.78, 2.42), 1.95, 1.2, fc="#ffffff", ec=INK, lw=1.4, zorder=5)
+    )
+    for k in range(5):
+        yy = 2.56 + k * 0.19
+        ax.plot([2.84, 4.67], [yy, yy], color="#c2c2c7", lw=0.5, zorder=5)
+    ax.add_patch(
+        Rectangle((3.45, 3.62), 0.55, 0.3, fc="#ffffff", ec=INK, lw=1.1, zorder=5)
+    )
+    for fx in (2.95, 4.35):
+        ax.add_patch(
+            Polygon(
+                [
+                    (fx - 0.14, GY + 0.52),
+                    (fx + 0.14, GY + 0.52),
+                    (fx + 0.07, 2.42),
+                    (fx - 0.07, 2.42),
+                ],
+                closed=True,
+                fc=LIGHT,
+                ec=INK,
+                lw=1.0,
+                zorder=5,
+            )
+        )
+    # shaft and coupling with its guard
+    ax.plot([4.73, 5.5], [AXY + 0.06, AXY + 0.06], color=INK, lw=1.1, zorder=5)
+    ax.plot([4.73, 5.5], [AXY - 0.06, AXY - 0.06], color=INK, lw=1.1, zorder=5)
+    for cx in (4.98, 5.18):
+        ax.add_patch(
+            Rectangle(
+                (cx, AXY - 0.24), 0.14, 0.48, fc="#ffffff", ec=INK, lw=1.1, zorder=6
+            )
+        )
+    ax.add_patch(
+        Rectangle(
+            (4.88, AXY - 0.34),
+            0.56,
+            0.68,
+            fc="none",
+            ec=GREY,
+            lw=0.8,
+            ls=(0, (4, 2.5)),
+            zorder=6,
+        )
+    )
+    # gear pump: casing, two meshing gears, foot, flanges
+    PC = (6.15, AXY)
+    ax.add_patch(Circle(PC, 0.62, fc="#ffffff", ec=INK, lw=1.4, zorder=5))
+    ax.add_patch(Circle(PC, 0.52, fc="none", ec=INK, lw=0.7, zorder=5))
+    ax.add_patch(
+        Circle(
+            (PC[0], PC[1] + 0.22),
+            0.215,
+            fc="none",
+            ec=GREY,
+            lw=0.7,
+            ls=(0, (3, 2)),
+            zorder=6,
+        )
+    )
+    ax.add_patch(
+        Circle(
+            (PC[0], PC[1] - 0.22),
+            0.215,
+            fc="none",
+            ec=GREY,
+            lw=0.7,
+            ls=(0, (3, 2)),
+            zorder=6,
+        )
+    )
+    ax.add_patch(
+        Polygon(
+            [
+                (PC[0] - 0.3, GY + 0.52),
+                (PC[0] + 0.3, GY + 0.52),
+                (PC[0] + 0.16, PC[1] - 0.57),
+                (PC[0] - 0.16, PC[1] - 0.57),
+            ],
+            closed=True,
+            fc=LIGHT,
+            ec=INK,
+            lw=1.1,
+            zorder=4,
+        )
+    )
+    # suction sump on the baseplate, to the right
+    ax.plot([6.77, 7.35], [AXY, AXY], color=INK, lw=1.0, zorder=4)
+    ax.plot([7.35, 7.35], [AXY, 2.72], color=INK, lw=1.0, zorder=4)
+    ax.add_patch(
+        Rectangle((7.05, GY + 0.52), 1.25, 0.72, fc="#ffffff", ec=INK, lw=1.2, zorder=3)
+    )
+    ax.plot([7.17, 8.18], [2.98, 2.98], color=INK, lw=0.7, ls=(0, (5, 3)), zorder=4)
+    ax.add_patch(
+        Polygon(
+            [(7.56, 3.1), (7.44, 2.98), (7.68, 2.98)],
+            closed=True,
+            fc="none",
+            ec=INK,
+            lw=0.7,
+            zorder=4,
+        )
+    )
+    # discharge up to the head tank
+    ax.plot(
+        [PC[0] - 0.04, PC[0] - 0.04], [PC[1] + 0.62, 5.15], color=INK, lw=1.0, zorder=4
+    )
+    ax.plot(
+        [PC[0] + 0.04, PC[0] + 0.04], [PC[1] + 0.62, 5.07], color=INK, lw=1.0, zorder=4
+    )
+    ax.plot([PC[0] - 0.04, 8.6], [5.15, 5.15], color=INK, lw=1.0, zorder=4)
+    ax.plot([PC[0] + 0.04, 8.6], [5.07, 5.07], color=INK, lw=1.0, zorder=4)
+    TK = (8.6, 4.15)
+    ax.add_patch(
+        Rectangle(
+            (TK[0] - 0.75, TK[1]), 1.5, 1.35, fc="#ffffff", ec=INK, lw=1.3, zorder=5
+        )
+    )
+    ax.plot(
+        [TK[0] - 0.5, TK[0] + 0.5],
+        [TK[1] + 0.95, TK[1] + 0.95],
+        color=INK,
+        lw=0.7,
+        ls=(0, (5, 3)),
+        zorder=6,
+    )
+    ax.add_patch(
+        Polygon(
+            [
+                (TK[0] - 0.12, TK[1] + 1.07),
+                (TK[0] - 0.24, TK[1] + 0.95),
+                (TK[0], TK[1] + 0.95),
+            ],
+            closed=True,
+            fc="none",
+            ec=INK,
+            lw=0.7,
+            zorder=6,
+        )
+    )
+    for lx in (TK[0] - 0.55, TK[0] + 0.55):
+        ax.plot([lx, lx], [GY, TK[1]], color=INK, lw=1.1, zorder=3)
+    cl(ax, 2.2, AXY, 7.0, AXY)
+    # callouts
+    lead(
+        ax,
+        3.75,
+        3.92,
+        2.6,
+        5.5,
+        "DC motor: armature R and L,\nrotor inertia and friction",
+    )
+    lead(ax, 5.16, AXY + 0.36, 4.6, 4.7, "coupling")
+    lead(
+        ax,
+        PC[0] - 0.42,
+        PC[1] - 0.48,
+        4.95,
+        1.28,
+        "gear pump: 20 cm³ per revolution",
+        ha="right",
+    )
+    lead(ax, TK[0] + 0.3, TK[1] + 1.33, 9.75, 6.0, "head tank", ha="left")
+    lead(ax, 7.9, 2.6, 9.3, 2.55, "suction sump")
+    tag_bubble(
+        ax,
+        5.35,
+        5.72,
+        "IT",
+        "08",
+        4.4,
+        3.64,
+        note="armature current at start-up:\nthe measurement",
+    )
+    save(fig, "t08_hero.png")
+
+
+# ----------------------------------------------------------------- T09
+
+
+def hero_flywheel():
+    fig, ax = sheet(
+        "Flywheel energy storage",
+        "Vertical section: steel rotor in a vacuum housing",
+        "T09",
+    )
+    CX = 6.0
+    X0, X1, Y0, Y1, W = 4.5, 7.5, 1.9, 5.9, 0.18
+    # vacuum vessel, wall in section
+    srect(ax, X0, Y0, W, Y1 - Y0)
+    srect(ax, X1 - W, Y0, W, Y1 - Y0)
+    srect(ax, X0, Y1 - W, X1 - X0, W)
+    srect(ax, X0, Y0, X1 - X0, W)
+    ax.text(X0 + 0.32, Y1 - 0.42, "vacuum", fontsize=8.5, color=GREY, style="italic")
+    # vacuum port with its valve
+    ax.plot([X1, 8.05], [5.45, 5.45], color=INK, lw=0.9, zorder=4)
+    ax.plot([X1, 8.05], [5.33, 5.33], color=INK, lw=0.9, zorder=4)
+    ax.add_patch(
+        Polygon(
+            [(8.05, 5.51), (8.05, 5.27), (8.33, 5.39)],
+            closed=True,
+            fc="#ffffff",
+            ec=INK,
+            lw=0.9,
+            zorder=5,
+        )
+    )
+    ax.add_patch(
+        Polygon(
+            [(8.61, 5.51), (8.61, 5.27), (8.33, 5.39)],
+            closed=True,
+            fc="#ffffff",
+            ec=INK,
+            lw=0.9,
+            zorder=5,
+        )
+    )
+    # shaft
+    ax.add_patch(
+        Rectangle(
+            (CX - 0.07, Y0 + W),
+            0.14,
+            Y1 - Y0 - 2 * W,
+            fc="#ffffff",
+            ec=INK,
+            lw=1.1,
+            zorder=5,
+        )
+    )
+    # rotor disc, in section
+    ax.add_patch(
+        Rectangle((CX - 1.0, 3.3), 2.0, 0.85, fc=RAISED, ec=INK, lw=1.5, zorder=6)
+    )
+    ax.add_patch(
+        Rectangle(
+            (CX - 1.0, 3.3), 2.0, 0.85, fc="none", ec=HATCHC, lw=0, hatch="///", zorder=6
+        )
+    )
+    # magnetic bearings, top and bottom: stator blocks with an air gap
+    for by in (5.05, 2.42):
+        for sx in (-1, 1):
+            x = CX - 0.44 if sx < 0 else CX + 0.14
+            ax.add_patch(
+                Rectangle((x, by), 0.30, 0.34, fc=LIGHT, ec=INK, lw=1.1, zorder=6)
+            )
+    # motor-generator stator
+    for sx in (CX - 0.52, CX + 0.14):
+        ax.add_patch(
+            Rectangle((sx, 4.38), 0.38, 0.40, fc=RAISED, ec=INK, lw=1.1, zorder=6)
+        )
+        ax.add_patch(
+            Rectangle(
+                (sx, 4.38), 0.38, 0.40, fc="none", ec=HATCHC, lw=0, hatch="///", zorder=6
+            )
+        )
+    cl(ax, CX, Y0 - 0.35, CX, Y1 + 0.35)
+    for xx in (CX - 1.0, CX + 1.0):
+        ax.plot([xx, xx], [3.26, 2.85], color=GREY, lw=0.55, zorder=3)
+    ax.annotate(
+        "",
+        (CX - 1.0, 2.95),
+        (CX + 1.0, 2.95),
+        arrowprops=dict(arrowstyle="<->", color=INK, lw=0.8, shrinkA=0, shrinkB=0),
+    )
+    ax.text(
+        CX,
+        3.06,
+        "Ø 560",
+        fontsize=8.5,
+        color=INK,
+        ha="center",
+        va="bottom",
+        bbox=dict(fc="#ffffff", ec="none", pad=1.2),
+        zorder=7,
+    )
+    # callouts
+    lead(ax, CX + 0.85, 3.9, 8.6, 3.6, "steel disc: 230 kg\nJ = 9 kg·m²")
+    lead(
+        ax, CX + 0.33, 5.22, 8.5, 6.15, "magnetic bearings: drag\nc = 1.0×10$^{-4}$ N·m·s"
+    )
+    lead(ax, CX - 0.5, 4.58, 2.6, 5.6, "motor-generator\n0.22 N·m per ampere", ha="left")
+    lead(ax, CX + 0.45, 2.59, 8.6, 2.45, "18 000 to 36 000 rpm:\nthe working window")
+    tag_bubble(ax, 9.9, 4.9, "ST", "09", CX + 0.53, 4.58, note="speed: the measurement")
+    save(fig, "t09_hero.png")
+
+
+# ----------------------------------------------------------------- T10
+
+
+def hero_twin():
+    fig, ax = sheet(
+        "From a model to a digital twin",
+        "Elevated tank with level sensor: fitted, forecast and audited",
+        "T10",
+    )
+    GY = 1.8
+    ground(ax, 1.5, 7.9, GY)
+
+    def wlevel(x, y, s=0.12):
+        ax.add_patch(
+            Polygon(
+                [(x - s, y + s), (x + s, y + s), (x, y)],
+                closed=True,
+                fc="none",
+                ec=INK,
+                lw=0.8,
+                zorder=7,
+            )
+        )
+        ax.plot([x - s * 1.6, x + s * 1.6], [y + s, y + s], color=INK, lw=0.8, zorder=7)
+
+    # the tank, TK-102
+    TX0, TX1, TY0, TY1 = 2.9, 6.1, 3.95, 5.85
+    ax.add_patch(
+        Rectangle(
+            (TX0, TY0), TX1 - TX0, TY1 - TY0, fc="#ffffff", ec=INK, lw=1.5, zorder=5
+        )
+    )
+    ax.plot([TX0 - 0.12, TX1 + 0.12], [TY0, TY0], color=INK, lw=1.5, zorder=5)
+    ax.plot(
+        [TX0 + 0.3, TX1 - 0.3], [5.35, 5.35], color=INK, lw=0.8, ls=(0, (5, 3)), zorder=6
+    )
+    wlevel(3.7, 5.35)
+    ax.text(
+        (TX0 + TX1) / 2,
+        TY1 + 0.16,
+        "TK-102 · A = 150 m²",
+        fontsize=8.5,
+        color=INK,
+        ha="center",
+        weight="bold",
+    )
+    for lx in (3.25, 5.75):
+        ax.plot([lx, lx], [GY, TY0], color=INK, lw=1.3, zorder=4)
+    ax.plot([3.25, 5.75], [GY + 0.3, TY0 - 0.25], color=INK, lw=0.7, zorder=3)
+    ax.plot([5.75, 3.25], [GY + 0.3, TY0 - 0.25], color=INK, lw=0.7, zorder=3)
+    # inflow from the pump station
+    ax.plot([1.35, TX0], [4.9, 4.9], color=INK, lw=1.0, zorder=4)
+    ax.plot([1.35, TX0], [4.82, 4.82], color=INK, lw=1.0, zorder=4)
+    brk(ax, 2.0, 4.86, angle=90, s=0.11)
+    ax.text(1.35, 5.1, "from the pump station", fontsize=8.5, color=INK, ha="left")
+    # service line with CV-102, to the town
+    ax.plot([5.55, 5.55], [TY0, 2.35], color=INK, lw=0.9, zorder=4)
+    ax.plot([5.55, 6.55], [2.35, 2.35], color=INK, lw=0.9, zorder=4)
+    ax.add_patch(
+        Polygon(
+            [(6.55, 2.49), (6.55, 2.21), (6.9, 2.35)],
+            closed=True,
+            fc="#ffffff",
+            ec=INK,
+            lw=0.9,
+            zorder=5,
+        )
+    )
+    ax.add_patch(
+        Polygon(
+            [(7.25, 2.49), (7.25, 2.21), (6.9, 2.35)],
+            closed=True,
+            fc="#ffffff",
+            ec=INK,
+            lw=0.9,
+            zorder=5,
+        )
+    )
+    ax.annotate(
+        "",
+        (7.95, 2.35),
+        (7.25, 2.35),
+        arrowprops=dict(arrowstyle="->", color=INK, lw=0.9),
+    )
+    ax.text(7.9, 2.56, "to the town", fontsize=8.5, color=INK, ha="right")
+    lead(
+        ax,
+        6.9,
+        2.22,
+        4.75,
+        1.25,
+        "CV-102, the service valve: its coefficient is on\nno data sheet, and it drifts as the valve wears",
+        ha="right",
+    )
+    # the level transmitter
+    tag_bubble(
+        ax,
+        7.0,
+        5.6,
+        "LT",
+        "102",
+        TX1,
+        5.35,
+        note="the level, every 10 minutes:\nall the twin sees",
+    )
+    # the twin, as a panel: measured, forecast, band, audit
+    PX0, PY0, PW, PH = 8.6, 2.9, 5.6, 3.4
+    ax.add_patch(
+        FancyBboxPatch(
+            (PX0, PY0),
+            PW,
+            PH,
+            boxstyle="round,pad=0.12",
+            fc="#ffffff",
+            ec="#d2d2d7",
+            lw=1.2,
+            zorder=5,
+        )
+    )
+    ax.text(
+        PX0 + 0.15,
+        PY0 + PH - 0.25,
+        "level · measured, forecast, 90 % range",
+        fontsize=8.5,
+        color=INK,
+        zorder=6,
+    )
+    t = np.linspace(0, 1, 160)
+    xm = PX0 + 0.35 + t * (PW - 2.3)
+    ym = PY0 + 1.6 + 0.75 * np.sin(t * 2 * np.pi * 0.9 - 0.6)
+    ax.plot(xm, ym, color=INK, lw=1.6, zorder=6)
+    tf = np.linspace(0, 1, 80)
+    xf = xm[-1] + tf * 1.55
+    ph0 = 0.9 * 2 * np.pi - 0.6
+    yf = ym[-1] + 0.72 * (np.sin(0.9 * 2 * np.pi * (1 + tf * 0.42) - 0.6) - np.sin(ph0))
+    band = 0.10 + 0.34 * tf
+    ax.fill_between(xf, yf - band, yf + band, color="#efe6ff", zorder=5)
+    ax.plot(xf, yf, color=VIOLET, lw=1.6, ls=(0, (4, 2.5)), zorder=6)
+    ax.plot(
+        [PX0 + 0.3, PX0 + PW - 0.3],
+        [PY0 + 0.62, PY0 + 0.62],
+        color="#d2d2d7",
+        lw=0.8,
+        zorder=6,
+    )
+    ax.text(
+        PX0 + 0.15,
+        PY0 + 0.32,
+        "coverage audit: 91 % delivered at the 90 % level",
+        fontsize=7.8,
+        color=GREY,
+        zorder=6,
+    )
+    ax.plot(
+        [TX1 + 0.12, PX0 - 0.12],
+        [4.6, 4.6],
+        color=GREY,
+        lw=0.7,
+        ls=(0, (4, 2.5)),
+        zorder=3,
+    )
+    save(fig, "t10_hero.png")
+
+
+# ----------------------------------------------------------------- T03
+
+
+def hero_suspension():
+    fig, ax = sheet(
+        "Vehicle suspension",
+        "Quarter-car corner, front elevation: McPherson strut",
+        "T03",
+    )
+
+    DASHDOT = (0, (7, 2, 1.5, 2))
+
+    def cl03(x0, y0, x1, y1, transform=None):
+        kw = dict(color=GREY, lw=0.65, ls=DASHDOT, zorder=2)
+        if transform is not None:
+            kw["transform"] = transform
+        ax.plot([x0, x1], [y0, y1], **kw)
+
+    # ------------------------------------------------------------- layout
+    AXLE_Y = 3.03
+    GY = 1.75
+    TIRE_CX = 7.73
+    TW, TH, TR = 0.86, 2.56, 0.30
+    tx0, ty0 = TIRE_CX - TW / 2, AXLE_Y - TH / 2  # tire left edge, bottom (= ground)
+
+    cl03(4.3, AXLE_Y, 8.78, AXLE_Y)  # axle centerline
+    cl03(TIRE_CX, GY - 0.28, TIRE_CX, ty0 + TH + 0.30)  # wheel plane centerline
+
+    # ------------------------------------------------------------------ tire
+    ax.add_patch(
+        FancyBboxPatch(
+            (tx0 + TR, ty0 + TR),
+            TW - 2 * TR,
+            TH - 2 * TR,
+            boxstyle=f"round,pad={TR}",
+            fc="#ffffff",
+            ec=INK,
+            lw=1.5,
+            zorder=4,
+        )
+    )
+    # shoulder lines and circumferential tread grooves
+    for dx in (0.13, 0.31, TW - 0.31, TW - 0.13):
+        lw = 0.8 if dx in (0.13, TW - 0.13) else 0.55
+        ax.plot(
+            [tx0 + dx, tx0 + dx],
+            [ty0 + 0.17, ty0 + TH - 0.17],
+            color=INK,
+            lw=lw,
+            zorder=4,
+        )
+
+    # hub flange and axle stub on the inboard face
+    ax.add_patch(
+        Rectangle(
+            (tx0 - 0.16, AXLE_Y - 0.20),
+            0.16,
+            0.40,
+            fc="#f5f5f7",
+            ec=INK,
+            lw=1.1,
+            zorder=5,
+        )
+    )
+
+    # --------------------------------------------------------------- knuckle
+    BOSS = (tx0 - 0.50, AXLE_Y)  # wheel-bearing housing
+    BJ = (BOSS[0] - 0.03, AXLE_Y - 0.80)  # ball joint
+    SY0 = AXLE_Y + 0.82  # strut clamp height
+    SX = BOSS[0] - 0.33  # strut axis x at the clamp
+    LEAN = 7  # strut lean, degrees
+
+    # axle stub: boss to hub
+    ax.plot(
+        [BOSS[0] + 0.28, tx0 - 0.16],
+        [AXLE_Y + 0.07, AXLE_Y + 0.07],
+        color=INK,
+        lw=1.0,
+        zorder=5,
+    )
+    ax.plot(
+        [BOSS[0] + 0.28, tx0 - 0.16],
+        [AXLE_Y - 0.07, AXLE_Y - 0.07],
+        color=INK,
+        lw=1.0,
+        zorder=5,
+    )
+
+    # upper link: strut clamp down to the bearing boss
+    ax.add_patch(
+        Polygon(
+            [
+                (SX - 0.15, SY0 + 0.02),
+                (SX + 0.15, SY0 + 0.02),
+                (BOSS[0] + 0.17, AXLE_Y + 0.26),
+                (BOSS[0] - 0.17, AXLE_Y + 0.26),
+            ],
+            closed=True,
+            fc="#ebebef",
+            ec=INK,
+            lw=1.2,
+            joinstyle="round",
+            zorder=5,
+        )
+    )
+    # lower link: boss down to the ball joint
+    ax.add_patch(
+        Polygon(
+            [
+                (BOSS[0] - 0.15, AXLE_Y - 0.26),
+                (BOSS[0] + 0.15, AXLE_Y - 0.26),
+                (BJ[0] + 0.10, BJ[1] + 0.07),
+                (BJ[0] - 0.10, BJ[1] + 0.07),
+            ],
+            closed=True,
+            fc="#ebebef",
+            ec=INK,
+            lw=1.2,
+            joinstyle="round",
+            zorder=5,
+        )
+    )
+    # bearing housing
+    ax.add_patch(Circle(BOSS, 0.30, fc="#ebebef", ec=INK, lw=1.3, zorder=6))
+    ax.add_patch(Circle(BOSS, 0.16, fc="#ffffff", ec=INK, lw=1.0, zorder=6))
+    # ball joint
+    ax.add_patch(Circle(BJ, 0.09, fc="#ffffff", ec=INK, lw=1.1, zorder=6))
+
+    # ----------------------------------------------------------------- strut
+    rot = Affine2D().rotate_deg_around(SX, SY0, LEAN) + ax.transData
+    S_LEN = 2.10  # clamp to top of bearing cap, local
+    SY1 = SY0 + S_LEN
+
+    def strut_rect(x0, y0, w, h, **kw):
+        ax.add_patch(Rectangle((x0, y0), w, h, transform=rot, **kw))
+
+    # clamp around the damper foot
+    strut_rect(SX - 0.24, SY0 - 0.16, 0.48, 0.34, fc="#ebebef", ec=INK, lw=1.2, zorder=5)
+    for by in (SY0 - 0.065, SY0 + 0.105):
+        ax.add_patch(
+            Circle(
+                (SX - 0.185, by),
+                0.035,
+                fc="#ffffff",
+                ec=INK,
+                lw=0.8,
+                transform=rot,
+                zorder=6,
+            )
+        )
+        ax.add_patch(
+            Circle(
+                (SX + 0.185, by),
+                0.035,
+                fc="#ffffff",
+                ec=INK,
+                lw=0.8,
+                transform=rot,
+                zorder=6,
+            )
+        )
+    # damper body
+    strut_rect(SX - 0.185, SY0 + 0.10, 0.37, 1.02, fc="#ffffff", ec=INK, lw=1.4, zorder=6)
+    for dy in (1.045, 0.975):  # rod gland
+        ax.plot(
+            [SX - 0.185, SX + 0.185],
+            [SY0 + dy, SY0 + dy],
+            color=INK,
+            lw=0.7,
+            transform=rot,
+            zorder=7,
+        )
+    # piston rod
+    strut_rect(
+        SX - 0.045,
+        SY0 + 1.12,
+        0.09,
+        S_LEN - 1.12 - 0.22,
+        fc="#ffffff",
+        ec=INK,
+        lw=1.0,
+        zorder=5,
+    )
+    # spring seats
+    strut_rect(SX - 0.52, SY0 + 1.03, 1.04, 0.06, fc="#f5f5f7", ec=INK, lw=1.0, zorder=6)
+    strut_rect(SX - 0.52, SY1 - 0.33, 1.04, 0.06, fc="#f5f5f7", ec=INK, lw=1.0, zorder=6)
+    # coil spring
+    sy0, sy1 = SY0 + 1.09, SY1 - 0.33
+    t = np.linspace(0, 1, 400)
+    xs = SX + 0.47 * np.sin(2 * np.pi * 5.5 * t + np.pi / 2)
+    ys = sy0 + (sy1 - sy0) * t
+    ax.plot(xs, ys, color=INK, lw=1.35, transform=rot, solid_capstyle="round", zorder=7)
+    # top mount and bearing cap
+    strut_rect(SX - 0.44, SY1 - 0.27, 0.88, 0.16, fc="#ebebef", ec=INK, lw=1.2, zorder=6)
+    strut_rect(SX - 0.15, SY1 - 0.11, 0.30, 0.11, fc="#ffffff", ec=INK, lw=1.0, zorder=6)
+    # strut axis centerline
+    cl03(SX, SY0 - 0.45, SX, SY1 + 0.28, transform=rot)
+
+    # top of the strut after the lean, in data coords
+    TOPY = SY0 + math.cos(math.radians(LEAN)) * S_LEN
+
+    # ------------------------------------------------------- body (sprung mass)
+    bx0, bx1 = 3.70, 7.55
+    by0, by1 = TOPY, TOPY + 0.42
+    ax.add_patch(
+        Rectangle(
+            (bx0, by0), bx1 - bx0, by1 - by0, fc="#f5f5f7", ec=INK, lw=1.4, zorder=4
+        )
+    )
+    ax.add_patch(
+        Rectangle(
+            (bx0, by0),
+            bx1 - bx0,
+            by1 - by0,
+            fc="none",
+            ec=HATCHC,
+            lw=0,
+            hatch="///",
+            zorder=4,
+        )
+    )
+
+    # ------------------------------------------- lower control arm and subframe
+    PIV = (4.72, BJ[1] + 0.02)
+    ax.add_patch(
+        Polygon(
+            [
+                (BJ[0] - 0.04, BJ[1] - 0.085),
+                (PIV[0], PIV[1] - 0.13),
+                (PIV[0], PIV[1] + 0.13),
+                (BJ[0] - 0.04, BJ[1] + 0.085),
+            ],
+            closed=True,
+            fc="#ebebef",
+            ec=INK,
+            lw=1.2,
+            joinstyle="round",
+            zorder=4,
+        )
+    )
+    ax.add_patch(Circle(PIV, 0.19, fc="#ffffff", ec=INK, lw=1.2, zorder=5))
+    ax.add_patch(Circle(PIV, 0.085, fc="#ffffff", ec=INK, lw=0.9, zorder=5))
+    sub = (PIV[0] - 0.56, PIV[1] - 0.36, 0.40, 0.80)
+    ax.add_patch(
+        Rectangle(sub[:2], sub[2], sub[3], fc="#f5f5f7", ec=INK, lw=1.3, zorder=4)
+    )
+    ax.add_patch(
+        Rectangle(
+            sub[:2], sub[2], sub[3], fc="none", ec=HATCHC, lw=0, hatch="///", zorder=4
+        )
+    )
+
+    # ------------------------------------------------------------------- road
+    ax.plot([3.4, 9.3], [GY, GY], color=INK, lw=1.5, zorder=3)
+    for gx in np.arange(3.5, 9.25, 0.17):
+        ax.plot([gx, gx - 0.11], [GY, GY - 0.11], color=GREY, lw=0.6, zorder=3)
+    bx = np.linspace(8.35, 9.05, 60)
+    bz = GY + 0.17 * np.sin(np.pi * (bx - 8.35) / 0.7) ** 2
+    ax.plot(bx, bz, color=INK, lw=1.0, ls=(0, (4, 2.5)), zorder=4)
+
+    # ------------------------------------------------------------- dimensions
+    def dim_v03(x, y0, y1, text, xext):
+        for yy in (y0, y1):
+            ax.plot([xext, x + 0.12], [yy, yy], color=GREY, lw=0.55, zorder=3)
+        ax.annotate(
+            "",
+            (x, y0),
+            (x, y1),
+            arrowprops=dict(arrowstyle="<->", color=INK, lw=0.8, shrinkA=0, shrinkB=0),
+        )
+        ax.text(
+            x + 0.10,
+            (y0 + y1) / 2,
+            text,
+            fontsize=8.5,
+            color=INK,
+            rotation=90,
+            va="center",
+            ha="left",
+        )
+
+    dim_v03(8.68, ty0, ty0 + TH, "Ø 640", xext=TIRE_CX + 0.45)
+
+    def leader03(tx, ty, px, py, text, ha="left", fs=9.0):
+        ax.plot([px, tx], [py, ty], color=GREY, lw=0.6, zorder=8)
+        ax.add_patch(Circle((px, py), 0.028, fc=GREY, ec="none", zorder=8))
+        ax.text(
+            tx + (0.08 if ha == "left" else -0.08),
+            ty,
+            text,
+            fontsize=fs,
+            color=INK,
+            ha=ha,
+            va="center",
+            zorder=9,
+        )
+
+    ax.text(
+        7.72,
+        (by0 + by1) / 2,
+        "sprung mass  m$_s$ = 300 kg\na quarter of the body",
+        fontsize=9.0,
+        color=INK,
+        ha="left",
+        va="center",
+        zorder=9,
+    )
+    leader03(3.30, 5.28, SX - 0.50, 5.02, "coil spring  k$_s$ = 20 kN/m")
+    leader03(3.30, 4.45, SX - 0.20, SY0 + 0.62, "damper  c$_s$ = 1.5 kN·s/m")
+    leader03(
+        8.95, 4.72, tx0 + TW - 0.06, AXLE_Y + 1.08, "tyre stiffness  k$_t$ = 180 kN/m"
+    )
+    leader03(
+        8.95,
+        2.42,
+        BOSS[0] + 0.21,
+        AXLE_Y - 0.21,
+        "unsprung mass  m$_u$ = 40 kg\n(wheel, hub, brake)",
+    )
+    leader03(6.95, GY - 0.48, 8.55, GY + 0.06, "road profile w(t): the input", ha="right")
+
+    # ------------------------------------------------- the one violet element
+    ATX, ATY = 2.30, by0 + 0.21
+    ax.add_patch(Circle((ATX, ATY), 0.21, fc="#ffffff", ec=VIOLET, lw=1.4, zorder=9))
+    ax.plot([ATX - 0.21, ATX + 0.21], [ATY, ATY], color=VIOLET, lw=0.8, zorder=10)
+    ax.text(
+        ATX,
+        ATY + 0.075,
+        "AT",
+        fontsize=7.0,
+        color=VIOLET,
+        ha="center",
+        va="center",
+        weight="bold",
+        zorder=10,
+    )
+    ax.text(
+        ATX,
+        ATY - 0.075,
+        "03",
+        fontsize=6.5,
+        color=VIOLET,
+        ha="center",
+        va="center",
+        zorder=10,
+    )
+    ax.plot(
+        [ATX + 0.21, bx0], [ATY, ATY], color=VIOLET, lw=0.7, ls=(0, (4, 2.5)), zorder=9
+    )
+    ax.text(
+        ATX,
+        ATY - 0.36,
+        "body acceleration:\nthe measurement",
+        fontsize=7.6,
+        color=GREY,
+        ha="center",
+        va="top",
+        zorder=9,
+    )
+    save(fig, "t03_hero.png")
 
 
 def pd_sheet(title: str, subtitle: str, number: str):
@@ -1813,7 +2596,7 @@ def transformer_sym(ax, x, y, label=None):
 
 
 def mass_sym(ax, x, y, w, h, label):
-    ax.add_patch(Rectangle((x, y), w, h, fc="#E9E6E1", ec=INK, lw=1.6, zorder=5))
+    ax.add_patch(Rectangle((x, y), w, h, fc="#e8e8ed", ec=INK, lw=1.6, zorder=5))
     ax.text(
         x + w / 2,
         y + h / 2,
@@ -1890,8 +2673,8 @@ def pd_bess():
         "Electrical: an equivalent circuit the Battery component builds (OCV(SoC), R_s, one RC pair).",
     )
     # thermal part (ISA style)
-    equipment(ax, 9.2, 4.6, 2.0, 1.1, "RACK", "cell mass, 1.2 MJ/K", fc="#F3F0EB")
-    equipment(ax, 12.2, 4.6, 2.0, 1.1, "AIR", "container air", fc="#F3F0EB")
+    equipment(ax, 9.2, 4.6, 2.0, 1.1, "RACK", "cell mass, 1.2 MJ/K", fc="#f5f5f7")
+    equipment(ax, 12.2, 4.6, 2.0, 1.1, "AIR", "container air", fc="#f5f5f7")
     line(ax, [(11.2, 5.15), (12.2, 5.15)])
     note(ax, 11.7, 5.45, "hA", fontsize=8, ha="center")
     line(ax, [(13.2, 4.6), (13.2, 3.2)], arrow=True)
@@ -2014,7 +2797,7 @@ def pd_turbine():
         "T04-PD",
     )
     y = 4.8
-    ax.add_patch(Circle((2.2, y), 0.75, fc="#E9E6E1", ec=INK, lw=1.6, zorder=5))
+    ax.add_patch(Circle((2.2, y), 0.75, fc="#e8e8ed", ec=INK, lw=1.6, zorder=5))
     note(ax, 2.2, y, "J_r\nrotor", ha="center", fontsize=8.5)
     line(ax, [(0.6, y), (1.45, y)], arrow=True, color=RED)
     note(ax, 0.5, y + 0.45, "T_aero (input)", fontsize=8)
@@ -2022,12 +2805,12 @@ def pd_turbine():
     zigzag(ax, (3.6, y), (5.4, y), n=7, amp=0.15, color=INK, lw=1.5)
     note(ax, 4.5, y + 0.45, "k_shaft  torsion", ha="center", fontsize=8.5)
     line(ax, [(5.4, y), (6.2, y)])
-    equipment(ax, 6.2, y - 0.6, 1.6, 1.2, "GEAR", "1 : 90", fc="#F3F0EB")
+    equipment(ax, 6.2, y - 0.6, 1.6, 1.2, "GEAR", "1 : 90", fc="#f5f5f7")
     line(ax, [(7.8, y), (9.0, y)])
-    ax.add_patch(Circle((9.5, y), 0.5, fc="#E9E6E1", ec=INK, lw=1.6, zorder=5))
+    ax.add_patch(Circle((9.5, y), 0.5, fc="#e8e8ed", ec=INK, lw=1.6, zorder=5))
     note(ax, 9.5, y, "J_g", ha="center", fontsize=8.5)
     line(ax, [(10.0, y), (11.0, y)])
-    equipment(ax, 11.0, y - 0.6, 2.0, 1.2, "GEN", "held at ω_grid", fc="#F3F0EB")
+    equipment(ax, 11.0, y - 0.6, 2.0, 1.2, "GEN", "held at ω_grid", fc="#f5f5f7")
     # bearing damper to housing, under the rotor shaft
     damper_sym(ax, 3.2, y - 1.9, y - 0.1, label="c_b  bearing")
     hatch(ax, 2.6, 3.8, y - 1.9, up=False)
@@ -2066,7 +2849,7 @@ def pd_water():
     line(ax, [(10.2, 5.6), (11.6, 5.6)])
     orifice_plate(ax, 11.9, 5.6, label="FE-102")
     line(ax, [(12.2, 5.6), (13.4, 5.6)], arrow=True)
-    equipment(ax, 13.4, 5.2, 1.6, 0.8, "DEMAND", "q(t) input", fc="#F3F0EB")
+    equipment(ax, 13.4, 5.2, 1.6, 0.8, "DEMAND", "q(t) input", fc="#f5f5f7")
     bubble(ax, 2.1, 5.3, "LT", "101", r=0.3)
     signal(ax, [(2.1, 5.0), (2.1, 4.45)])
     bubble(ax, 9.4, 7.5, "LT", "102", r=0.3)
@@ -2113,7 +2896,7 @@ def pd_wastewater():
             line(ax, [(4.6 + k * 2.3, 3.6), (4.9 + k * 2.3, 3.6)], arrow=True)
     note(ax, 7.2, 2.6, "4 × 650 m³, serpentine, τ = 2.1 h", fontsize=8.5, ha="center")
     line(ax, [(11.8, 3.6), (13.6, 3.6)], arrow=True)
-    equipment(ax, 13.6, 3.2, 1.6, 0.8, "OUTFALL", "Cl₂ ≥ 0.2 mg/L", fc="#F3F0EB")
+    equipment(ax, 13.6, 3.2, 1.6, 0.8, "OUTFALL", "Cl₂ ≥ 0.2 mg/L", fc="#f5f5f7")
     bubble(ax, 12.7, 5.0, "AT", "202", r=0.3)
     signal(ax, [(12.7, 4.7), (12.7, 3.65)])
     note(ax, 12.7, 5.5, "residual chlorine", fontsize=8, ha="center")
@@ -2150,15 +2933,15 @@ def pd_building():
     ground_sym(ax, 3.4, y - 1.0)
     line(ax, [(3.6, y + 0.95), (3.6, y + 0.3), (6.0, y + 0.3)], arrow=True, color=RED)
     note(ax, 4.9, y + 0.55, "I²R to heat", fontsize=8, ha="center")
-    equipment(ax, 6.0, y - 0.3, 1.8, 1.2, "WATER", "C_w  boiler loop", fc="#F3F0EB")
+    equipment(ax, 6.0, y - 0.3, 1.8, 1.2, "WATER", "C_w  boiler loop", fc="#f5f5f7")
     line(ax, [(7.8, y + 0.3), (9.2, y + 0.3)])
     note(ax, 8.5, y + 0.6, "radiators hA", fontsize=8, ha="center")
-    equipment(ax, 9.2, y - 0.3, 1.8, 1.2, "ROOM", "C_air", fc="#F3F0EB")
+    equipment(ax, 9.2, y - 0.3, 1.8, 1.2, "ROOM", "C_air", fc="#f5f5f7")
     line(ax, [(11.0, y + 0.3), (12.4, y + 0.3)])
     note(ax, 11.7, y + 0.6, "walls R_wall", fontsize=8, ha="center")
     line(ax, [(10.1, y - 0.3), (10.1, y - 1.6), (12.4, y - 1.6)])
     note(ax, 11.25, y - 1.3, "ventilation ṁ c_p", fontsize=8, ha="center")
-    equipment(ax, 12.4, y - 1.9, 2.0, 2.5, "OUTDOOR", "T_out(t) input", fc="#F3F0EB")
+    equipment(ax, 12.4, y - 1.9, 2.0, 2.5, "OUTDOOR", "T_out(t) input", fc="#f5f5f7")
     line(ax, [(10.1, y + 0.9), (10.1, y + 1.9)], arrow=True, color=RED)
     note(ax, 10.1, y + 2.2, "solar + occupants (input)", fontsize=8, ha="center")
     bubble(ax, 7.9, 6.6, "TT", "301", r=0.3)
@@ -2194,10 +2977,10 @@ def pd_pumpdrive():
     ground_sym(ax, 3.6, y - 1.6)
     line(ax, [(6.4, y), (7.4, y)], lw=3.0)
     note(ax, 6.9, y + 0.35, "shaft", fontsize=8, ha="center")
-    ax.add_patch(Circle((7.9, y), 0.5, fc="#E9E6E1", ec=INK, lw=1.6, zorder=5))
+    ax.add_patch(Circle((7.9, y), 0.5, fc="#e8e8ed", ec=INK, lw=1.6, zorder=5))
     note(ax, 7.9, y, "J", ha="center", fontsize=9)
     line(ax, [(8.4, y), (9.2, y)], lw=3.0)
-    equipment(ax, 9.2, y - 0.6, 1.6, 1.2, "PUMP", "D = 20 cm³/rev", fc="#F3F0EB")
+    equipment(ax, 9.2, y - 0.6, 1.6, 1.2, "PUMP", "D = 20 cm³/rev", fc="#f5f5f7")
     line(ax, [(10.8, y + 0.3), (12.4, y + 0.3)], arrow=True)
     valve(ax, 12.8, y + 0.3, label="HV")
     line(ax, [(13.06, y + 0.3), (14.0, y + 0.3), (14.0, y + 1.2)])
@@ -2233,11 +3016,11 @@ def pd_flywheel():
     line(ax, [(1.6, y - 0.44), (1.6, y), (2.8, y)])
     resistor_sym(ax, 2.8, 3.8, y, label="R_w winding")
     line(ax, [(3.8, y), (4.8, y)])
-    equipment(ax, 4.8, y - 0.6, 2.0, 1.2, "M / G", "gyrator  τ = k i", fc="#F3F0EB")
+    equipment(ax, 4.8, y - 0.6, 2.0, 1.2, "M / G", "gyrator  τ = k i", fc="#f5f5f7")
     line(ax, [(5.8, y - 0.6), (5.8, y - 1.6), (1.6, y - 1.6), (1.6, y - 1.16)])
     ground_sym(ax, 3.7, y - 1.6)
     line(ax, [(6.8, y), (8.0, y)], lw=3.0)
-    ax.add_patch(Circle((8.9, y), 0.9, fc="#D8DADD", ec=INK, lw=1.8, zorder=5))
+    ax.add_patch(Circle((8.9, y), 0.9, fc="#d9d9de", ec=INK, lw=1.8, zorder=5))
     ax.add_patch(Circle((8.9, y), 0.18, fc=INK, ec=INK, zorder=5.2))
     note(ax, 8.9, y - 1.2, "J rotor  ½Jω²", ha="center", fontsize=8.5)
     line(ax, [(9.8, y), (10.8, y)], lw=3.0)
@@ -2281,7 +3064,7 @@ def pd_twin():
         ("AUDIT", "coverage by horizon"),
     ]
     for x, (l1, l2) in zip(xs, labels, strict=True):
-        equipment(ax, x, 5.2, 1.9, 1.1, l1, l2, fc="#F3F0EB")
+        equipment(ax, x, 5.2, 1.9, 1.1, l1, l2, fc="#f5f5f7")
     for a, b in zip(xs[:-1], xs[1:], strict=True):
         line(ax, [(a + 1.9, 5.75), (b, 5.75)], arrow=True)
     signal(ax, [(2.1, 6.1), (6.9, 6.1), (6.9, 6.3)])
@@ -2295,7 +3078,7 @@ def pd_twin():
         1.1,
         "DECIDE OR REFUSE",
         "Envelope: inside the validated range, or a refusal with the reason",
-        fc="#FBD9D2",
+        fc="#efe6ff",
     )
     line(ax, [(13.85, 5.2), (13.85, 3.9)], arrow=True)
     note(

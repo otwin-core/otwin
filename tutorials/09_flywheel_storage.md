@@ -53,7 +53,7 @@ from otwin.components.fundamental import (
     Transformer,
 )
 
-sns.set_theme(style="whitegrid", palette=["#201E1D", "#EC3013", "#4D86A6", "#8A8886"])
+sns.set_theme(style="whitegrid", palette=["#1d1d1f", "#7a2ffc", "#52525b", "#6e6e73"])
 
 J_ROTOR = 9.0  # kg m2: a 230 kg steel disc of 0.28 m radius
 W_MAX, W_MIN = 2 * np.pi * 36_000 / 60, 2 * np.pi * 18_000 / 60  # rad/s
@@ -235,7 +235,7 @@ g = sns.relplot(
     height=1.8,
     aspect=4.5,
     facet_kws={"sharey": False},
-    color="#201E1D",
+    color="#1d1d1f",
 )
 g.set_titles("{row_name}")
 g.figure.suptitle("Charge, hold, discharge at 100 kW", y=1.02)

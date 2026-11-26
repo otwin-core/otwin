@@ -41,7 +41,7 @@ from otwin import expr as ex
 from otwin.components.base import Component, Composite, ResistorBranch
 from otwin.components.hydraulic import Atmosphere, FlowSource, Tank
 
-sns.set_theme(style="whitegrid", palette=["#201E1D", "#EC3013", "#4D86A6", "#8A8886"])
+sns.set_theme(style="whitegrid", palette=["#1d1d1f", "#7a2ffc", "#52525b", "#6e6e73"])
 warnings.filterwarnings("ignore", category=UserWarning)
 AREA = 150.0  # m2, the elevated tank
 
@@ -283,12 +283,12 @@ frame = pd.DataFrame(
 fc = pd.DataFrame(
     {"hour": (t[k : k + H] - t[k]) / 3600, "forecast": p, "low": low, "high": high}
 )
-ax = sns.lineplot(data=frame, x="hour", y="measured", color="#201E1D", label="measured")
+ax = sns.lineplot(data=frame, x="hour", y="measured", color="#1d1d1f", label="measured")
 sns.lineplot(
-    data=fc, x="hour", y="forecast", color="#EC3013", ls="--", label="forecast", ax=ax
+    data=fc, x="hour", y="forecast", color="#7a2ffc", ls="--", label="forecast", ax=ax
 )
-ax.fill_between(fc["hour"], fc["low"], fc["high"], color="#FBD9D2", label="90 % range")
-ax.axvline(0, color="#8A8886", lw=0.8)
+ax.fill_between(fc["hour"], fc["low"], fc["high"], color="#efe6ff", label="90 % range")
+ax.axvline(0, color="#6e6e73", lw=0.8)
 ax.set_ylabel("tower level (m)")
 ax.set_title("Six hours ahead from day 12, 08:00")
 ax.legend()

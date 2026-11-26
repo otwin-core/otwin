@@ -49,7 +49,7 @@ from otwin.components.chemical import (
     TanksInSeries,
 )
 
-sns.set_theme(style="whitegrid", palette=["#201E1D", "#EC3013", "#4D86A6", "#8A8886"])
+sns.set_theme(style="whitegrid", palette=["#1d1d1f", "#7a2ffc", "#52525b", "#6e6e73"])
 
 MG_L = 1.0 / 70.9  # mol/m3 per mg/L of chlorine
 K_DECAY = 0.4 / 3600  # 1/s: first-order chlorine decay, 0.4 per hour
@@ -192,10 +192,10 @@ ax = sns.lineplot(
     y="outlet residual (mg/L)",
     hue="cells",
     marker="o",
-    palette=["#8A8886", "#201E1D"],
+    palette=["#6e6e73", "#1d1d1f"],
 )
-ax.axhline(0.2, color="#EC3013", ls="--", lw=1)
-ax.text(1.52, 0.21, "permit", color="#EC3013", fontsize=9)
+ax.axhline(0.2, color="#b45309", ls="--", lw=1)
+ax.text(1.52, 0.21, "permit", color="#b45309", fontsize=9)
 ax.set_title("Outlet residual against applied dose: one stirred basin vs four cells")
 
 # %% [markdown]
@@ -261,10 +261,10 @@ ax = sns.lineplot(
     x="time (h)",
     y="outlet residual (mg/L)",
     hue="tank",
-    palette=["#8A8886", "#201E1D"],
+    palette=["#6e6e73", "#1d1d1f"],
 )
-ax.axhline(0.2, color="#EC3013", ls="--", lw=1)
-ax.axvspan(14, 16, color="#FBD9D2", alpha=0.6)
+ax.axhline(0.2, color="#b45309", ls="--", lw=1)
+ax.axvspan(14, 16, color="#efe6ff", alpha=0.6)
 ax.set_title("A two-hour storm flush: how long is the permit breached?")
 
 # %% [markdown]

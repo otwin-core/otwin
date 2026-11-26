@@ -48,7 +48,7 @@ from otwin.components.electrical import (
 )
 from otwin.components.twoport import Transformer
 
-sns.set_theme(style="whitegrid", palette=["#201E1D", "#EC3013", "#4D86A6", "#8A8886"])
+sns.set_theme(style="whitegrid", palette=["#1d1d1f", "#7a2ffc", "#52525b", "#6e6e73"])
 
 source = VoltageSource(None, name="substation")  # V, an input
 cable_r = Resistor(0.20, name="cable_r")  # ohm, 2 km of 240 mm2 aluminium, both ways
@@ -141,11 +141,11 @@ g = sns.relplot(
     height=2.0,
     aspect=4.2,
     facet_kws={"sharey": False},
-    color="#201E1D",
+    color="#1d1d1f",
 )
 g.set_titles("{row_name}")
 for ax in g.axes.flat:
-    ax.axvline(50, color="#EC3013", ls="--", lw=1)
+    ax.axvline(50, color="#6e6e73", ls="--", lw=1)
 g.figure.suptitle("Load step from 20 kW to 60 kW at t = 50 ms", y=1.02)
 
 # %% [markdown]
